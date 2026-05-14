@@ -1,0 +1,47 @@
+---
+Language: Cpp
+BasedOnStyle: Google
+
+# Override Google defaults for this project
+IndentWidth: 4
+ColumnLimit: 100
+AccessModifierOffset: -4
+
+# Braces
+BreakBeforeBraces: Attach
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+
+# Includes
+IncludeBlocks: Regroup
+IncludeCategories:
+  # Project headers
+  - Regex: '^"(core|backend|pipeline)/'
+    Priority: 1
+  # Third-party headers
+  - Regex: '^<(Eigen|yaml-cpp|pcl|gtest)/'
+    Priority: 2
+  # System headers
+  - Regex: '^<'
+    Priority: 3
+SortIncludes: CaseSensitive
+
+# Alignment
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: false
+AlignOperands: Align
+AlignTrailingComments: true
+
+# Pointers/References
+PointerAlignment: Left
+ReferenceAlignment: Left
+
+# Misc
+SpaceAfterCStyleCast: false
+SpaceAfterTemplateKeyword: true
+SpaceBeforeParens: ControlStatements
+Cpp11BracedListStyle: true
+DerivePointerAlignment: false
+ReflowComments: true
+...

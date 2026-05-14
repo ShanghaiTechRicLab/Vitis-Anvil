@@ -67,3 +67,22 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+docs/donotcommit/
+# CMake / Ninja build outputs
+.cmake/
+# Generated test data (gen_dataset writes here)
+tests/data/*.bin
+tests/data/synthetic/*.bin
+# Editor / IDE
+.vscode/
+.idea/
+*.swo
+.DS_Store
+# Reports
+reports/*.jsonl
+reports/*.csv
+reports/*.md
+!reports/.gitkeep
+# Local planning artifacts (do not commit)
+docs/superpowers/
