@@ -17,7 +17,7 @@
 | `hls-model-linux-release` | Release build with gold + HLS CPU model      |
 | `alveo-u250-host`         | Phase 2 U250 Vitis HLS csynth preset         |
 | `zcu104-host-aarch64`     | Phase 4 aarch64 host stub (requires SYSROOT) |
-| `zcu104-kernel`           | Phase 2 Vitis kernel stub                    |
+| `zcu104-kernel`           | Future embedded/ZCU104 kernel preset; fail-fast until xpfm / Phase 4+ platform work lands |
 
 ## Typical workflow
 
