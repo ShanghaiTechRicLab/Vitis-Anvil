@@ -64,3 +64,7 @@ add_library(anvil::gold_iface ALIAS anvil_gold_iface)
 add_library(anvil_compare INTERFACE)
 target_link_libraries(anvil_compare INTERFACE anvil_core)
 add_library(anvil::compare ALIAS anvil_compare)
+
+if(ANVIL_BUILD_XRT)
+    add_subdirectory(runtime)
+endif()

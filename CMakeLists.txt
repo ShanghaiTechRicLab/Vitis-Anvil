@@ -31,6 +31,10 @@ target_compile_features(anvil_core INTERFACE cxx_std_20)
 add_library(anvil::core ALIAS anvil_core)
 
 add_subdirectory(third_party)
+
+if(ANVIL_BUILD_XRT)
+  find_package(XRT REQUIRED)
+endif()
 add_subdirectory(src/anvil)
 
 if(ANVIL_BUILD_GOLD)
@@ -41,11 +45,6 @@ if(ANVIL_BUILD_HLS_MODEL)
 endif()
 if(ANVIL_BUILD_APPS)
   add_subdirectory(src/apps)
-endif()
-
-if(ANVIL_BUILD_XRT)
-  find_package(XRT REQUIRED)
-  add_subdirectory(src/runtime)
 endif()
 
 if(ANVIL_BUILD_TESTS)

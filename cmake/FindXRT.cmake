@@ -31,7 +31,7 @@ find_library(XRT_COREUTIL_LIBRARY
 
 include(FindPackageHandleStandardArgs)
 if(NOT XRT_INCLUDE_DIR OR NOT XRT_COREUTIL_LIBRARY)
-  set(XRT_PHASE3_FAILURE_MESSAGE "ANVIL_BUILD_XRT=ON requests the Phase 3 XRT runtime path, but XRT was not found. Install XRT (set XILINX_XRT or provide headers/library in the sysroot) before enabling this preset. Until Phase 3 runtime code lands, native Phase 0+1 presets should keep ANVIL_BUILD_XRT=OFF.")
+  set(XRT_PHASE3_FAILURE_MESSAGE "ANVIL_BUILD_XRT=ON requests the Phase 3 XRT runtime path, but XRT was not found. Install XRT (set XILINX_XRT or provide headers/library in the sysroot) before enabling this preset. Native CPU-only presets should keep ANVIL_BUILD_XRT=OFF.")
 endif()
 find_package_handle_standard_args(XRT
   REQUIRED_VARS XRT_INCLUDE_DIR XRT_COREUTIL_LIBRARY

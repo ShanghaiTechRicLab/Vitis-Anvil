@@ -1,9 +1,3 @@
 # src/runtime/CMakeLists.txt
-# Phase 3 stub. add_subdirectory(src/runtime) runs only when
-# ANVIL_BUILD_XRT=ON. We refuse to build until the runtime layer is
-# implemented in Phase 3.
-
-message(FATAL_ERROR
-  "src/runtime: ANVIL_BUILD_XRT=ON but Phase 3 (XRT runtime wrapper) "
-  "is not yet implemented. "
-  "See docs/build.md for current presets; Phase 3 docs will replace this stub.")
+# XRT runtime now lives in src/anvil/runtime/. This directory is kept only
+# for compatibility with earlier scaffold layout; root CMake no longer adds it.

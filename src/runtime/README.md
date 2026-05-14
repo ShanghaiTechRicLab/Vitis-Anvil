@@ -1,8 +1,5 @@
-# src/runtime/
+# Legacy runtime directory
 
-XRT host runtime wrappers live here.
-
-Populated in **Phase 3**.
-
-Build-system stub: `CMakeLists.txt` here intentionally fails when
-`ANVIL_BUILD_XRT=ON` until the runtime layer exists.
+The XRT runtime wrappers now live under `include/anvil/runtime/` and
+`src/anvil/runtime/`. This directory is retained only so older scaffold paths
+remain understandable; root CMake no longer adds `src/runtime`.

@@ -5,7 +5,7 @@
 - CMake ≥ 3.21
 - Ninja
 - C++20 compiler (GCC ≥ 10 or Clang ≥ 13)
-- No Vitis, XRT, or Xilinx tools required for Phase 0+1 native builds
+- No Vitis, XRT, or Xilinx tools required for CPU-only native builds
 
 ## Available presets
 
@@ -16,7 +16,7 @@
 | `hls-model-linux-debug`   | Debug build with gold + HLS CPU model        |
 | `hls-model-linux-release` | Release build with gold + HLS CPU model      |
 | `u250-host`         | Phase 2 U250 Vitis HLS csynth preset         |
-| `zcu104-host`     | Phase 4 aarch64 host stub (requires SYSROOT) |
+| `zcu104-host`          | AArch64 host/XRT preset (requires SYSROOT + XRT in sysroot) |
 | `zcu104-kernel`           | Future embedded/ZCU104 kernel preset; fail-fast until xpfm / Phase 4+ platform work lands |
 
 ## Typical workflow
@@ -45,7 +45,7 @@ rtk ./build/hls-model-linux-debug/src/apps/compare_gold_hls_model \
 - `ANVIL_BUILD_HLS_MODEL=ON` — build `anvil_hls_model` (requires gold)
 - `ANVIL_BUILD_APPS=ON` — build CLI tools
 - `ANVIL_BUILD_TESTS=ON` — build Catch2 tests
-- `ANVIL_BUILD_XRT=OFF` — Phase 3 runtime stub
+- `ANVIL_BUILD_XRT=OFF` — Phase 3 runtime wrapper
 - `ANVIL_BUILD_KERNELS=OFF` — Phase 2 kernel/csynth generation
 - `ANVIL_PLATFORM_KIND=native` — `native|u250|alveo_u55c|zcu104|kv260`
 - `ANVIL_VITIS_PLATFORM=` — Vitis `.xpfm` path for Phase 2 kernel presets
@@ -109,8 +109,8 @@ CTest labels distinguish the Vitis checks from native tests:
 `ANVIL_VITIS_TARGET` controls only the xclbin link mode (`hw`, `hw_emu`, or
 `sw_emu`) and defaults to `hw`; Vitis 2024.2 HLS csynth/cosim do not receive
 `--target`. `saxpy_xclbin` is intentionally manual-only: it is not an `ALL`
-target, is not registered with ctest, and is long-running. Phase 3 will consume
-that artifact when the XRT host runtime is enabled later.
+target, is not registered with ctest, and is long-running. The XRT host flow consumes
+that artifact when the XRT host runtime is enabled.
 
 ## Exit codes (apps)
 

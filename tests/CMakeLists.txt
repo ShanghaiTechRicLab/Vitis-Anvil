@@ -9,6 +9,9 @@ set(TEST_SOURCES
 if(TARGET anvil_hls_model)
   list(APPEND TEST_SOURCES cpp/test_hls_model_vs_gold.cpp)
 endif()
+if(ANVIL_BUILD_XRT AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/cpp/test_anvil_runtime_smoke.cpp)
+  list(APPEND TEST_SOURCES cpp/test_anvil_runtime_smoke.cpp)
+endif()
 
 add_executable(anvil_tests ${TEST_SOURCES})
 target_include_directories(anvil_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -27,6 +30,9 @@ target_link_libraries(anvil_tests PRIVATE
 )
 if(TARGET anvil_hls_model)
   target_link_libraries(anvil_tests PRIVATE anvil_hls_model)
+endif()
+if(TARGET anvil_runtime)
+  target_link_libraries(anvil_tests PRIVATE anvil_runtime)
 endif()
 
 add_test(NAME anvil_tests COMMAND anvil_tests)
