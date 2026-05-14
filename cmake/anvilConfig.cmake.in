@@ -1,6 +1,11 @@
 @PACKAGE_INIT@
 
 include(CMakeFindDependencyMacro)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
 find_dependency(Threads REQUIRED)
+set(ANVIL_PACKAGE_WITH_XRT @ANVIL_BUILD_XRT@)
+if(ANVIL_PACKAGE_WITH_XRT AND NOT TARGET XRT::xrt_coreutil)
+  find_dependency(XRT REQUIRED)
+endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/anvilTargets.cmake")

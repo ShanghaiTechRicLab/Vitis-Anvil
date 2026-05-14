@@ -62,12 +62,21 @@
         "ANVIL_BUILD_APPS": "ON",
         "ANVIL_BUILD_TESTS": "ON",
         "ANVIL_BUILD_KERNELS": "ON",
-        "ANVIL_BUILD_XRT": "OFF",
+        "ANVIL_BUILD_XRT": "ON",
         "ANVIL_PARALLELISM": "16",
         "ANVIL_CLOCK_MHZ": "300",
         "ANVIL_VITIS_PLATFORM": "/opt/xilinx/platforms/xilinx_u250_gen3x16_xdma_4_1_202210_1/xilinx_u250_gen3x16_xdma_4_1_202210_1.xpfm",
         "ANVIL_VITIS_TARGET": "hw",
         "ANVIL_VITIS_PART": "xcu250-figd2104-2L-e"
+      }
+    },
+    {
+      "name": "u250-host-hwemu",
+      "inherits": "u250-host",
+      "binaryDir": "${sourceDir}/build/u250-host-hwemu",
+      "cacheVariables": {
+        "ANVIL_VITIS_TARGET": "hw_emu",
+        "ANVIL_BUILD_XRT": "ON"
       }
     },
     {
@@ -129,6 +138,10 @@
       "configurePreset": "u250-host"
     },
     {
+      "name": "u250-host-hwemu",
+      "configurePreset": "u250-host-hwemu"
+    },
+    {
       "name": "zcu104-kernel",
       "configurePreset": "zcu104-kernel"
     }
@@ -165,6 +178,13 @@
     {
       "name": "u250-host",
       "configurePreset": "u250-host",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "u250-host-hwemu",
+      "configurePreset": "u250-host-hwemu",
       "output": {
         "outputOnFailure": true
       }

@@ -10,12 +10,16 @@ include config/$(TARGET)/anvil.mk
 BUILD_DIR   := build/$(ANVIL_PRESET)
 HOST_BIN    := $(BUILD_DIR)/src/host/run_saxpy
 XCLBIN_PATH := $(BUILD_DIR)/src/kernels/saxpy_xclbin/saxpy.xclbin
+ANVIL_HWEMU_PRESET ?= $(ANVIL_PRESET)-hwemu
+HWEMU_BUILD_DIR    := build/$(ANVIL_HWEMU_PRESET)
+HWEMU_HOST_BIN     := $(HWEMU_BUILD_DIR)/src/host/run_saxpy
+HWEMU_XCLBIN_PATH  := $(HWEMU_BUILD_DIR)/src/kernels/saxpy_xclbin/saxpy.xclbin
 PYTHON      := .venv/bin/python
 PIP         := $(PYTHON) -m pip
 
 .PHONY: all configure build build-cpp build-python clean clean-all help \
         csynth cosim xclbin xclbin-hwemu \
-        gen gold run-host xrt-emu xrt-hw compare analyze \
+        gen gold run-host xrt-emu xrt-hw compare analyze emconfig \
         test test-csynth test-cosim test-xrt-emu test-slow test-all
 
 all: build
@@ -42,8 +46,9 @@ cosim: configure
 xclbin: configure
 	rtk cmake --build $(BUILD_DIR) --target saxpy_xclbin
 
-xclbin-hwemu: configure
-	rtk cmake --build $(BUILD_DIR) --target saxpy_xclbin
+xclbin-hwemu:
+	rtk cmake --preset $(ANVIL_HWEMU_PRESET)
+	rtk cmake --build --preset $(ANVIL_HWEMU_PRESET) --target saxpy_xclbin
 
 gen:
 	@if [ ! -f scripts/gen_dataset.py ]; then rtk echo "scripts/gen_dataset.py is added in Task 15" >&2; exit 1; fi
@@ -54,13 +59,22 @@ gold: build gen
 	@if [ ! -f scripts/run_gold.sh ]; then rtk echo "scripts/run_gold.sh is added in Task 15" >&2; exit 1; fi
 	rtk env ANVIL_LANG=$(ANVIL_LANG) DATASET=$(DATASET) ANVIL_PRESET=$(ANVIL_PRESET) bash scripts/run_gold.sh
 
-run-host: build
+run-host: build gen
 	@if [ ! -x $(HOST_BIN) ]; then rtk echo "$(HOST_BIN) not built; use a preset with ANVIL_BUILD_XRT=ON" >&2; exit 1; fi
 	@if [ ! -f $(XCLBIN_PATH) ]; then rtk echo "$(XCLBIN_PATH) not found; run make xclbin first" >&2; exit 1; fi
-	rtk $(HOST_BIN) --xclbin $(XCLBIN_PATH)
+	rtk $(HOST_BIN) --xclbin $(XCLBIN_PATH) --data-dir data/$(DATASET) --output data/$(DATASET)/xrt_hw_out.bin
 
-xrt-emu: build
-	rtk env XCL_EMULATION_MODE=hw_emu $(MAKE) run-host
+emconfig:
+	rtk env ANVIL_PLATFORM=$(ANVIL_PLATFORM) BUILD_DIR=$(HWEMU_BUILD_DIR) bash scripts/emconfig.sh
+
+xrt-emu: gen
+	@if [ "$(ANVIL_DEVICE_KIND)" != "accelerator" ]; then rtk echo "make xrt-emu currently requires an accelerator target with a combined host+kernel hw_emu preset; got TARGET=$(TARGET) ($(ANVIL_DEVICE_KIND))" >&2; exit 1; fi
+	rtk cmake --preset $(ANVIL_HWEMU_PRESET)
+	rtk cmake --build --preset $(ANVIL_HWEMU_PRESET) --target run_saxpy saxpy_xclbin
+	rtk env ANVIL_PLATFORM=$(ANVIL_PLATFORM) BUILD_DIR=$(HWEMU_BUILD_DIR) bash scripts/emconfig.sh
+	@if [ ! -x $(HWEMU_HOST_BIN) ]; then rtk echo "$(HWEMU_HOST_BIN) not built; use a hw_emu preset with ANVIL_BUILD_XRT=ON" >&2; exit 1; fi
+	@if [ ! -f $(HWEMU_XCLBIN_PATH) ]; then rtk echo "$(HWEMU_XCLBIN_PATH) not found; make xrt-emu should have built saxpy_xclbin" >&2; exit 1; fi
+	rtk env XCL_EMULATION_MODE=hw_emu EMCONFIG_PATH=$(HWEMU_BUILD_DIR) $(HWEMU_HOST_BIN) --xclbin $(HWEMU_XCLBIN_PATH) --data-dir data/$(DATASET) --output data/$(DATASET)/xrt_emu_out.bin
 
 xrt-hw: build
 	rtk $(MAKE) run-host
@@ -91,8 +105,8 @@ test-csynth: configure
 test-cosim: configure
 	rtk ctest --test-dir $(BUILD_DIR) -L cosim -V
 
-test-xrt-emu: configure
-	rtk ctest --test-dir $(BUILD_DIR) -L xrt_emu -V
+test-xrt-emu:
+	rtk $(MAKE) xrt-emu
 
 test-slow: configure
 	rtk ctest --test-dir $(BUILD_DIR) -L "csynth|cosim|xrt_emu" -V
@@ -115,10 +129,11 @@ help:
 	@rtk echo "  make xclbin                       — link .xclbin"
 	@rtk echo "  make gen                          — generate dataset"
 	@rtk echo "  make gold [ANVIL_LANG=cpp|python]       — run gold reference"
-	@rtk echo "  make xrt-emu                      — run on hw_emu"
+	@rtk echo "  make xrt-emu                      — build/run accelerator hw_emu preset"
 	@rtk echo "  make xrt-hw                       — run on real hardware"
 	@rtk echo "  make compare                      — compare outputs vs gold"
 	@rtk echo "  make analyze                      — parse HLS csynth report"
+	@rtk echo "  make emconfig                     — generate emconfig.json for hw_emu"
 	@rtk echo "  make test-csynth/cosim/xrt-emu    — label-specific hardware tests"
 	@rtk echo "  make clean [TARGET=...]           — remove preset build dir"
 	@rtk echo "  make clean-all                    — remove all build dirs + eggs"

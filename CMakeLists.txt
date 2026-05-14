@@ -147,3 +147,5 @@ install(FILES
   ${CMAKE_CURRENT_BINARY_DIR}/anvilConfig.cmake
   ${CMAKE_CURRENT_BINARY_DIR}/anvilConfigVersion.cmake
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/anvil)
+install(FILES cmake/FindXRT.cmake
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/anvil)

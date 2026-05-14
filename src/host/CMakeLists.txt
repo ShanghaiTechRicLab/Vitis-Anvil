@@ -8,4 +8,5 @@ add_anvil_host(
         anvil_gold
         anvil_log
         anvil_cli
+        anvil_json
         anvil_compare)
