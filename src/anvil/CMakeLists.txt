@@ -49,3 +49,18 @@ target_link_libraries(anvil_test INTERFACE
     $<BUILD_INTERFACE:Catch2::Catch2WithMain>
     $<INSTALL_INTERFACE:Catch2::Catch2WithMain>)
 add_library(anvil::test ALIAS anvil_test)
+
+add_library(anvil_hls INTERFACE)
+target_link_libraries(anvil_hls INTERFACE
+    anvil_core
+    $<BUILD_INTERFACE:hlslib::hlslib>
+    $<INSTALL_INTERFACE:hlslib::hlslib>)
+add_library(anvil::hls ALIAS anvil_hls)
+
+add_library(anvil_gold_iface INTERFACE)
+target_link_libraries(anvil_gold_iface INTERFACE anvil_core)
+add_library(anvil::gold_iface ALIAS anvil_gold_iface)
+
+add_library(anvil_compare INTERFACE)
+target_link_libraries(anvil_compare INTERFACE anvil_core)
+add_library(anvil::compare ALIAS anvil_compare)

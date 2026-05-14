@@ -4,6 +4,7 @@ set(TEST_SOURCES
   cpp/test_saxpy_gold.cpp
   cpp/test_metrics.cpp
   cpp/test_anvil_log.cpp
+  cpp/test_anvil_compare.cpp
 )
 if(TARGET anvil_hls_model)
   list(APPEND TEST_SOURCES cpp/test_hls_model_vs_gold.cpp)
@@ -20,6 +21,8 @@ target_link_libraries(anvil_tests PRIVATE
   anvil::table
   anvil::progress
   anvil::test
+  anvil::compare
+  anvil::hls
   Catch2::Catch2WithMain
 )
 if(TARGET anvil_hls_model)
