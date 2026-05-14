@@ -17,6 +17,9 @@ target_link_libraries(anvil_tests PRIVATE
   anvil::cli
   anvil::json
   anvil::toml
+  anvil::table
+  anvil::progress
+  anvil::test
   Catch2::Catch2WithMain
 )
 if(TARGET anvil_hls_model)

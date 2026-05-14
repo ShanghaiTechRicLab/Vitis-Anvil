@@ -28,3 +28,24 @@ target_link_libraries(anvil_toml INTERFACE
     $<BUILD_INTERFACE:tomlplusplus::tomlplusplus>
     $<INSTALL_INTERFACE:tomlplusplus::tomlplusplus>)
 add_library(anvil::toml ALIAS anvil_toml)
+
+add_library(anvil_table INTERFACE)
+target_link_libraries(anvil_table INTERFACE
+    anvil_core
+    $<BUILD_INTERFACE:tabulate::tabulate>
+    $<INSTALL_INTERFACE:tabulate::tabulate>)
+add_library(anvil::table ALIAS anvil_table)
+
+add_library(anvil_progress INTERFACE)
+target_link_libraries(anvil_progress INTERFACE
+    anvil_core
+    $<BUILD_INTERFACE:indicators::indicators>
+    $<INSTALL_INTERFACE:indicators::indicators>)
+add_library(anvil::progress ALIAS anvil_progress)
+
+add_library(anvil_test INTERFACE)
+target_link_libraries(anvil_test INTERFACE
+    anvil_core
+    $<BUILD_INTERFACE:Catch2::Catch2WithMain>
+    $<INSTALL_INTERFACE:Catch2::Catch2WithMain>)
+add_library(anvil::test ALIAS anvil_test)
