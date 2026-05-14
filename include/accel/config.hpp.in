@@ -1,0 +1,15 @@
+#pragma once
+// This file is configured by CMake from include/accel/config.hpp.in.
+// Generated path: ${CMAKE_BINARY_DIR}/generated/accel/config.hpp
+//
+// Only platform-INDEPENDENT compile-time constants belong here.
+// DO NOT add sysroot, xpfm, or build-machine paths.
+
+namespace accel::config {
+
+inline constexpr int  kParallelism    = @ACCEL_PARALLELISM@;
+inline constexpr int  kClockMHz       = @ACCEL_CLOCK_MHZ@;
+inline constexpr int  kMaxElements    = @ACCEL_MAX_ELEMENTS@;
+inline constexpr const char* kPlatformKind = "@ACCEL_PLATFORM_KIND@";
+
+}  // namespace accel::config
