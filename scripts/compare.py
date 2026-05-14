@@ -37,9 +37,9 @@ def main(dataset: str, tol: float) -> None:
         log.error("meta.json not found in {}. Run 'make gen' first.", data_dir)
         sys.exit(1)
 
-    gold = load_bin(data_dir / f"{dataset}_gold_out.bin")
+    gold = load_bin(data_dir / "gold_out.bin")
     if gold is None:
-        gold = load_bin(data_dir / "gold_out.bin")
+        gold = load_bin(data_dir / f"{dataset}_gold_out.bin")
     hls = load_bin(data_dir / "hls_model_out.bin")
     xrt_emu = load_bin(data_dir / "xrt_emu_out.bin")
     xrt_hw = load_bin(data_dir / "xrt_hw_out.bin")
