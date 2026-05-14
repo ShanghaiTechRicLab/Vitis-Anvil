@@ -34,6 +34,7 @@ add_subdirectory(third_party)
 
 if(ANVIL_BUILD_XRT)
   find_package(XRT REQUIRED)
+  include(AnvilHost)
 endif()
 add_subdirectory(src/anvil)
 
@@ -45,6 +46,9 @@ if(ANVIL_BUILD_HLS_MODEL)
 endif()
 if(ANVIL_BUILD_APPS)
   add_subdirectory(src/apps)
+endif()
+if(ANVIL_BUILD_XRT)
+  add_subdirectory(src/host)
 endif()
 
 if(ANVIL_BUILD_TESTS)

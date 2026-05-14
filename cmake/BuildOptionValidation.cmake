@@ -14,3 +14,7 @@ endif()
 if(ANVIL_BUILD_APPS AND NOT ANVIL_BUILD_GOLD)
   message(FATAL_ERROR "ANVIL_BUILD_APPS=ON requires ANVIL_BUILD_GOLD=ON.")
 endif()
+
+if(ANVIL_BUILD_XRT AND NOT ANVIL_BUILD_GOLD)
+  message(FATAL_ERROR "ANVIL_BUILD_XRT=ON requires ANVIL_BUILD_GOLD=ON (run_saxpy verifies device output against the gold model).")
+endif()
