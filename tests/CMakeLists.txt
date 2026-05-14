@@ -3,6 +3,7 @@
 set(TEST_SOURCES
   cpp/test_saxpy_gold.cpp
   cpp/test_metrics.cpp
+  cpp/test_anvil_log.cpp
 )
 if(TARGET anvil_hls_model)
   list(APPEND TEST_SOURCES cpp/test_hls_model_vs_gold.cpp)
@@ -12,9 +13,11 @@ add_executable(anvil_tests ${TEST_SOURCES})
 target_include_directories(anvil_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(anvil_tests PRIVATE
   anvil_gold
+  anvil::log
+  anvil::cli
+  anvil::json
+  anvil::toml
   Catch2::Catch2WithMain
-  spdlog::spdlog
-  nlohmann_json::nlohmann_json
 )
 if(TARGET anvil_hls_model)
   target_link_libraries(anvil_tests PRIVATE anvil_hls_model)

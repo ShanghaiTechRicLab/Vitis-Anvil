@@ -31,6 +31,7 @@ target_compile_features(anvil_core INTERFACE cxx_std_20)
 add_library(anvil::core ALIAS anvil_core)
 
 add_subdirectory(third_party)
+add_subdirectory(src/anvil)
 
 if(ANVIL_BUILD_GOLD)
   add_subdirectory(src/gold)
