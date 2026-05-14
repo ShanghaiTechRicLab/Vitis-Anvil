@@ -198,6 +198,9 @@ function(add_accel_kernel)
 
   if(AK_TESTBENCH)
     set(_ak_cosim_stamp "${_ak_work_dir}/.cosim.stamp")
+    # vitis-run 2024.2 defaults to --mode hls; the flag is intentionally
+    # omitted so this command stays valid if a future release renames mode
+    # tokens (we only need the HLS cosim mode here).
     add_custom_command(
       OUTPUT "${_ak_cosim_stamp}"
       COMMAND "${CMAKE_COMMAND}" -E make_directory "${_ak_work_dir}"
