@@ -340,7 +340,7 @@ function(add_accel_kernel_xclbin)
             --platform "${ACCEL_VITIS_PLATFORM}"
             --target "${AKX_MODE}"
             --config "${AKX_LINK_CFG}"
-            --work_dir "${_akx_work_dir}"
+            --temp_dir "${_akx_work_dir}"
             ${_akx_artifacts}
             -o "${_akx_xclbin}"
     DEPENDS ${_akx_artifacts} "${AKX_LINK_CFG}"

@@ -49,16 +49,26 @@ rtk ./build/hls-model-linux-debug/src/apps/compare_gold_hls_model \
 - `ACCEL_BUILD_KERNELS=OFF` — Phase 2 kernel/csynth generation
 - `ACCEL_PLATFORM_KIND=native` — `native|alveo_u250|alveo_u55c|zcu104|kv260`
 - `ACCEL_VITIS_PLATFORM=` — Vitis `.xpfm` path for Phase 2 kernel presets
-- `ACCEL_VITIS_TARGET=hw` — Vitis package/link target (`hw|hw_emu|sw_emu`); currently validated and reserved because HLS csynth does not pass a target
+- `ACCEL_VITIS_TARGET=hw` — Vitis xclbin link target (`hw|hw_emu|sw_emu`); HLS csynth does not pass `--target`
 - `ACCEL_PARALLELISM=8` — reserved for Phase 2 (DataPack lane width)
 - `ACCEL_MAX_ELEMENTS=131072` — maximum saxpy frame length
 - `ACCEL_HLS_STD=c++14` — kernel-synthesis C++ standard (Phase 2)
 
-## Alveo U250 Phase 2 csynth preset
+## Alveo U250 Phase 2 preset
 
-`alveo-u250-host` enables the Phase 2 Vitis HLS kernel csynth flow with
+`alveo-u250-host` enables the Phase 2 Vitis HLS kernel flow with
 `ACCEL_BUILD_KERNELS=ON` and `ACCEL_BUILD_XRT=OFF`; it does not build the Phase
-3 XRT host runtime. The preset uses the repository default U250 platform path:
+3 XRT host runtime. `saxpy_xo` is part of the default build, while the U250
+`saxpy_xclbin` link is an explicit, long-running target and is not part of
+`ALL` or ctest:
+
+```bash
+rtk cmake --build --preset alveo-u250-host --target saxpy_xclbin
+```
+
+`ACCEL_VITIS_TARGET` controls the xclbin link mode (`hw`, `hw_emu`, or
+`sw_emu`) and defaults to `hw`. The preset uses the repository default U250
+platform path:
 
 ```text
 /opt/xilinx/platforms/xilinx_u250_gen3x16_xdma_4_1_202210_1/xilinx_u250_gen3x16_xdma_4_1_202210_1.xpfm

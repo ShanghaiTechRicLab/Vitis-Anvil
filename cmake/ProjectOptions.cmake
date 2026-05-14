@@ -22,12 +22,11 @@ set(ACCEL_MAX_ELEMENTS   "131072"  CACHE STRING "Max elements per saxpy frame")
 # ---------------------------------------------------------------------------
 # Phase 2: when ACCEL_BUILD_KERNELS=ON, verify Vitis HLS toolchain is available
 # and the U250 / target platform .xpfm path is set. ACCEL_VITIS_TARGET is
-# declared and validated here so presets can carry the future xclbin/link target
-# without CMake treating it as an unused cache variable. v++ --compile --mode hls
-# in Vitis 2024.2 does not accept --target, so HLS csynth intentionally does not
-# pass it until package/link support lands. These checks are FATAL_ERROR
-# with a helpful hint because skipping the check produces obscure failures
-# deep in v++ runs.
+# declared and validated here for xclbin link/package targets. v++ --compile
+# --mode hls in Vitis 2024.2 does not accept --target, so HLS csynth
+# intentionally does not pass it; add_accel_kernel_xclbin uses it by default.
+# These checks are FATAL_ERROR with a helpful hint because skipping the check
+# produces obscure failures deep in v++ runs.
 # ---------------------------------------------------------------------------
 if(NOT ACCEL_VITIS_TARGET MATCHES "^(hw|hw_emu|sw_emu)$")
   message(FATAL_ERROR
@@ -61,5 +60,5 @@ if(ACCEL_BUILD_KERNELS)
   message(STATUS "Phase 2 toolchain: v++ = ${VPP_EXECUTABLE}")
   message(STATUS "Phase 2 toolchain: vitis-run = ${VITIS_RUN_EXECUTABLE}")
   message(STATUS "Phase 2 platform: ${ACCEL_VITIS_PLATFORM}")
-  message(STATUS "Phase 2 Vitis target: ${ACCEL_VITIS_TARGET} (reserved for package/link; not passed to v++ --mode hls)")
+  message(STATUS "Phase 2 Vitis target: ${ACCEL_VITIS_TARGET} (used by xclbin link; not passed to v++ --mode hls)")
 endif()

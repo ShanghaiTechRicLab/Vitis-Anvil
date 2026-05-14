@@ -21,6 +21,5 @@ if(ACCEL_PLATFORM_KIND STREQUAL "alveo_u250")
   add_accel_kernel_xclbin(
     NAME saxpy
     KERNEL_TARGETS saxpy_xo
-    PLATFORM_KIND ${ACCEL_PLATFORM_KIND}
-    MODE hw)
+    PLATFORM_KIND ${ACCEL_PLATFORM_KIND})
 endif()
