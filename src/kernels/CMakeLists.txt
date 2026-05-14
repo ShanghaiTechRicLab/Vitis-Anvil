@@ -1,8 +1,8 @@
 # src/kernels/CMakeLists.txt
-# Phase 2 stub. add_subdirectory(src/kernels) runs only when
-# ACCEL_BUILD_KERNELS=ON. The call below triggers VitisKernel.cmake's
-# stub which fails with a clear "Phase 2 not implemented" message.
+# Phase 2 kernel registration. The saxpy_xo target runs Vitis HLS and
+# emits build/<preset>/src/kernels/saxpy_hls/saxpy.xo.
 
 add_accel_kernel(saxpy
-  TOP     saxpy
-  SOURCES saxpy_kernel.cpp)
+  TOP           saxpy
+  SOURCES       saxpy_kernel.cpp
+  PLATFORM_KIND ${ACCEL_PLATFORM_KIND})

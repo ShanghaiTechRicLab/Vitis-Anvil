@@ -57,9 +57,16 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "ACCEL_PLATFORM_KIND": "alveo_u250",
-        "ACCEL_BUILD_XRT": "ON",
-        "ACCEL_BUILD_KERNELS": "OFF",
-        "ACCEL_BUILD_TESTS": "OFF"
+        "ACCEL_BUILD_GOLD": "ON",
+        "ACCEL_BUILD_HLS_MODEL": "ON",
+        "ACCEL_BUILD_APPS": "ON",
+        "ACCEL_BUILD_TESTS": "ON",
+        "ACCEL_BUILD_KERNELS": "ON",
+        "ACCEL_BUILD_XRT": "OFF",
+        "ACCEL_PARALLELISM": "16",
+        "ACCEL_CLOCK_MHZ": "300",
+        "ACCEL_VITIS_PLATFORM": "/opt/xilinx/platforms/xilinx_u250_gen3x16_xdma_4_1_202210_1/xilinx_u250_gen3x16_xdma_4_1_202210_1.xpfm",
+        "ACCEL_VITIS_TARGET": "hw"
       }
     },
     {
@@ -108,6 +115,10 @@
     {
       "name": "hls-model-linux-release",
       "configurePreset": "hls-model-linux-release"
+    },
+    {
+      "name": "alveo-u250-host",
+      "configurePreset": "alveo-u250-host"
     }
   ],
   "testPresets": [
@@ -135,6 +146,13 @@
     {
       "name": "hls-model-linux-release",
       "configurePreset": "hls-model-linux-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "alveo-u250-host",
+      "configurePreset": "alveo-u250-host",
       "output": {
         "outputOnFailure": true
       }
