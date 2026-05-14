@@ -1,6 +1,10 @@
 {
   "version": 3,
-  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
   "configurePresets": [
     {
       "name": "gold-linux-debug",
@@ -20,7 +24,9 @@
       "name": "gold-linux-release",
       "inherits": "gold-linux-debug",
       "binaryDir": "${sourceDir}/build/gold-linux-release",
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
     },
     {
       "name": "hls-model-linux-debug",
@@ -40,7 +46,9 @@
       "name": "hls-model-linux-release",
       "inherits": "hls-model-linux-debug",
       "binaryDir": "${sourceDir}/build/hls-model-linux-release",
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
     },
     {
       "name": "alveo-u250-host",
@@ -85,21 +93,51 @@
     }
   ],
   "buildPresets": [
-    { "name": "gold-linux-debug",       "configurePreset": "gold-linux-debug" },
-    { "name": "gold-linux-release",     "configurePreset": "gold-linux-release" },
-    { "name": "hls-model-linux-debug",  "configurePreset": "hls-model-linux-debug" },
-    { "name": "hls-model-linux-release","configurePreset": "hls-model-linux-release" }
+    {
+      "name": "gold-linux-debug",
+      "configurePreset": "gold-linux-debug"
+    },
+    {
+      "name": "gold-linux-release",
+      "configurePreset": "gold-linux-release"
+    },
+    {
+      "name": "hls-model-linux-debug",
+      "configurePreset": "hls-model-linux-debug"
+    },
+    {
+      "name": "hls-model-linux-release",
+      "configurePreset": "hls-model-linux-release"
+    }
   ],
   "testPresets": [
     {
       "name": "gold-linux-debug",
       "configurePreset": "gold-linux-debug",
-      "output": { "outputOnFailure": true }
+      "output": {
+        "outputOnFailure": true
+      }
     },
     {
       "name": "hls-model-linux-debug",
       "configurePreset": "hls-model-linux-debug",
-      "output": { "outputOnFailure": true }
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "gold-linux-release",
+      "configurePreset": "gold-linux-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "hls-model-linux-release",
+      "configurePreset": "hls-model-linux-release",
+      "output": {
+        "outputOnFailure": true
+      }
     }
   ]
 }
