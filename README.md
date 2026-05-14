@@ -30,8 +30,8 @@ rtk cmake --build --preset hls-model-linux-debug
 rtk ctest --preset hls-model-linux-debug --output-on-failure
 ```
 
-See `docs/build.md` for all presets and `docs/superpowers/specs/2026-05-14-vitis-anvil-phase01-design.md`
-for the full design.
+See `docs/build.md` for presets and Phase 0+1 build/test usage. Future phase
+design notes will be added to tracked docs as those phases land.
 
 ## Layout
 

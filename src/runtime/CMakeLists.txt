@@ -6,4 +6,4 @@
 message(FATAL_ERROR
   "src/runtime: ACCEL_BUILD_XRT=ON but Phase 3 (XRT runtime wrapper) "
   "is not yet implemented. "
-  "See docs/donotcommit/vitis-anvil-design.md §8.")
+  "See docs/build.md for current presets; Phase 3 docs will replace this stub.")

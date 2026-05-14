@@ -8,4 +8,4 @@
 - board-side XRT / zocl verification commands
 - failure-log collection procedure
 
-See `docs/donotcommit/vitis-anvil-design.md` §14.3-14.4 for the design.
+Detailed deployment design will be added to tracked docs when Phase 4 lands.

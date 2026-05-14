@@ -9,6 +9,6 @@
 //   using ElemPack = hlslib::DataPack<float, accel::config::kParallelism>;
 //   }
 //
-// See docs/superpowers/specs/2026-05-14-vitis-anvil-phase01-design.md §6.1.
+// See docs/build.md for current Phase 0+1 build/test usage.
 
 namespace accel::hls {}
