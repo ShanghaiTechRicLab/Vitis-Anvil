@@ -56,7 +56,9 @@ extern "C" void saxpy(
 #pragma HLS interface s_axilite port=n_total bundle=control
 #pragma HLS interface s_axilite port=return  bundle=control
 
-  const int n_pack = (n_total + 15) / 16;
+  if (n_total <= 0) return;
+
+  const int n_pack = (n_total - 1) / 16 + 1;
 
   hlslib::Stream<SaxpyPack, kStreamDepth> sx("sx"), sy("sy"), so("so");
 
