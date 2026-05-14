@@ -265,6 +265,95 @@ function(add_accel_kernel)
 endfunction()
 
 function(add_accel_kernel_xclbin)
-  message(FATAL_ERROR
-    "add_accel_kernel_xclbin: not implemented in Task 7; see Task 11")
+  set(options)
+  set(one_value_args NAME PLATFORM_KIND LINK_CFG MODE)
+  set(multi_value_args KERNEL_TARGETS)
+  cmake_parse_arguments(AKX "${options}" "${one_value_args}" "${multi_value_args}" ${ARGN})
+
+  if(NOT AKX_NAME)
+    message(FATAL_ERROR "add_accel_kernel_xclbin: NAME is required")
+  endif()
+  if(NOT AKX_KERNEL_TARGETS)
+    message(FATAL_ERROR "add_accel_kernel_xclbin(${AKX_NAME}): KERNEL_TARGETS required")
+  endif()
+  if(NOT AKX_PLATFORM_KIND)
+    set(AKX_PLATFORM_KIND "${ACCEL_PLATFORM_KIND}")
+  endif()
+  if(NOT AKX_PLATFORM_KIND)
+    message(FATAL_ERROR
+      "add_accel_kernel_xclbin(${AKX_NAME}): PLATFORM_KIND required (e.g. alveo_u250) "
+      "or set ACCEL_PLATFORM_KIND")
+  endif()
+  if(AKX_UNPARSED_ARGUMENTS)
+    message(FATAL_ERROR
+      "add_accel_kernel_xclbin(${AKX_NAME}): unexpected arguments: ${AKX_UNPARSED_ARGUMENTS}")
+  endif()
+
+  if(NOT AKX_LINK_CFG)
+    set(AKX_LINK_CFG "${PROJECT_SOURCE_DIR}/config/${AKX_PLATFORM_KIND}/link.cfg")
+  elseif(NOT IS_ABSOLUTE "${AKX_LINK_CFG}")
+    get_filename_component(AKX_LINK_CFG "${AKX_LINK_CFG}" ABSOLUTE
+                           BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+  endif()
+  if(NOT EXISTS "${AKX_LINK_CFG}")
+    message(FATAL_ERROR
+      "add_accel_kernel_xclbin(${AKX_NAME}): LINK_CFG not found: ${AKX_LINK_CFG}")
+  endif()
+
+  if(NOT AKX_MODE)
+    if(ACCEL_VITIS_TARGET)
+      set(AKX_MODE "${ACCEL_VITIS_TARGET}")
+    else()
+      set(AKX_MODE "hw")
+    endif()
+  endif()
+  if(NOT AKX_MODE MATCHES "^(hw|hw_emu|sw_emu)$")
+    message(FATAL_ERROR
+      "add_accel_kernel_xclbin(${AKX_NAME}): MODE must be one of hw, hw_emu, or sw_emu; "
+      "got '${AKX_MODE}'")
+  endif()
+
+  set(_akx_artifacts)
+  foreach(_akx_target IN LISTS AKX_KERNEL_TARGETS)
+    if(NOT TARGET "${_akx_target}")
+      message(FATAL_ERROR
+        "add_accel_kernel_xclbin(${AKX_NAME}): kernel target not found: ${_akx_target}")
+    endif()
+    get_target_property(_akx_artifact "${_akx_target}" ACCEL_KERNEL_ARTIFACT)
+    if(NOT _akx_artifact)
+      message(FATAL_ERROR
+        "add_accel_kernel_xclbin(${AKX_NAME}): target '${_akx_target}' does not set "
+        "ACCEL_KERNEL_ARTIFACT")
+    endif()
+    list(APPEND _akx_artifacts "${_akx_artifact}")
+  endforeach()
+
+  set(_akx_out_dir "${CMAKE_CURRENT_BINARY_DIR}/${AKX_NAME}_xclbin")
+  set(_akx_work_dir "${_akx_out_dir}/work")
+  set(_akx_xclbin "${_akx_out_dir}/${AKX_NAME}.xclbin")
+
+  add_custom_command(
+    OUTPUT "${_akx_xclbin}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${_akx_out_dir}" "${_akx_work_dir}"
+    COMMAND "${VPP_EXECUTABLE}"
+            --link
+            --platform "${ACCEL_VITIS_PLATFORM}"
+            --target "${AKX_MODE}"
+            --config "${AKX_LINK_CFG}"
+            --work_dir "${_akx_work_dir}"
+            ${_akx_artifacts}
+            -o "${_akx_xclbin}"
+    DEPENDS ${_akx_artifacts} "${AKX_LINK_CFG}"
+    COMMENT "Linking Vitis xclbin for ${AKX_NAME} (${AKX_PLATFORM_KIND}, ${AKX_MODE})"
+    VERBATIM
+    USES_TERMINAL)
+
+  add_custom_target("${AKX_NAME}_xclbin"
+    DEPENDS "${_akx_xclbin}")
+
+  set_target_properties("${AKX_NAME}_xclbin" PROPERTIES
+    ACCEL_XCLBIN "${_akx_xclbin}"
+    ACCEL_XCLBIN_MODE "${AKX_MODE}"
+    ACCEL_XCLBIN_LINK_CFG "${AKX_LINK_CFG}"
+    ACCEL_XCLBIN_PLATFORM_KIND "${AKX_PLATFORM_KIND}")
 endfunction()
