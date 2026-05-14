@@ -50,25 +50,23 @@ rtk ./build/hls-model-linux-debug/src/apps/compare_gold_hls_model \
 - `ACCEL_PLATFORM_KIND=native` — `native|alveo_u250|alveo_u55c|zcu104|kv260`
 - `ACCEL_VITIS_PLATFORM=` — Vitis `.xpfm` path for Phase 2 kernel presets
 - `ACCEL_VITIS_TARGET=hw` — Vitis xclbin link target (`hw|hw_emu|sw_emu`); HLS csynth does not pass `--target`
-- `ACCEL_PARALLELISM=8` — reserved for Phase 2 (DataPack lane width)
+- `ACCEL_PARALLELISM=8` — DataPack lane width; `alveo-u250-host` overrides this to `16`
 - `ACCEL_MAX_ELEMENTS=131072` — maximum saxpy frame length
 - `ACCEL_HLS_STD=c++14` — kernel-synthesis C++ standard (Phase 2)
 
 ## Alveo U250 Phase 2 preset
 
-`alveo-u250-host` enables the Phase 2 Vitis HLS kernel flow with
-`ACCEL_BUILD_KERNELS=ON` and `ACCEL_BUILD_XRT=OFF`; it does not build the Phase
-3 XRT host runtime. `saxpy_xo` is part of the default build, while the U250
-`saxpy_xclbin` link is an explicit, long-running target and is not part of
-`ALL` or ctest:
+`alveo-u250-host` enables the Phase 2 U250 Vitis HLS kernel flow. It builds the
+native gold/HLS-model libraries, CLI apps, Catch2 tests, and Vitis kernel
+csynthesis (`ACCEL_BUILD_KERNELS=ON`) while keeping the Phase 3 XRT host runtime
+off (`ACCEL_BUILD_XRT=OFF`). Source Vitis 2024.2 before configuring so `v++`
+and `vitis-run` are on `PATH`:
 
 ```bash
-rtk cmake --build --preset alveo-u250-host --target saxpy_xclbin
+source /tools/Xilinx/Vitis/2024.2/settings64.sh
 ```
 
-`ACCEL_VITIS_TARGET` controls the xclbin link mode (`hw`, `hw_emu`, or
-`sw_emu`) and defaults to `hw`. The preset uses the repository default U250
-platform path:
+The preset defaults `ACCEL_VITIS_PLATFORM` to the lab U250 platform file:
 
 ```text
 /opt/xilinx/platforms/xilinx_u250_gen3x16_xdma_4_1_202210_1/xilinx_u250_gen3x16_xdma_4_1_202210_1.xpfm
@@ -79,6 +77,40 @@ If the platform is installed elsewhere, override it at configure time:
 ```bash
 rtk cmake --preset alveo-u250-host -DACCEL_VITIS_PLATFORM=/path/to/xilinx_u250.xpfm
 ```
+
+Typical Phase 2 usage is configure, build, then run the preset test matrix:
+
+```bash
+rtk cmake --preset alveo-u250-host
+rtk cmake --build --preset alveo-u250-host
+rtk ctest --preset alveo-u250-host --output-on-failure
+```
+
+The default build includes `saxpy_xo`, so `rtk cmake --build --preset
+alveo-u250-host` runs Vitis HLS csynth and packages the `.xo`. The full ctest
+matrix includes the native unit/app tests plus Vitis csynth build/check tests
+and U250 HLS cosimulation. The current cosim testbench uses `n=65`.
+
+| Target | Trigger | Rough time |
+|--------|---------|------------|
+| `saxpy_xo` | Default `alveo-u250-host` build; also ctest `saxpy_csynth_build` | Minutes |
+| `saxpy_cosim` | ctest `saxpy_cosim_vs_gold` builds this target after csynth | Minutes to tens of minutes |
+| `saxpy_xclbin` | Manual `rtk cmake --build --preset alveo-u250-host --target saxpy_xclbin` | Long-running hardware link; tens of minutes or more |
+
+CTest labels distinguish the Vitis checks from native tests:
+
+- Unlabeled tests (`anvil_tests`, `gen_tiny_dataset_smoke`, `run_gold_smoke`,
+  `compare_gold_hls_model_smoke`) are native unit/app smoke tests.
+- `csynth` tests build `saxpy_xo` and parse the generated HLS report;
+  `saxpy_csynth_build` is also labeled `build` and provides the shared fixture.
+- `cosim` tests run `vitis-run --cosim` against the U250 testbench and require
+  the csynth fixture.
+
+`ACCEL_VITIS_TARGET` controls only the xclbin link mode (`hw`, `hw_emu`, or
+`sw_emu`) and defaults to `hw`; Vitis 2024.2 HLS csynth/cosim do not receive
+`--target`. `saxpy_xclbin` is intentionally manual-only: it is not an `ALL`
+target, is not registered with ctest, and is long-running. Phase 3 will consume
+that artifact when the XRT host runtime is enabled later.
 
 ## Exit codes (apps)
 
