@@ -1,0 +1,12 @@
+{
+  "case_id": "tiny_case_001",
+  "n": 16,
+  "a": 2.0,
+  "seed": 42,
+  "x": "tiny_case_001_x.bin",
+  "y": "tiny_case_001_y.bin",
+  "tolerance": {
+    "max_abs": 0.0,
+    "rms": 0.0
+  }
+}
