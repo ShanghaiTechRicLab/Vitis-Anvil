@@ -68,7 +68,6 @@ vcpkg_installed/
 Testing/
 .cache/
 
-docs/donotcommit/
 # CMake / Ninja build outputs
 .cmake/
 # Generated test data (gen_dataset writes here)
@@ -85,4 +84,3 @@ reports/*.csv
 reports/*.md
 !reports/.gitkeep
 # Local planning artifacts (do not commit)
-docs/superpowers/
