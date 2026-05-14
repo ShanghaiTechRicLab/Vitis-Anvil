@@ -5,4 +5,5 @@
 add_accel_kernel(saxpy
   TOP           saxpy
   SOURCES       saxpy_kernel.cpp
+  TESTBENCH    ${CMAKE_SOURCE_DIR}/tests/kernels/saxpy_cosim_tb.cpp
   PLATFORM_KIND ${ACCEL_PLATFORM_KIND})
