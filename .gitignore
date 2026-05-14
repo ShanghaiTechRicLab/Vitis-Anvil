@@ -83,4 +83,3 @@ reports/*.jsonl
 reports/*.csv
 reports/*.md
 !reports/.gitkeep
-# Local planning artifacts (do not commit)
