@@ -11,6 +11,9 @@ option(ACCEL_BUILD_KERNELS    "Build Vitis HLS kernels"  OFF)   # Phase 2
 set(ACCEL_PLATFORM_KIND  "native"  CACHE STRING
     "Target platform: native|alveo_u250|alveo_u55c|zcu104|kv260")
 set(ACCEL_VITIS_PLATFORM ""        CACHE STRING "Path to .xpfm (Phase 2)")
+set(ACCEL_VITIS_TARGET   "hw"      CACHE STRING
+    "Vitis compile/link target for packaged artifacts: hw|hw_emu|sw_emu")
+set_property(CACHE ACCEL_VITIS_TARGET PROPERTY STRINGS hw hw_emu sw_emu)
 set(ACCEL_CLOCK_MHZ      "200"     CACHE STRING "Kernel clock (Phase 2)")
 set(ACCEL_PARALLELISM    "8"       CACHE STRING "DataPack width / kernel parallelism (Phase 2)")
 set(ACCEL_HLS_STD        "c++14"   CACHE STRING "C++ std for HLS kernel synthesis (Phase 2)")
@@ -18,10 +21,20 @@ set(ACCEL_MAX_ELEMENTS   "131072"  CACHE STRING "Max elements per saxpy frame")
 
 # ---------------------------------------------------------------------------
 # Phase 2: when ACCEL_BUILD_KERNELS=ON, verify Vitis HLS toolchain is available
-# and the U250 / target platform .xpfm path is set. Both are FATAL_ERROR
+# and the U250 / target platform .xpfm path is set. ACCEL_VITIS_TARGET is
+# declared and validated here so presets can carry the future xclbin/link target
+# without CMake treating it as an unused cache variable. v++ --compile --mode hls
+# in Vitis 2024.2 does not accept --target, so HLS csynth intentionally does not
+# pass it until package/link support lands. These checks are FATAL_ERROR
 # with a helpful hint because skipping the check produces obscure failures
 # deep in v++ runs.
 # ---------------------------------------------------------------------------
+if(NOT ACCEL_VITIS_TARGET MATCHES "^(hw|hw_emu|sw_emu)$")
+  message(FATAL_ERROR
+    "ACCEL_VITIS_TARGET must be one of hw, hw_emu, or sw_emu; "
+    "got '${ACCEL_VITIS_TARGET}'.")
+endif()
+
 if(ACCEL_BUILD_KERNELS)
   find_program(VPP_EXECUTABLE v++)
   if(NOT VPP_EXECUTABLE)
@@ -48,4 +61,5 @@ if(ACCEL_BUILD_KERNELS)
   message(STATUS "Phase 2 toolchain: v++ = ${VPP_EXECUTABLE}")
   message(STATUS "Phase 2 toolchain: vitis-run = ${VITIS_RUN_EXECUTABLE}")
   message(STATUS "Phase 2 platform: ${ACCEL_VITIS_PLATFORM}")
+  message(STATUS "Phase 2 Vitis target: ${ACCEL_VITIS_TARGET} (reserved for package/link; not passed to v++ --mode hls)")
 endif()

@@ -109,6 +109,8 @@ function(add_accel_kernel)
   set(_ak_cflags
     "-std=${ACCEL_HLS_STD} -DHLSLIB_SYNTHESIS -I${PROJECT_SOURCE_DIR}/include -I${CMAKE_BINARY_DIR}/generated -I${PROJECT_SOURCE_DIR}/third_party/hlslib/include")
 
+  # Vitis 2024.2 HLS compile mode accepts platform/frequency but not --target;
+  # ACCEL_VITIS_TARGET is retained as target metadata for future xclbin/link work.
   file(WRITE "${_ak_cfg}"
     "platform=${ACCEL_VITIS_PLATFORM}\n"
     "freqhz=${AK_CLOCK_HZ}\n"
@@ -143,7 +145,8 @@ function(add_accel_kernel)
     ACCEL_KERNEL_WORK_DIR "${_ak_work_dir}"
     ACCEL_KERNEL_TOP "${AK_TOP}"
     ACCEL_KERNEL_PLATFORM_KIND "${AK_PLATFORM_KIND}"
-    ACCEL_KERNEL_CLOCK_HZ "${AK_CLOCK_HZ}")
+    ACCEL_KERNEL_CLOCK_HZ "${AK_CLOCK_HZ}"
+    ACCEL_KERNEL_VITIS_TARGET "${ACCEL_VITIS_TARGET}")
 
   if(ACCEL_BUILD_TESTS)
     if(NOT Python3_EXECUTABLE)

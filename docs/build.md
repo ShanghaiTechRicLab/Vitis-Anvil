@@ -15,7 +15,7 @@
 | `gold-linux-release`      | Release build with gold reference only       |
 | `hls-model-linux-debug`   | Debug build with gold + HLS CPU model        |
 | `hls-model-linux-release` | Release build with gold + HLS CPU model      |
-| `alveo-u250-host`         | Phase 3 XRT host stub (fails without XRT)    |
+| `alveo-u250-host`         | Phase 2 U250 Vitis HLS csynth preset         |
 | `zcu104-host-aarch64`     | Phase 4 aarch64 host stub (requires SYSROOT) |
 | `zcu104-kernel`           | Phase 2 Vitis kernel stub                    |
 
@@ -46,11 +46,29 @@ rtk ./build/hls-model-linux-debug/src/apps/compare_gold_hls_model \
 - `ACCEL_BUILD_APPS=ON` — build CLI tools
 - `ACCEL_BUILD_TESTS=ON` — build Catch2 tests
 - `ACCEL_BUILD_XRT=OFF` — Phase 3 runtime stub
-- `ACCEL_BUILD_KERNELS=OFF` — Phase 2 kernel stub
+- `ACCEL_BUILD_KERNELS=OFF` — Phase 2 kernel/csynth generation
 - `ACCEL_PLATFORM_KIND=native` — `native|alveo_u250|alveo_u55c|zcu104|kv260`
+- `ACCEL_VITIS_PLATFORM=` — Vitis `.xpfm` path for Phase 2 kernel presets
+- `ACCEL_VITIS_TARGET=hw` — Vitis package/link target (`hw|hw_emu|sw_emu`); currently validated and reserved because HLS csynth does not pass a target
 - `ACCEL_PARALLELISM=8` — reserved for Phase 2 (DataPack lane width)
 - `ACCEL_MAX_ELEMENTS=131072` — maximum saxpy frame length
 - `ACCEL_HLS_STD=c++14` — kernel-synthesis C++ standard (Phase 2)
+
+## Alveo U250 Phase 2 csynth preset
+
+`alveo-u250-host` enables the Phase 2 Vitis HLS kernel csynth flow with
+`ACCEL_BUILD_KERNELS=ON` and `ACCEL_BUILD_XRT=OFF`; it does not build the Phase
+3 XRT host runtime. The preset uses the repository default U250 platform path:
+
+```text
+/opt/xilinx/platforms/xilinx_u250_gen3x16_xdma_4_1_202210_1/xilinx_u250_gen3x16_xdma_4_1_202210_1.xpfm
+```
+
+If the platform is installed elsewhere, override it at configure time:
+
+```bash
+rtk cmake --preset alveo-u250-host -DACCEL_VITIS_PLATFORM=/path/to/xilinx_u250.xpfm
+```
 
 ## Exit codes (apps)
 
