@@ -80,7 +80,11 @@
         "ANVIL_PLATFORM_KIND": "zcu104",
         "ANVIL_BUILD_XRT": "ON",
         "ANVIL_BUILD_KERNELS": "OFF",
-        "ANVIL_BUILD_TESTS": "OFF"
+        "ANVIL_BUILD_TESTS": "OFF",
+        "ANVIL_BUILD_GOLD": "ON",
+        "ANVIL_BUILD_HLS_MODEL": "OFF",
+        "ANVIL_BUILD_APPS": "ON",
+        "ANVIL_NEEDS_CROSS": "ON"
       }
     },
     {
@@ -98,7 +102,8 @@
         "ANVIL_BUILD_KERNELS": "ON",
         "ANVIL_VITIS_PLATFORM": "/tools/Xilinx/Vitis/2024.2/base_platforms/xilinx_zcu104_base_202420_1/xilinx_zcu104_base_202420_1.xpfm",
         "ANVIL_VITIS_PART": "xczu7ev-ffvc1156-2-e",
-        "ANVIL_VITIS_TARGET": "hw_emu"
+        "ANVIL_VITIS_TARGET": "hw_emu",
+        "ANVIL_NEEDS_CROSS": "OFF"
       }
     }
   ],

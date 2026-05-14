@@ -1,8 +1,6 @@
 # cmake/FindXRT.cmake
-# Locate XRT (Xilinx Runtime) headers and the xrt_coreutil library.
-# Works for both datacenter (Alveo, /opt/xilinx/xrt) and embedded
-# (sysroot /usr) installations. Cross-compilation honors CMAKE_SYSROOT
-# via CMAKE_FIND_ROOT_PATH_MODE_* in toolchain files.
+# Locate XRT for Alveo datacenter and embedded sysroot targets. Cross builds
+# honor CMAKE_SYSROOT/CMAKE_FIND_ROOT_PATH through CMake's normal find rules.
 
 find_path(XRT_INCLUDE_DIR
   NAMES xrt/xrt_device.h
@@ -11,8 +9,7 @@ find_path(XRT_INCLUDE_DIR
     ${XILINX_XRT}/include
     /opt/xilinx/xrt/include
   PATHS
-    /usr/include
-)
+    /usr/include)
 
 find_library(XRT_COREUTIL_LIBRARY
   NAMES xrt_coreutil
@@ -26,8 +23,8 @@ find_library(XRT_COREUTIL_LIBRARY
   PATHS
     /usr/lib
     /usr/lib64
-    /usr/lib/aarch64-linux-gnu
-)
+    /usr/lib/x86_64-linux-gnu
+    /usr/lib/aarch64-linux-gnu)
 
 find_library(XRT_UUID_LIBRARY
   NAMES uuid
@@ -35,8 +32,7 @@ find_library(XRT_UUID_LIBRARY
     /usr/lib
     /usr/lib64
     /usr/lib/x86_64-linux-gnu
-    /usr/lib/aarch64-linux-gnu
-)
+    /usr/lib/aarch64-linux-gnu)
 
 find_library(XRT_RT_LIBRARY
   NAMES rt
@@ -44,19 +40,16 @@ find_library(XRT_RT_LIBRARY
     /usr/lib
     /usr/lib64
     /usr/lib/x86_64-linux-gnu
-    /usr/lib/aarch64-linux-gnu
-)
+    /usr/lib/aarch64-linux-gnu)
 
 find_package(Threads REQUIRED)
 
+set(_xrt_fail_msg "ANVIL_BUILD_XRT=ON but XRT was not found. Alveo: install XRT and source /opt/xilinx/xrt/setup.sh, or set XILINX_XRT. Embedded: set SYSROOT/CMAKE_SYSROOT to a PetaLinux sysroot containing XRT. CPU-only native presets should keep ANVIL_BUILD_XRT=OFF.")
+
 include(FindPackageHandleStandardArgs)
-if(NOT XRT_INCLUDE_DIR OR NOT XRT_COREUTIL_LIBRARY)
-  set(XRT_PHASE3_FAILURE_MESSAGE "ANVIL_BUILD_XRT=ON requests the Phase 3 XRT runtime path, but XRT was not found. Install XRT (set XILINX_XRT or provide headers/library in the sysroot) before enabling this preset. Native CPU-only presets should keep ANVIL_BUILD_XRT=OFF.")
-endif()
 find_package_handle_standard_args(XRT
   REQUIRED_VARS XRT_INCLUDE_DIR XRT_COREUTIL_LIBRARY XRT_UUID_LIBRARY
-  REASON_FAILURE_MESSAGE "${XRT_PHASE3_FAILURE_MESSAGE}"
-)
+  REASON_FAILURE_MESSAGE "${_xrt_fail_msg}")
 
 if(XRT_FOUND AND NOT TARGET XRT::xrt_coreutil)
   add_library(XRT::xrt_coreutil UNKNOWN IMPORTED)
@@ -71,6 +64,5 @@ if(XRT_FOUND AND NOT TARGET XRT::xrt_coreutil)
   set_target_properties(XRT::xrt_coreutil PROPERTIES
     IMPORTED_LOCATION "${XRT_COREUTIL_LIBRARY}"
     INTERFACE_INCLUDE_DIRECTORIES "${XRT_INCLUDE_DIR}"
-    INTERFACE_LINK_LIBRARIES "${_xrt_interface_libs}"
-  )
+    INTERFACE_LINK_LIBRARIES "${_xrt_interface_libs}")
 endif()

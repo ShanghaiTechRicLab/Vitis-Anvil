@@ -7,6 +7,7 @@ option(ANVIL_BUILD_APPS       "Build CLI apps"           ON)
 option(ANVIL_BUILD_TESTS      "Build tests"              ON)
 option(ANVIL_BUILD_XRT        "Build XRT host runtime"   OFF)   # Phase 3
 option(ANVIL_BUILD_KERNELS    "Build Vitis HLS kernels"  OFF)   # Phase 2
+option(ANVIL_NEEDS_CROSS     "Cross-compile host binary for embedded target" OFF)
 
 set(ANVIL_PLATFORM_KIND  "native"  CACHE STRING
     "Target platform: native|u250|alveo_u55c|zcu104|kv260")
