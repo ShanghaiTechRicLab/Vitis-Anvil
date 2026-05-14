@@ -79,6 +79,10 @@ function(add_accel_kernel)
       get_filename_component(_ak_abs_src "${_ak_src}" ABSOLUTE
                              BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
     endif()
+    if(NOT EXISTS "${_ak_abs_src}")
+      message(FATAL_ERROR
+        "add_accel_kernel(${AK_NAME}): kernel source not found: ${_ak_abs_src}")
+    endif()
     list(APPEND _ak_abs_sources "${_ak_abs_src}")
   endforeach()
 
@@ -88,6 +92,10 @@ function(add_accel_kernel)
     else()
       get_filename_component(_ak_abs_testbench "${AK_TESTBENCH}" ABSOLUTE
                              BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+    endif()
+    if(NOT EXISTS "${_ak_abs_testbench}")
+      message(FATAL_ERROR
+        "add_accel_kernel(${AK_NAME}): testbench not found: ${_ak_abs_testbench}")
     endif()
 
     if(AK_PLATFORM_KIND STREQUAL "alveo_u250")
@@ -159,7 +167,8 @@ function(add_accel_kernel)
       "syn.cflags=${_ak_cflags}\n"
       "${_ak_syn_files}"
       "tb.file=${_ak_abs_testbench}\n"
-      "tb.file_cflags=${_ak_abs_testbench},${_ak_tb_cflags}\n")
+      "tb.file_cflags=${_ak_abs_testbench},${_ak_tb_cflags}\n"
+      "cosim.trace_level=none\n")
   endif()
 
   add_custom_command(
@@ -234,7 +243,8 @@ function(add_accel_kernel)
               --max-ii 1)
     set_tests_properties("${AK_NAME}_csynth_build" PROPERTIES
       LABELS "csynth;build"
-      FIXTURES_SETUP "${AK_NAME}_csynth_fixture")
+      FIXTURES_SETUP "${AK_NAME}_csynth_fixture"
+      RESOURCE_LOCK "${AK_NAME}_hls_build_tree")
     set_tests_properties("${AK_NAME}_csynth_check" PROPERTIES
       LABELS csynth
       FIXTURES_REQUIRED "${AK_NAME}_csynth_fixture")
@@ -247,6 +257,8 @@ function(add_accel_kernel)
                 --target "${AK_NAME}_cosim")
       set_tests_properties("${AK_NAME}_cosim_vs_gold" PROPERTIES
         LABELS cosim
+        FIXTURES_REQUIRED "${AK_NAME}_csynth_fixture"
+        RESOURCE_LOCK "${AK_NAME}_hls_build_tree"
         TIMEOUT 600)
     endif()
   endif()
