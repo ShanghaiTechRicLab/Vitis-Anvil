@@ -52,7 +52,7 @@ def sibling_aggregate_loop_ii(report: Path) -> int:
 
     try:
         tree = ET.parse(aggregate)
-    except ET.ParseError:
+    except (ET.ParseError, OSError):
         return 0
     return worst_loop_ii(tree.getroot())
 
@@ -74,6 +74,9 @@ def main(argv: list[str]) -> int:
 
     try:
         tree = ET.parse(args.report)
+    except OSError as e:
+        print(f"error: report read failed: {e}", file=sys.stderr)
+        return 2
     except ET.ParseError as e:
         print(f"error: XML parse failed: {e}", file=sys.stderr)
         return 2
@@ -84,8 +87,8 @@ def main(argv: list[str]) -> int:
         ii = max(ii, sibling_aggregate_loop_ii(args.report))
     lat = overall_latency(root)
 
-    print(f"worst_loop_ii  = {ii}")
-    print(f"overall_latency = {lat}")
+    print(f"worst_loop_ii  = {ii}", flush=True)
+    print(f"overall_latency = {lat}", flush=True)
 
     failed = False
     if args.max_ii is not None and ii > args.max_ii:
