@@ -60,3 +60,6 @@ if(TARGET compare_gold_hls_model)
   set_tests_properties(compare_gold_hls_model_smoke
     PROPERTIES DEPENDS gen_tiny_dataset_smoke)
 endif()
+# Phase 2: tests/kernels/saxpy_cosim_tb.cpp is NOT compiled into anvil_tests.
+# It is consumed by vitis-run --cosim via VitisKernel.cmake (TESTBENCH param),
+# which builds the testbench inside the HLS sim flow. Do not list it here.
