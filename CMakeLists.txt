@@ -47,12 +47,16 @@ if(ACCEL_BUILD_XRT)
   add_subdirectory(src/runtime)
 endif()
 
+if(ACCEL_BUILD_TESTS)
+  enable_testing()
+endif()
+
 if(ACCEL_BUILD_KERNELS)
+  find_package(Python3 COMPONENTS Interpreter REQUIRED)
   include(VitisKernel)
   add_subdirectory(src/kernels)
 endif()
 
 if(ACCEL_BUILD_TESTS)
-  enable_testing()
   add_subdirectory(tests)
 endif()
