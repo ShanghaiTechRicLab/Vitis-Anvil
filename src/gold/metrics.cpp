@@ -1,9 +1,9 @@
-#include "accel/gold/metrics.hpp"
+#include "anvil/gold/metrics.hpp"
 #include <cmath>
 #include <cstddef>
 #include <stdexcept>
 
-namespace accel::gold {
+namespace anvil::gold {
 
 float max_abs_error(std::span<const float> a, std::span<const float> b) {
   if (a.size() != b.size()) {
@@ -30,4 +30,4 @@ float rms_error(std::span<const float> a, std::span<const float> b) {
   return static_cast<float>(std::sqrt(acc / static_cast<double>(a.size())));
 }
 
-}  // namespace accel::gold
+}  // namespace anvil::gold

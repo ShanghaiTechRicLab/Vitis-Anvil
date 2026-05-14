@@ -1,4 +1,4 @@
-#include "accel/hls/saxpy_hls_model.hpp"
+#include "anvil/hls/saxpy_hls_model.hpp"
 
 #include <hlslib/xilinx/Simulation.h>
 #include <hlslib/xilinx/Stream.h>
@@ -7,10 +7,10 @@
 #include <stdexcept>
 #include <vector>
 
-#include "accel/hls/data_pack.hpp"
-#include "accel/hls/stream_utils.hpp"
+#include "anvil/hls/data_pack.hpp"
+#include "anvil/hls/stream_utils.hpp"
 
-namespace accel::hls {
+namespace anvil::hls {
 
 namespace {
 
@@ -24,7 +24,7 @@ void Compute(hlslib::Stream<SaxpyPack, kStreamDepth>& xs,
              hlslib::Stream<SaxpyPack, kStreamDepth>& ys,
              hlslib::Stream<SaxpyPack, kStreamDepth>& os,
              float a, int n_pack) {
-  constexpr int W = accel::config::kParallelism;
+  constexpr int W = anvil::config::kParallelism;
   for (int i = 0; i < n_pack; ++i) {
     SaxpyPack xv = xs.Pop();
     SaxpyPack yv = ys.Pop();
@@ -45,14 +45,14 @@ void Store(hlslib::Stream<SaxpyPack, kStreamDepth>& s, SaxpyPack* out, int n_pac
 void saxpy_hls_model(std::span<const float> x,
                      std::span<const float> y,
                      std::span<float>       out,
-                     const accel::gold::SaxpyConfig& cfg) {
+                     const anvil::gold::SaxpyConfig& cfg) {
   if (x.size() != y.size() || x.size() != out.size()) {
     throw std::invalid_argument("saxpy_hls_model: span sizes must match");
   }
   const int n = static_cast<int>(x.size());
   if (n == 0) return;
 
-  constexpr int W = accel::config::kParallelism;
+  constexpr int W = anvil::config::kParallelism;
   const int n_pack = (n + W - 1) / W;
 
   // Pack inputs; tail lanes get 0.
@@ -77,4 +77,4 @@ void saxpy_hls_model(std::span<const float> x,
   Unpack(out_packed.data(), out);
 }
 
-}  // namespace accel::hls
+}  // namespace anvil::hls

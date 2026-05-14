@@ -4,10 +4,10 @@
 // compares them via max_abs_error / rms_error, writes a JSON report and
 // exits with code 1 if tolerance is exceeded.
 
-#include "accel/config.hpp"
-#include "accel/gold/metrics.hpp"
-#include "accel/gold/saxpy_gold.hpp"
-#include "accel/hls/saxpy_hls_model.hpp"
+#include "anvil/config.hpp"
+#include "anvil/gold/metrics.hpp"
+#include "anvil/gold/saxpy_gold.hpp"
+#include "anvil/hls/saxpy_hls_model.hpp"
 
 #include <argparse.hpp>
 #include <nlohmann/json.hpp>
@@ -125,9 +125,9 @@ int main(int argc, char** argv) {
       spdlog::error("manifest n must be > 0");
       return kExitInputError;
     }
-    if (m.n > static_cast<std::uint64_t>(accel::config::kMaxElements)) {
+    if (m.n > static_cast<std::uint64_t>(anvil::config::kMaxElements)) {
       spdlog::error("manifest n={} exceeds kMaxElements={}",
-                    m.n, accel::config::kMaxElements);
+                    m.n, anvil::config::kMaxElements);
       return kExitInputError;
     }
 
@@ -152,12 +152,12 @@ int main(int argc, char** argv) {
     const auto y = read_floats(data_dir / m.y_file, n);
 
     std::vector<float> out_gold(n), out_hls(n);
-    accel::gold::SaxpyConfig cfg{m.a};
-    accel::gold::saxpy_gold     (x, y, out_gold, cfg);
-    accel::hls ::saxpy_hls_model(x, y, out_hls,  cfg);
+    anvil::gold::SaxpyConfig cfg{m.a};
+    anvil::gold::saxpy_gold     (x, y, out_gold, cfg);
+    anvil::hls ::saxpy_hls_model(x, y, out_hls,  cfg);
 
-    const float max_abs = accel::gold::max_abs_error(out_gold, out_hls);
-    const float rms     = accel::gold::rms_error    (out_gold, out_hls);
+    const float max_abs = anvil::gold::max_abs_error(out_gold, out_hls);
+    const float rms     = anvil::gold::rms_error    (out_gold, out_hls);
     const bool pass     = (max_abs <= m.tol_max_abs) && (rms <= m.tol_rms);
     const std::string verdict = pass ? "pass" : "fail";
 

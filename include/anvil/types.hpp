@@ -3,4 +3,4 @@
 // Phase 0+1 keeps this empty — saxpy uses plain float.
 // Future phases (Phase 2 vectorization) will introduce ElemPack, FixedT, etc.
 
-namespace accel {}
+namespace anvil {}

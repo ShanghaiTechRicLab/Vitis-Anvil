@@ -22,26 +22,26 @@ find_package(Threads REQUIRED)
 
 add_library(hlslib_anvil INTERFACE)
 
-set(ACCEL_XILINX_INCLUDE_DIR "/tools/Xilinx/Vitis/2024.2/include" CACHE PATH
+set(ANVIL_XILINX_INCLUDE_DIR "/tools/Xilinx/Vitis/2024.2/include" CACHE PATH
   "Directory containing Xilinx ap_int.h/ap_fixed.h for hlslib host builds")
 
-set(_accel_hlslib_include_dirs ${CMAKE_CURRENT_SOURCE_DIR}/hlslib/include)
-if(EXISTS "${ACCEL_XILINX_INCLUDE_DIR}/ap_int.h" AND
-   EXISTS "${ACCEL_XILINX_INCLUDE_DIR}/ap_fixed.h")
-  list(APPEND _accel_hlslib_include_dirs ${ACCEL_XILINX_INCLUDE_DIR})
-  message(STATUS "hlslib: using Xilinx headers from ${ACCEL_XILINX_INCLUDE_DIR}")
+set(_anvil_hlslib_include_dirs ${CMAKE_CURRENT_SOURCE_DIR}/hlslib/include)
+if(EXISTS "${ANVIL_XILINX_INCLUDE_DIR}/ap_int.h" AND
+   EXISTS "${ANVIL_XILINX_INCLUDE_DIR}/ap_fixed.h")
+  list(APPEND _anvil_hlslib_include_dirs ${ANVIL_XILINX_INCLUDE_DIR})
+  message(STATUS "hlslib: using Xilinx headers from ${ANVIL_XILINX_INCLUDE_DIR}")
 else()
   message(WARNING
     "hlslib: Xilinx ap_int.h/ap_fixed.h not found in "
-    "ACCEL_XILINX_INCLUDE_DIR=${ACCEL_XILINX_INCLUDE_DIR}; targets that include "
-    "hlslib/xilinx/DataPack.h may fail to compile. Set ACCEL_XILINX_INCLUDE_DIR "
+    "ANVIL_XILINX_INCLUDE_DIR=${ANVIL_XILINX_INCLUDE_DIR}; targets that include "
+    "hlslib/xilinx/DataPack.h may fail to compile. Set ANVIL_XILINX_INCLUDE_DIR "
     "to a Vitis/Vitis_HLS include directory.")
 endif()
 
-target_include_directories(hlslib_anvil INTERFACE ${_accel_hlslib_include_dirs})
+target_include_directories(hlslib_anvil INTERFACE ${_anvil_hlslib_include_dirs})
 target_link_libraries(hlslib_anvil INTERFACE Threads::Threads)
 add_library(hlslib::hlslib ALIAS hlslib_anvil)
-unset(_accel_hlslib_include_dirs)
+unset(_anvil_hlslib_include_dirs)
 
 # ---------------------------------------------------------------------------
 # Single-header / header-only INTERFACE libs

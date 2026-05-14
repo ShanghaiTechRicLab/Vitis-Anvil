@@ -1,15 +1,15 @@
 #include <catch_amalgamated.hpp>
-#include "accel/gold/saxpy_gold.hpp"
-#include "accel/hls/saxpy_hls_model.hpp"
-#include "accel/config.hpp"
+#include "anvil/gold/saxpy_gold.hpp"
+#include "anvil/hls/saxpy_hls_model.hpp"
+#include "anvil/config.hpp"
 
 #include <cstdint>
 #include <random>
 #include <vector>
 
-using accel::gold::SaxpyConfig;
-using accel::gold::saxpy_gold;
-using accel::hls::saxpy_hls_model;
+using anvil::gold::SaxpyConfig;
+using anvil::gold::saxpy_gold;
+using anvil::hls::saxpy_hls_model;
 
 namespace {
 
@@ -51,5 +51,5 @@ TEST_CASE("hls_model vs gold: bit-exact across a", "[hls][parity]") {
 }
 
 TEST_CASE("hls_model vs gold: bit-exact at kMaxElements", "[hls][parity][slow]") {
-  run_one(accel::config::kMaxElements, 0.5f, 1234u);
+  run_one(anvil::config::kMaxElements, 0.5f, 1234u);
 }

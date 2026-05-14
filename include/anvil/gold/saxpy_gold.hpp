@@ -2,7 +2,7 @@
 #include <span>
 #include <cstddef>
 
-namespace accel::gold {
+namespace anvil::gold {
 
 struct SaxpyConfig {
   float a = 1.0f;
@@ -16,4 +16,4 @@ void saxpy_gold(std::span<const float> x,
                 std::span<float>       out,
                 const SaxpyConfig&     cfg);
 
-}  // namespace accel::gold
+}  // namespace anvil::gold

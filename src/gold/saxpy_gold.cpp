@@ -1,7 +1,7 @@
-#include "accel/gold/saxpy_gold.hpp"
+#include "anvil/gold/saxpy_gold.hpp"
 #include <stdexcept>
 
-namespace accel::gold {
+namespace anvil::gold {
 
 void saxpy_gold(std::span<const float> x,
                 std::span<const float> y,
@@ -17,4 +17,4 @@ void saxpy_gold(std::span<const float> x,
   }
 }
 
-}  // namespace accel::gold
+}  // namespace anvil::gold

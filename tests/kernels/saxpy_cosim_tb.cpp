@@ -1,4 +1,4 @@
-#include "accel/kernels/saxpy_kernel.hpp"
+#include "anvil/kernels/saxpy_kernel.hpp"
 
 #include <cstdio>
 #include <cstdint>

@@ -1,14 +1,14 @@
 #include <catch_amalgamated.hpp>
-#include "accel/gold/saxpy_gold.hpp"
-#include "accel/config.hpp"
+#include "anvil/gold/saxpy_gold.hpp"
+#include "anvil/config.hpp"
 
 #include <array>
 #include <random>
 #include <stdexcept>
 #include <vector>
 
-using accel::gold::saxpy_gold;
-using accel::gold::SaxpyConfig;
+using anvil::gold::saxpy_gold;
+using anvil::gold::SaxpyConfig;
 
 TEST_CASE("saxpy_gold: empty input is a no-op", "[gold][saxpy]") {
   std::vector<float> x, y, out;
@@ -49,7 +49,7 @@ TEST_CASE("saxpy_gold: n == 7 (non-aligned)", "[gold][saxpy]") {
 }
 
 TEST_CASE("saxpy_gold: n == kMaxElements", "[gold][saxpy]") {
-  const std::size_t n = accel::config::kMaxElements;
+  const std::size_t n = anvil::config::kMaxElements;
   std::vector<float> x(n, 1.0f), y(n, 2.0f), out(n);
   saxpy_gold(x, y, out, SaxpyConfig{3.0f});
   REQUIRE(out.front() == 5.0f);

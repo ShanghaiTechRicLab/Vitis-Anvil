@@ -5,14 +5,14 @@
 #include <cstddef>
 #include <span>
 
-#include "accel/hls/data_pack.hpp"
+#include "anvil/hls/data_pack.hpp"
 
-namespace accel::hls {
+namespace anvil::hls {
 
 // Packs `n` scalar floats into ceil(n/W) SaxpyPack values. Tail lanes are
 // zero-filled. `dst` MUST have at least (n + W - 1) / W entries.
 inline void Pack(std::span<const float> src, SaxpyPack* dst) {
-  constexpr std::size_t W = static_cast<std::size_t>(accel::config::kParallelism);
+  constexpr std::size_t W = static_cast<std::size_t>(anvil::config::kParallelism);
   const std::size_t n = src.size();
   const std::size_t n_pack = (n + W - 1) / W;
   for (std::size_t i = 0; i < n_pack; ++i) {
@@ -29,11 +29,11 @@ inline void Pack(std::span<const float> src, SaxpyPack* dst) {
 // `src` MUST have at least (n + W - 1) / W entries; extra tail lanes are
 // discarded.
 inline void Unpack(const SaxpyPack* src, std::span<float> dst) {
-  constexpr std::size_t W = static_cast<std::size_t>(accel::config::kParallelism);
+  constexpr std::size_t W = static_cast<std::size_t>(anvil::config::kParallelism);
   const std::size_t n = dst.size();
   for (std::size_t i = 0; i < n; ++i) {
     dst[i] = src[i / W][i % W];
   }
 }
 
-}  // namespace accel::hls
+}  // namespace anvil::hls

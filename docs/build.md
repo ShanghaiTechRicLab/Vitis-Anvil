@@ -41,32 +41,32 @@ rtk ./build/hls-model-linux-debug/src/apps/compare_gold_hls_model \
 
 ## CMake options
 
-- `ACCEL_BUILD_GOLD=ON` — build `accel_gold`
-- `ACCEL_BUILD_HLS_MODEL=ON` — build `accel_hls_model` (requires gold)
-- `ACCEL_BUILD_APPS=ON` — build CLI tools
-- `ACCEL_BUILD_TESTS=ON` — build Catch2 tests
-- `ACCEL_BUILD_XRT=OFF` — Phase 3 runtime stub
-- `ACCEL_BUILD_KERNELS=OFF` — Phase 2 kernel/csynth generation
-- `ACCEL_PLATFORM_KIND=native` — `native|alveo_u250|alveo_u55c|zcu104|kv260`
-- `ACCEL_VITIS_PLATFORM=` — Vitis `.xpfm` path for Phase 2 kernel presets
-- `ACCEL_VITIS_TARGET=hw` — Vitis xclbin link target (`hw|hw_emu|sw_emu`); HLS csynth does not pass `--target`
-- `ACCEL_PARALLELISM=8` — DataPack lane width; `alveo-u250-host` overrides this to `16`
-- `ACCEL_MAX_ELEMENTS=131072` — maximum saxpy frame length
-- `ACCEL_HLS_STD=c++14` — kernel-synthesis C++ standard (Phase 2)
+- `ANVIL_BUILD_GOLD=ON` — build `anvil_gold`
+- `ANVIL_BUILD_HLS_MODEL=ON` — build `anvil_hls_model` (requires gold)
+- `ANVIL_BUILD_APPS=ON` — build CLI tools
+- `ANVIL_BUILD_TESTS=ON` — build Catch2 tests
+- `ANVIL_BUILD_XRT=OFF` — Phase 3 runtime stub
+- `ANVIL_BUILD_KERNELS=OFF` — Phase 2 kernel/csynth generation
+- `ANVIL_PLATFORM_KIND=native` — `native|alveo_u250|alveo_u55c|zcu104|kv260`
+- `ANVIL_VITIS_PLATFORM=` — Vitis `.xpfm` path for Phase 2 kernel presets
+- `ANVIL_VITIS_TARGET=hw` — Vitis xclbin link target (`hw|hw_emu|sw_emu`); HLS csynth does not pass `--target`
+- `ANVIL_PARALLELISM=8` — DataPack lane width; `alveo-u250-host` overrides this to `16`
+- `ANVIL_MAX_ELEMENTS=131072` — maximum saxpy frame length
+- `ANVIL_HLS_STD=c++14` — kernel-synthesis C++ standard (Phase 2)
 
 ## Alveo U250 Phase 2 preset
 
 `alveo-u250-host` enables the Phase 2 U250 Vitis HLS kernel flow. It builds the
 native gold/HLS-model libraries, CLI apps, Catch2 tests, and Vitis kernel
-csynthesis (`ACCEL_BUILD_KERNELS=ON`) while keeping the Phase 3 XRT host runtime
-off (`ACCEL_BUILD_XRT=OFF`). Source Vitis 2024.2 before configuring so `v++`
+csynthesis (`ANVIL_BUILD_KERNELS=ON`) while keeping the Phase 3 XRT host runtime
+off (`ANVIL_BUILD_XRT=OFF`). Source Vitis 2024.2 before configuring so `v++`
 and `vitis-run` are on `PATH`:
 
 ```bash
 source /tools/Xilinx/Vitis/2024.2/settings64.sh
 ```
 
-The preset defaults `ACCEL_VITIS_PLATFORM` to the lab U250 platform file:
+The preset defaults `ANVIL_VITIS_PLATFORM` to the lab U250 platform file:
 
 ```text
 /opt/xilinx/platforms/xilinx_u250_gen3x16_xdma_4_1_202210_1/xilinx_u250_gen3x16_xdma_4_1_202210_1.xpfm
@@ -75,7 +75,7 @@ The preset defaults `ACCEL_VITIS_PLATFORM` to the lab U250 platform file:
 If the platform is installed elsewhere, override it at configure time:
 
 ```bash
-rtk cmake --preset alveo-u250-host -DACCEL_VITIS_PLATFORM=/path/to/xilinx_u250.xpfm
+rtk cmake --preset alveo-u250-host -DANVIL_VITIS_PLATFORM=/path/to/xilinx_u250.xpfm
 ```
 
 Typical Phase 2 usage is configure, build, then run the preset test matrix:
@@ -106,7 +106,7 @@ CTest labels distinguish the Vitis checks from native tests:
 - `cosim` tests run `vitis-run --cosim` against the U250 testbench and require
   the csynth fixture.
 
-`ACCEL_VITIS_TARGET` controls only the xclbin link mode (`hw`, `hw_emu`, or
+`ANVIL_VITIS_TARGET` controls only the xclbin link mode (`hw`, `hw_emu`, or
 `sw_emu`) and defaults to `hw`; Vitis 2024.2 HLS csynth/cosim do not receive
 `--target`. `saxpy_xclbin` is intentionally manual-only: it is not an `ALL`
 target, is not registered with ctest, and is long-running. Phase 3 will consume

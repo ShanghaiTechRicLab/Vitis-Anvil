@@ -1,0 +1,15 @@
+#pragma once
+// This file is configured by CMake from include/anvil/config.hpp.in.
+// Generated path: ${CMAKE_BINARY_DIR}/generated/anvil/config.hpp
+//
+// Only platform-INDEPENDENT compile-time constants belong here.
+// DO NOT add sysroot, xpfm, or build-machine paths.
+
+namespace anvil::config {
+
+inline constexpr int  kParallelism    = @ANVIL_PARALLELISM@;
+inline constexpr int  kClockMHz       = @ANVIL_CLOCK_MHZ@;
+inline constexpr int  kMaxElements    = @ANVIL_MAX_ELEMENTS@;
+inline constexpr const char* kPlatformKind = "@ANVIL_PLATFORM_KIND@";
+
+}  // namespace anvil::config

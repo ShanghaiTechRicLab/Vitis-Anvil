@@ -1,17 +1,17 @@
 #pragma once
 // Vector-pack typedef for the saxpy HLS pipeline. The lane count comes from
-// the ACCEL_PARALLELISM build option; see cmake/ProjectOptions.cmake and the
-// generated accel/config.hpp.
+// the ANVIL_PARALLELISM build option; see cmake/ProjectOptions.cmake and the
+// generated anvil/config.hpp.
 //
 // Keep code that exchanges packed saxpy floats on this alias so the pack width
 // stays a single source of truth as Phase 2 integration expands.
 
 #include <hlslib/xilinx/DataPack.h>
 
-#include "accel/config.hpp"
+#include "anvil/config.hpp"
 
-namespace accel::hls {
+namespace anvil::hls {
 
-using SaxpyPack = ::hlslib::DataPack<float, accel::config::kParallelism>;
+using SaxpyPack = ::hlslib::DataPack<float, anvil::config::kParallelism>;
 
-}  // namespace accel::hls
+}  // namespace anvil::hls

@@ -24,7 +24,7 @@ remain scaffolded for future plans.
 - C++20 compiler (GCC ≥ 10 or Clang ≥ 13)
 - Ninja (recommended)
 - No Vitis / XRT / Xilinx tools required for Phase 0+1 native builds
-- Vitis and a platform `.xpfm` are required only when `ACCEL_BUILD_KERNELS=ON`
+- Vitis and a platform `.xpfm` are required only when `ANVIL_BUILD_KERNELS=ON`
 
 ## Quickstart
 
@@ -39,7 +39,7 @@ design notes will be added to tracked docs as those phases land.
 
 ## Layout
 
-- `include/accel/` — public headers
+- `include/anvil/` — public headers
 - `src/gold/` — algorithmic reference (`saxpy_gold`)
 - `src/hls_model/` — HLS-friendly CPU model (`saxpy_hls_model`)
 - `src/apps/` — CLI tools (`gen_dataset`, `run_gold`, `compare_gold_hls_model`)

@@ -1,44 +1,44 @@
 # cmake/ProjectOptions.cmake
-# Centralized declaration of all ACCEL_* CMake options and cache variables.
+# Centralized declaration of all ANVIL_* CMake options and cache variables.
 
-option(ACCEL_BUILD_GOLD       "Build gold reference"     ON)
-option(ACCEL_BUILD_HLS_MODEL  "Build HLS CPU model"      ON)
-option(ACCEL_BUILD_APPS       "Build CLI apps"           ON)
-option(ACCEL_BUILD_TESTS      "Build tests"              ON)
-option(ACCEL_BUILD_XRT        "Build XRT host runtime"   OFF)   # Phase 3
-option(ACCEL_BUILD_KERNELS    "Build Vitis HLS kernels"  OFF)   # Phase 2
+option(ANVIL_BUILD_GOLD       "Build gold reference"     ON)
+option(ANVIL_BUILD_HLS_MODEL  "Build HLS CPU model"      ON)
+option(ANVIL_BUILD_APPS       "Build CLI apps"           ON)
+option(ANVIL_BUILD_TESTS      "Build tests"              ON)
+option(ANVIL_BUILD_XRT        "Build XRT host runtime"   OFF)   # Phase 3
+option(ANVIL_BUILD_KERNELS    "Build Vitis HLS kernels"  OFF)   # Phase 2
 
-set(ACCEL_PLATFORM_KIND  "native"  CACHE STRING
+set(ANVIL_PLATFORM_KIND  "native"  CACHE STRING
     "Target platform: native|alveo_u250|alveo_u55c|zcu104|kv260")
-set(ACCEL_VITIS_PLATFORM ""        CACHE STRING "Path to .xpfm (Phase 2)")
-set(ACCEL_VITIS_TARGET   "hw"      CACHE STRING
+set(ANVIL_VITIS_PLATFORM ""        CACHE STRING "Path to .xpfm (Phase 2)")
+set(ANVIL_VITIS_TARGET   "hw"      CACHE STRING
     "Vitis compile/link target for packaged artifacts: hw|hw_emu|sw_emu")
-set_property(CACHE ACCEL_VITIS_TARGET PROPERTY STRINGS hw hw_emu sw_emu)
-set(ACCEL_CLOCK_MHZ      "200"     CACHE STRING "Kernel clock (Phase 2)")
-set(ACCEL_PARALLELISM    "8"       CACHE STRING "DataPack width / kernel parallelism (Phase 2)")
-set(ACCEL_HLS_STD        "c++14"   CACHE STRING "C++ std for HLS kernel synthesis (Phase 2)")
-set(ACCEL_MAX_ELEMENTS   "131072"  CACHE STRING "Max elements per saxpy frame")
+set_property(CACHE ANVIL_VITIS_TARGET PROPERTY STRINGS hw hw_emu sw_emu)
+set(ANVIL_CLOCK_MHZ      "200"     CACHE STRING "Kernel clock (Phase 2)")
+set(ANVIL_PARALLELISM    "8"       CACHE STRING "DataPack width / kernel parallelism (Phase 2)")
+set(ANVIL_HLS_STD        "c++14"   CACHE STRING "C++ std for HLS kernel synthesis (Phase 2)")
+set(ANVIL_MAX_ELEMENTS   "131072"  CACHE STRING "Max elements per saxpy frame")
 
 # ---------------------------------------------------------------------------
-# Phase 2: when ACCEL_BUILD_KERNELS=ON, verify Vitis HLS toolchain is available
-# and the U250 / target platform .xpfm path is set. ACCEL_VITIS_TARGET is
+# Phase 2: when ANVIL_BUILD_KERNELS=ON, verify Vitis HLS toolchain is available
+# and the U250 / target platform .xpfm path is set. ANVIL_VITIS_TARGET is
 # declared and validated here for xclbin link/package targets. v++ --compile
 # --mode hls in Vitis 2024.2 does not accept --target, so HLS csynth
-# intentionally does not pass it; add_accel_kernel_xclbin uses it by default.
+# intentionally does not pass it; add_anvil_kernel_xclbin uses it by default.
 # These checks are FATAL_ERROR with a helpful hint because skipping the check
 # produces obscure failures deep in v++ runs.
 # ---------------------------------------------------------------------------
-if(NOT ACCEL_VITIS_TARGET MATCHES "^(hw|hw_emu|sw_emu)$")
+if(NOT ANVIL_VITIS_TARGET MATCHES "^(hw|hw_emu|sw_emu)$")
   message(FATAL_ERROR
-    "ACCEL_VITIS_TARGET must be one of hw, hw_emu, or sw_emu; "
-    "got '${ACCEL_VITIS_TARGET}'.")
+    "ANVIL_VITIS_TARGET must be one of hw, hw_emu, or sw_emu; "
+    "got '${ANVIL_VITIS_TARGET}'.")
 endif()
 
-if(ACCEL_BUILD_KERNELS)
+if(ANVIL_BUILD_KERNELS)
   find_program(VPP_EXECUTABLE v++)
   if(NOT VPP_EXECUTABLE)
     message(FATAL_ERROR
-      "Phase 2 (ACCEL_BUILD_KERNELS=ON) requires v++ in PATH.\n"
+      "Phase 2 (ANVIL_BUILD_KERNELS=ON) requires v++ in PATH.\n"
       "Source the Vitis settings first:\n"
       "  source /tools/Xilinx/Vitis/2024.2/settings64.sh\n"
       "then re-configure (rm -rf build/<preset> first).")
@@ -50,15 +50,15 @@ if(ACCEL_BUILD_KERNELS)
       "install as v++).\n  Found v++: ${VPP_EXECUTABLE}\nSource "
       "/tools/Xilinx/Vitis/2024.2/settings64.sh to get vitis-run too.")
   endif()
-  if(NOT ACCEL_VITIS_PLATFORM OR NOT EXISTS "${ACCEL_VITIS_PLATFORM}")
+  if(NOT ANVIL_VITIS_PLATFORM OR NOT EXISTS "${ANVIL_VITIS_PLATFORM}")
     message(FATAL_ERROR
-      "ACCEL_VITIS_PLATFORM not set or .xpfm missing:\n"
-      "  '${ACCEL_VITIS_PLATFORM}'\n"
+      "ANVIL_VITIS_PLATFORM not set or .xpfm missing:\n"
+      "  '${ANVIL_VITIS_PLATFORM}'\n"
       "Set it in the preset cacheVariables or via "
-      "-DACCEL_VITIS_PLATFORM=/path/to/xpfm.")
+      "-DANVIL_VITIS_PLATFORM=/path/to/xpfm.")
   endif()
   message(STATUS "Phase 2 toolchain: v++ = ${VPP_EXECUTABLE}")
   message(STATUS "Phase 2 toolchain: vitis-run = ${VITIS_RUN_EXECUTABLE}")
-  message(STATUS "Phase 2 platform: ${ACCEL_VITIS_PLATFORM}")
-  message(STATUS "Phase 2 Vitis target: ${ACCEL_VITIS_TARGET} (used by xclbin link; not passed to v++ --mode hls)")
+  message(STATUS "Phase 2 platform: ${ANVIL_VITIS_PLATFORM}")
+  message(STATUS "Phase 2 Vitis target: ${ANVIL_VITIS_TARGET} (used by xclbin link; not passed to v++ --mode hls)")
 endif()

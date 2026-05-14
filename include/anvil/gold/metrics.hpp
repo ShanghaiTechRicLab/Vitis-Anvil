@@ -1,7 +1,7 @@
 #pragma once
 #include <span>
 
-namespace accel::gold {
+namespace anvil::gold {
 
 // Element-wise max absolute error: max_i |a[i] - b[i]|.
 // Pre: a.size() == b.size(). Throws std::invalid_argument on mismatch.
@@ -13,4 +13,4 @@ float max_abs_error(std::span<const float> a, std::span<const float> b);
 // For empty inputs, returns 0.0f.
 float rms_error(std::span<const float> a, std::span<const float> b);
 
-}  // namespace accel::gold
+}  // namespace anvil::gold

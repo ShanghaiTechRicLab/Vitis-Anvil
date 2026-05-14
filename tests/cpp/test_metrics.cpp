@@ -1,12 +1,12 @@
 #include <catch_amalgamated.hpp>
-#include "accel/gold/metrics.hpp"
+#include "anvil/gold/metrics.hpp"
 
 #include <array>
 #include <stdexcept>
 #include <vector>
 
-using accel::gold::max_abs_error;
-using accel::gold::rms_error;
+using anvil::gold::max_abs_error;
+using anvil::gold::rms_error;
 
 TEST_CASE("max_abs_error: empty inputs return zero", "[gold][metrics]") {
   std::vector<float> a, b;

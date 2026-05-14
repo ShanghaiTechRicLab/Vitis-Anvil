@@ -3,7 +3,7 @@
 // Reads a case manifest JSON and writes deterministic x.bin and y.bin
 // for use by run_gold and compare_gold_hls_model.
 
-#include "accel/config.hpp"
+#include "anvil/config.hpp"
 
 #include <argparse.hpp>
 #include <nlohmann/json.hpp>
@@ -93,9 +93,9 @@ int main(int argc, char** argv) {
       spdlog::error("manifest n must be > 0");
       return kExitInputError;
     }
-    if (m.n > static_cast<std::uint64_t>(accel::config::kMaxElements)) {
+    if (m.n > static_cast<std::uint64_t>(anvil::config::kMaxElements)) {
       spdlog::error("manifest n={} exceeds kMaxElements={}",
-                    m.n, accel::config::kMaxElements);
+                    m.n, anvil::config::kMaxElements);
       return kExitInputError;
     }
 

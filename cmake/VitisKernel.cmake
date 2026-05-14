@@ -1,15 +1,15 @@
 # cmake/VitisKernel.cmake
 # Phase 2 Vitis HLS kernel helpers.
 
-function(_accel_kernel_reject_space_path kernel_name path_label path_value)
+function(_anvil_kernel_reject_space_path kernel_name path_label path_value)
   if("${path_value}" MATCHES "[ \t]")
     message(FATAL_ERROR
-      "add_accel_kernel(${kernel_name}): ${path_label} contains whitespace, "
+      "add_anvil_kernel(${kernel_name}): ${path_label} contains whitespace, "
       "which is not supported by the generated Vitis HLS config: '${path_value}'")
   endif()
 endfunction()
 
-function(add_accel_kernel)
+function(add_anvil_kernel)
   set(options)
   set(one_value_args NAME TOP CLOCK_HZ PLATFORM_KIND TESTBENCH)
   set(multi_value_args SOURCES)
@@ -24,51 +24,51 @@ function(add_accel_kernel)
   endif()
 
   if(NOT AK_NAME)
-    message(FATAL_ERROR "add_accel_kernel: NAME is required")
+    message(FATAL_ERROR "add_anvil_kernel: NAME is required")
   endif()
   if(NOT AK_SOURCES)
-    message(FATAL_ERROR "add_accel_kernel(${AK_NAME}): SOURCES required")
+    message(FATAL_ERROR "add_anvil_kernel(${AK_NAME}): SOURCES required")
   endif()
   if(NOT AK_PLATFORM_KIND)
-    set(AK_PLATFORM_KIND "${ACCEL_PLATFORM_KIND}")
+    set(AK_PLATFORM_KIND "${ANVIL_PLATFORM_KIND}")
   endif()
   if(NOT AK_PLATFORM_KIND)
     message(FATAL_ERROR
-      "add_accel_kernel(${AK_NAME}): PLATFORM_KIND required (e.g. alveo_u250) "
-      "or set ACCEL_PLATFORM_KIND")
+      "add_anvil_kernel(${AK_NAME}): PLATFORM_KIND required (e.g. alveo_u250) "
+      "or set ANVIL_PLATFORM_KIND")
   endif()
   if(AK_UNPARSED_ARGUMENTS)
     message(FATAL_ERROR
-      "add_accel_kernel(${AK_NAME}): unexpected arguments: ${AK_UNPARSED_ARGUMENTS}")
+      "add_anvil_kernel(${AK_NAME}): unexpected arguments: ${AK_UNPARSED_ARGUMENTS}")
   endif()
   list(FIND AK_SOURCES CONFIG _ak_config_source_index)
   if(NOT _ak_config_source_index EQUAL -1)
     list(SUBLIST AK_SOURCES ${_ak_config_source_index} -1 _ak_unexpected_sources)
     message(FATAL_ERROR
-      "add_accel_kernel(${AK_NAME}): unexpected arguments: ${_ak_unexpected_sources}")
+      "add_anvil_kernel(${AK_NAME}): unexpected arguments: ${_ak_unexpected_sources}")
   endif()
 
   if(NOT AK_TOP)
     set(AK_TOP "${AK_NAME}")
   endif()
   if(NOT AK_CLOCK_HZ)
-    if(NOT ACCEL_CLOCK_MHZ MATCHES "^[0-9]+$")
+    if(NOT ANVIL_CLOCK_MHZ MATCHES "^[0-9]+$")
       message(FATAL_ERROR
-        "add_accel_kernel(${AK_NAME}): ACCEL_CLOCK_MHZ must be a positive integer, "
-        "got '${ACCEL_CLOCK_MHZ}'")
+        "add_anvil_kernel(${AK_NAME}): ANVIL_CLOCK_MHZ must be a positive integer, "
+        "got '${ANVIL_CLOCK_MHZ}'")
     endif()
-    if(ACCEL_CLOCK_MHZ LESS_EQUAL 0)
+    if(ANVIL_CLOCK_MHZ LESS_EQUAL 0)
       message(FATAL_ERROR
-        "add_accel_kernel(${AK_NAME}): ACCEL_CLOCK_MHZ must be greater than zero, "
-        "got '${ACCEL_CLOCK_MHZ}'")
+        "add_anvil_kernel(${AK_NAME}): ANVIL_CLOCK_MHZ must be greater than zero, "
+        "got '${ANVIL_CLOCK_MHZ}'")
     endif()
-    math(EXPR AK_CLOCK_HZ "${ACCEL_CLOCK_MHZ} * 1000000")
+    math(EXPR AK_CLOCK_HZ "${ANVIL_CLOCK_MHZ} * 1000000")
   elseif(NOT AK_CLOCK_HZ MATCHES "^[0-9]+$")
     message(FATAL_ERROR
-      "add_accel_kernel(${AK_NAME}): CLOCK_HZ must be a positive integer, got '${AK_CLOCK_HZ}'")
+      "add_anvil_kernel(${AK_NAME}): CLOCK_HZ must be a positive integer, got '${AK_CLOCK_HZ}'")
   elseif(AK_CLOCK_HZ LESS_EQUAL 0)
     message(FATAL_ERROR
-      "add_accel_kernel(${AK_NAME}): CLOCK_HZ must be greater than zero, got '${AK_CLOCK_HZ}'")
+      "add_anvil_kernel(${AK_NAME}): CLOCK_HZ must be greater than zero, got '${AK_CLOCK_HZ}'")
   endif()
 
   set(_ak_abs_sources)
@@ -81,7 +81,7 @@ function(add_accel_kernel)
     endif()
     if(NOT EXISTS "${_ak_abs_src}")
       message(FATAL_ERROR
-        "add_accel_kernel(${AK_NAME}): kernel source not found: ${_ak_abs_src}")
+        "add_anvil_kernel(${AK_NAME}): kernel source not found: ${_ak_abs_src}")
     endif()
     list(APPEND _ak_abs_sources "${_ak_abs_src}")
   endforeach()
@@ -95,14 +95,14 @@ function(add_accel_kernel)
     endif()
     if(NOT EXISTS "${_ak_abs_testbench}")
       message(FATAL_ERROR
-        "add_accel_kernel(${AK_NAME}): testbench not found: ${_ak_abs_testbench}")
+        "add_anvil_kernel(${AK_NAME}): testbench not found: ${_ak_abs_testbench}")
     endif()
 
     if(AK_PLATFORM_KIND STREQUAL "alveo_u250")
       set(_ak_cosim_part "xcu250-figd2104-2L-e")
     else()
       message(FATAL_ERROR
-        "add_accel_kernel(${AK_NAME}): TESTBENCH cosim does not yet support "
+        "add_anvil_kernel(${AK_NAME}): TESTBENCH cosim does not yet support "
         "PLATFORM_KIND='${AK_PLATFORM_KIND}'. Add a Vitis part mapping before "
         "enabling cosim for this platform kind.")
     endif()
@@ -114,20 +114,20 @@ function(add_accel_kernel)
   set(_ak_xo "${_ak_work_dir}/${AK_NAME}.xo")
   set(_ak_csynth_xml "${_ak_work_dir}/hls/syn/report/${AK_TOP}_csynth.xml")
 
-  _accel_kernel_reject_space_path("${AK_NAME}" "source directory" "${CMAKE_CURRENT_SOURCE_DIR}")
-  _accel_kernel_reject_space_path("${AK_NAME}" "build directory" "${CMAKE_CURRENT_BINARY_DIR}")
-  _accel_kernel_reject_space_path("${AK_NAME}" "Vitis platform path" "${ACCEL_VITIS_PLATFORM}")
-  _accel_kernel_reject_space_path("${AK_NAME}" "public include path" "${PROJECT_SOURCE_DIR}/include")
-  _accel_kernel_reject_space_path("${AK_NAME}" "generated include path" "${CMAKE_BINARY_DIR}/generated")
-  _accel_kernel_reject_space_path("${AK_NAME}" "hlslib include path" "${PROJECT_SOURCE_DIR}/third_party/hlslib/include")
+  _anvil_kernel_reject_space_path("${AK_NAME}" "source directory" "${CMAKE_CURRENT_SOURCE_DIR}")
+  _anvil_kernel_reject_space_path("${AK_NAME}" "build directory" "${CMAKE_CURRENT_BINARY_DIR}")
+  _anvil_kernel_reject_space_path("${AK_NAME}" "Vitis platform path" "${ANVIL_VITIS_PLATFORM}")
+  _anvil_kernel_reject_space_path("${AK_NAME}" "public include path" "${PROJECT_SOURCE_DIR}/include")
+  _anvil_kernel_reject_space_path("${AK_NAME}" "generated include path" "${CMAKE_BINARY_DIR}/generated")
+  _anvil_kernel_reject_space_path("${AK_NAME}" "hlslib include path" "${PROJECT_SOURCE_DIR}/third_party/hlslib/include")
   foreach(_ak_abs_src IN LISTS _ak_abs_sources)
-    _accel_kernel_reject_space_path("${AK_NAME}" "kernel source path" "${_ak_abs_src}")
+    _anvil_kernel_reject_space_path("${AK_NAME}" "kernel source path" "${_ak_abs_src}")
   endforeach()
   if(AK_TESTBENCH)
-    _accel_kernel_reject_space_path("${AK_NAME}" "testbench path" "${_ak_abs_testbench}")
+    _anvil_kernel_reject_space_path("${AK_NAME}" "testbench path" "${_ak_abs_testbench}")
   endif()
-  _accel_kernel_reject_space_path("${AK_NAME}" "kernel work directory" "${_ak_work_dir}")
-  _accel_kernel_reject_space_path("${AK_NAME}" "kernel artifact path" "${_ak_xo}")
+  _anvil_kernel_reject_space_path("${AK_NAME}" "kernel work directory" "${_ak_work_dir}")
+  _anvil_kernel_reject_space_path("${AK_NAME}" "kernel artifact path" "${_ak_xo}")
 
   file(MAKE_DIRECTORY "${_ak_work_dir}")
 
@@ -137,14 +137,14 @@ function(add_accel_kernel)
   endforeach()
 
   set(_ak_cflags
-    "-std=${ACCEL_HLS_STD} -DHLSLIB_SYNTHESIS -I${PROJECT_SOURCE_DIR}/include -I${CMAKE_BINARY_DIR}/generated -I${PROJECT_SOURCE_DIR}/third_party/hlslib/include")
+    "-std=${ANVIL_HLS_STD} -DHLSLIB_SYNTHESIS -I${PROJECT_SOURCE_DIR}/include -I${CMAKE_BINARY_DIR}/generated -I${PROJECT_SOURCE_DIR}/third_party/hlslib/include")
   set(_ak_tb_cflags
-    "-std=${ACCEL_HLS_STD} -I${PROJECT_SOURCE_DIR}/include -I${CMAKE_BINARY_DIR}/generated -I${PROJECT_SOURCE_DIR}/third_party/hlslib/include")
+    "-std=${ANVIL_HLS_STD} -I${PROJECT_SOURCE_DIR}/include -I${CMAKE_BINARY_DIR}/generated -I${PROJECT_SOURCE_DIR}/third_party/hlslib/include")
 
   # Vitis 2024.2 HLS compile mode accepts platform/frequency but not --target;
-  # ACCEL_VITIS_TARGET is retained as target metadata for future xclbin/link work.
+  # ANVIL_VITIS_TARGET is retained as target metadata for future xclbin/link work.
   file(WRITE "${_ak_cfg}"
-    "platform=${ACCEL_VITIS_PLATFORM}\n"
+    "platform=${ANVIL_VITIS_PLATFORM}\n"
     "freqhz=${AK_CLOCK_HZ}\n"
     "\n"
     "[hls]\n"
@@ -188,13 +188,13 @@ function(add_accel_kernel)
     DEPENDS "${_ak_xo}")
 
   set_target_properties("${AK_NAME}_xo" PROPERTIES
-    ACCEL_KERNEL_ARTIFACT "${_ak_xo}"
-    ACCEL_KERNEL_CSYNTH_XML "${_ak_csynth_xml}"
-    ACCEL_KERNEL_WORK_DIR "${_ak_work_dir}"
-    ACCEL_KERNEL_TOP "${AK_TOP}"
-    ACCEL_KERNEL_PLATFORM_KIND "${AK_PLATFORM_KIND}"
-    ACCEL_KERNEL_CLOCK_HZ "${AK_CLOCK_HZ}"
-    ACCEL_KERNEL_VITIS_TARGET "${ACCEL_VITIS_TARGET}")
+    ANVIL_KERNEL_ARTIFACT "${_ak_xo}"
+    ANVIL_KERNEL_CSYNTH_XML "${_ak_csynth_xml}"
+    ANVIL_KERNEL_WORK_DIR "${_ak_work_dir}"
+    ANVIL_KERNEL_TOP "${AK_TOP}"
+    ANVIL_KERNEL_PLATFORM_KIND "${AK_PLATFORM_KIND}"
+    ANVIL_KERNEL_CLOCK_HZ "${AK_CLOCK_HZ}"
+    ANVIL_KERNEL_VITIS_TARGET "${ANVIL_VITIS_TARGET}")
 
   if(AK_TESTBENCH)
     set(_ak_cosim_stamp "${_ak_work_dir}/.cosim.stamp")
@@ -218,19 +218,19 @@ function(add_accel_kernel)
       DEPENDS "${_ak_cosim_stamp}")
 
     set_target_properties("${AK_NAME}_cosim" PROPERTIES
-      ACCEL_KERNEL_COSIM_STAMP "${_ak_cosim_stamp}"
-      ACCEL_KERNEL_COSIM_CONFIG "${_ak_cosim_cfg}"
-      ACCEL_KERNEL_TESTBENCH "${_ak_abs_testbench}"
-      ACCEL_KERNEL_WORK_DIR "${_ak_work_dir}"
-      ACCEL_KERNEL_TOP "${AK_TOP}"
-      ACCEL_KERNEL_PLATFORM_KIND "${AK_PLATFORM_KIND}"
-      ACCEL_KERNEL_CLOCK_HZ "${AK_CLOCK_HZ}")
+      ANVIL_KERNEL_COSIM_STAMP "${_ak_cosim_stamp}"
+      ANVIL_KERNEL_COSIM_CONFIG "${_ak_cosim_cfg}"
+      ANVIL_KERNEL_TESTBENCH "${_ak_abs_testbench}"
+      ANVIL_KERNEL_WORK_DIR "${_ak_work_dir}"
+      ANVIL_KERNEL_TOP "${AK_TOP}"
+      ANVIL_KERNEL_PLATFORM_KIND "${AK_PLATFORM_KIND}"
+      ANVIL_KERNEL_CLOCK_HZ "${AK_CLOCK_HZ}")
   endif()
 
-  if(ACCEL_BUILD_TESTS)
+  if(ANVIL_BUILD_TESTS)
     if(NOT Python3_EXECUTABLE)
       message(FATAL_ERROR
-        "add_accel_kernel(${AK_NAME}): Python3 interpreter is required for csynth checks")
+        "add_anvil_kernel(${AK_NAME}): Python3 interpreter is required for csynth checks")
     endif()
 
     add_test(
@@ -267,29 +267,29 @@ function(add_accel_kernel)
   endif()
 endfunction()
 
-function(add_accel_kernel_xclbin)
+function(add_anvil_kernel_xclbin)
   set(options)
   set(one_value_args NAME PLATFORM_KIND LINK_CFG MODE)
   set(multi_value_args KERNEL_TARGETS)
   cmake_parse_arguments(AKX "${options}" "${one_value_args}" "${multi_value_args}" ${ARGN})
 
   if(NOT AKX_NAME)
-    message(FATAL_ERROR "add_accel_kernel_xclbin: NAME is required")
+    message(FATAL_ERROR "add_anvil_kernel_xclbin: NAME is required")
   endif()
   if(NOT AKX_KERNEL_TARGETS)
-    message(FATAL_ERROR "add_accel_kernel_xclbin(${AKX_NAME}): KERNEL_TARGETS required")
+    message(FATAL_ERROR "add_anvil_kernel_xclbin(${AKX_NAME}): KERNEL_TARGETS required")
   endif()
   if(NOT AKX_PLATFORM_KIND)
-    set(AKX_PLATFORM_KIND "${ACCEL_PLATFORM_KIND}")
+    set(AKX_PLATFORM_KIND "${ANVIL_PLATFORM_KIND}")
   endif()
   if(NOT AKX_PLATFORM_KIND)
     message(FATAL_ERROR
-      "add_accel_kernel_xclbin(${AKX_NAME}): PLATFORM_KIND required (e.g. alveo_u250) "
-      "or set ACCEL_PLATFORM_KIND")
+      "add_anvil_kernel_xclbin(${AKX_NAME}): PLATFORM_KIND required (e.g. alveo_u250) "
+      "or set ANVIL_PLATFORM_KIND")
   endif()
   if(AKX_UNPARSED_ARGUMENTS)
     message(FATAL_ERROR
-      "add_accel_kernel_xclbin(${AKX_NAME}): unexpected arguments: ${AKX_UNPARSED_ARGUMENTS}")
+      "add_anvil_kernel_xclbin(${AKX_NAME}): unexpected arguments: ${AKX_UNPARSED_ARGUMENTS}")
   endif()
 
   if(NOT AKX_LINK_CFG)
@@ -300,19 +300,19 @@ function(add_accel_kernel_xclbin)
   endif()
   if(NOT EXISTS "${AKX_LINK_CFG}")
     message(FATAL_ERROR
-      "add_accel_kernel_xclbin(${AKX_NAME}): LINK_CFG not found: ${AKX_LINK_CFG}")
+      "add_anvil_kernel_xclbin(${AKX_NAME}): LINK_CFG not found: ${AKX_LINK_CFG}")
   endif()
 
   if(NOT AKX_MODE)
-    if(ACCEL_VITIS_TARGET)
-      set(AKX_MODE "${ACCEL_VITIS_TARGET}")
+    if(ANVIL_VITIS_TARGET)
+      set(AKX_MODE "${ANVIL_VITIS_TARGET}")
     else()
       set(AKX_MODE "hw")
     endif()
   endif()
   if(NOT AKX_MODE MATCHES "^(hw|hw_emu|sw_emu)$")
     message(FATAL_ERROR
-      "add_accel_kernel_xclbin(${AKX_NAME}): MODE must be one of hw, hw_emu, or sw_emu; "
+      "add_anvil_kernel_xclbin(${AKX_NAME}): MODE must be one of hw, hw_emu, or sw_emu; "
       "got '${AKX_MODE}'")
   endif()
 
@@ -320,13 +320,13 @@ function(add_accel_kernel_xclbin)
   foreach(_akx_target IN LISTS AKX_KERNEL_TARGETS)
     if(NOT TARGET "${_akx_target}")
       message(FATAL_ERROR
-        "add_accel_kernel_xclbin(${AKX_NAME}): kernel target not found: ${_akx_target}")
+        "add_anvil_kernel_xclbin(${AKX_NAME}): kernel target not found: ${_akx_target}")
     endif()
-    get_target_property(_akx_artifact "${_akx_target}" ACCEL_KERNEL_ARTIFACT)
+    get_target_property(_akx_artifact "${_akx_target}" ANVIL_KERNEL_ARTIFACT)
     if(NOT _akx_artifact)
       message(FATAL_ERROR
-        "add_accel_kernel_xclbin(${AKX_NAME}): target '${_akx_target}' does not set "
-        "ACCEL_KERNEL_ARTIFACT")
+        "add_anvil_kernel_xclbin(${AKX_NAME}): target '${_akx_target}' does not set "
+        "ANVIL_KERNEL_ARTIFACT")
     endif()
     list(APPEND _akx_artifacts "${_akx_artifact}")
   endforeach()
@@ -340,7 +340,7 @@ function(add_accel_kernel_xclbin)
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${_akx_out_dir}" "${_akx_work_dir}"
     COMMAND "${VPP_EXECUTABLE}"
             --link
-            --platform "${ACCEL_VITIS_PLATFORM}"
+            --platform "${ANVIL_VITIS_PLATFORM}"
             --target "${AKX_MODE}"
             --config "${AKX_LINK_CFG}"
             --temp_dir "${_akx_work_dir}"
@@ -355,8 +355,8 @@ function(add_accel_kernel_xclbin)
     DEPENDS "${_akx_xclbin}")
 
   set_target_properties("${AKX_NAME}_xclbin" PROPERTIES
-    ACCEL_XCLBIN "${_akx_xclbin}"
-    ACCEL_XCLBIN_MODE "${AKX_MODE}"
-    ACCEL_XCLBIN_LINK_CFG "${AKX_LINK_CFG}"
-    ACCEL_XCLBIN_PLATFORM_KIND "${AKX_PLATFORM_KIND}")
+    ANVIL_XCLBIN "${_akx_xclbin}"
+    ANVIL_XCLBIN_MODE "${AKX_MODE}"
+    ANVIL_XCLBIN_LINK_CFG "${AKX_LINK_CFG}"
+    ANVIL_XCLBIN_PLATFORM_KIND "${AKX_PLATFORM_KIND}")
 endfunction()
