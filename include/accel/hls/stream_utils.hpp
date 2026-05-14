@@ -19,7 +19,7 @@ inline void Pack(std::span<const float> src, SaxpyPack* dst) {
     SaxpyPack p;
     for (std::size_t j = 0; j < W; ++j) {
       const std::size_t idx = i * W + j;
-      p[static_cast<int>(j)] = (idx < n) ? src[idx] : 0.0f;
+      p[j] = (idx < n) ? src[idx] : 0.0f;
     }
     dst[i] = p;
   }
@@ -32,7 +32,7 @@ inline void Unpack(const SaxpyPack* src, std::span<float> dst) {
   constexpr std::size_t W = static_cast<std::size_t>(accel::config::kParallelism);
   const std::size_t n = dst.size();
   for (std::size_t i = 0; i < n; ++i) {
-    dst[i] = src[i / W][static_cast<int>(i % W)];
+    dst[i] = src[i / W][i % W];
   }
 }
 
