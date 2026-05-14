@@ -1,9 +1,9 @@
 #pragma once
-// Pack/Unpack helpers used by saxpy_hls_model (CPU). The kernel uses raw
-// pointer arithmetic and m_axi directly, so it does not link this header.
+// Pack/Unpack helpers for host-side HLS model code. Kernel-side code should
+// avoid this header because std::span is a C++20 host dependency.
 
 #include <cstddef>
-#include <span>           // C++20; kernel-side code MUST NOT include this header
+#include <span>
 
 #include "accel/hls/data_pack.hpp"
 
@@ -12,14 +12,14 @@ namespace accel::hls {
 // Packs `n` scalar floats into ceil(n/W) SaxpyPack values. Tail lanes are
 // zero-filled. `dst` MUST have at least (n + W - 1) / W entries.
 inline void Pack(std::span<const float> src, SaxpyPack* dst) {
-  constexpr int W = accel::config::kParallelism;
-  const int n = static_cast<int>(src.size());
-  const int n_pack = (n + W - 1) / W;
-  for (int i = 0; i < n_pack; ++i) {
+  constexpr std::size_t W = static_cast<std::size_t>(accel::config::kParallelism);
+  const std::size_t n = src.size();
+  const std::size_t n_pack = (n + W - 1) / W;
+  for (std::size_t i = 0; i < n_pack; ++i) {
     SaxpyPack p;
-    for (int j = 0; j < W; ++j) {
-      const int idx = i * W + j;
-      p[j] = (idx < n) ? src[idx] : 0.0f;
+    for (std::size_t j = 0; j < W; ++j) {
+      const std::size_t idx = i * W + j;
+      p[static_cast<int>(j)] = (idx < n) ? src[idx] : 0.0f;
     }
     dst[i] = p;
   }
@@ -29,10 +29,10 @@ inline void Pack(std::span<const float> src, SaxpyPack* dst) {
 // `src` MUST have at least (n + W - 1) / W entries; extra tail lanes are
 // discarded.
 inline void Unpack(const SaxpyPack* src, std::span<float> dst) {
-  constexpr int W = accel::config::kParallelism;
-  const int n = static_cast<int>(dst.size());
-  for (int i = 0; i < n; ++i) {
-    dst[i] = src[i / W][i % W];
+  constexpr std::size_t W = static_cast<std::size_t>(accel::config::kParallelism);
+  const std::size_t n = dst.size();
+  for (std::size_t i = 0; i < n; ++i) {
+    dst[i] = src[i / W][static_cast<int>(i % W)];
   }
 }
 

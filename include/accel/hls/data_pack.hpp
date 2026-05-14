@@ -1,10 +1,10 @@
 #pragma once
 // Vector-pack typedef for the saxpy HLS pipeline. The lane count comes from
-// the ACCEL_PARALLELISM build option (default 16); see cmake/ProjectOptions.cmake
-// and include/accel/config.hpp.
+// the ACCEL_PARALLELISM build option; see cmake/ProjectOptions.cmake and the
+// generated accel/config.hpp.
 //
-// Both saxpy_hls_model (CPU) and saxpy_kernel (Vitis HLS) use this alias so
-// the pack width stays a single source of truth.
+// Keep code that exchanges packed saxpy floats on this alias so the pack width
+// stays a single source of truth as Phase 2 integration expands.
 
 #include <hlslib/xilinx/DataPack.h>
 
