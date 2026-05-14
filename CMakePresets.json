@@ -51,12 +51,12 @@
       }
     },
     {
-      "name": "alveo-u250-host",
+      "name": "u250-host",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/alveo-u250-host",
+      "binaryDir": "${sourceDir}/build/u250-host",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "ANVIL_PLATFORM_KIND": "alveo_u250",
+        "ANVIL_PLATFORM_KIND": "u250",
         "ANVIL_BUILD_GOLD": "ON",
         "ANVIL_BUILD_HLS_MODEL": "ON",
         "ANVIL_BUILD_APPS": "ON",
@@ -70,9 +70,9 @@
       }
     },
     {
-      "name": "zcu104-host-aarch64",
+      "name": "zcu104-host",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/zcu104-host-aarch64",
+      "binaryDir": "${sourceDir}/build/zcu104-host",
       "toolchainFile": "${sourceDir}/cmake/Toolchain-aarch64-linux.cmake",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
@@ -117,8 +117,8 @@
       "configurePreset": "hls-model-linux-release"
     },
     {
-      "name": "alveo-u250-host",
-      "configurePreset": "alveo-u250-host"
+      "name": "u250-host",
+      "configurePreset": "u250-host"
     }
   ],
   "testPresets": [
@@ -151,8 +151,8 @@
       }
     },
     {
-      "name": "alveo-u250-host",
-      "configurePreset": "alveo-u250-host",
+      "name": "u250-host",
+      "configurePreset": "u250-host",
       "output": {
         "outputOnFailure": true
       }

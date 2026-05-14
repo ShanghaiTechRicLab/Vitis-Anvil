@@ -9,7 +9,7 @@ option(ANVIL_BUILD_XRT        "Build XRT host runtime"   OFF)   # Phase 3
 option(ANVIL_BUILD_KERNELS    "Build Vitis HLS kernels"  OFF)   # Phase 2
 
 set(ANVIL_PLATFORM_KIND  "native"  CACHE STRING
-    "Target platform: native|alveo_u250|alveo_u55c|zcu104|kv260")
+    "Target platform: native|u250|alveo_u55c|zcu104|kv260")
 set(ANVIL_VITIS_PLATFORM ""        CACHE STRING "Path to .xpfm (Phase 2)")
 set(ANVIL_VITIS_TARGET   "hw"      CACHE STRING
     "Vitis compile/link target for packaged artifacts: hw|hw_emu|sw_emu")
@@ -24,7 +24,7 @@ set(ANVIL_MAX_ELEMENTS   "131072"  CACHE STRING "Max elements per saxpy frame")
 # and the U250 / target platform .xpfm path is set. ANVIL_VITIS_TARGET is
 # declared and validated here for xclbin link/package targets. v++ --compile
 # --mode hls in Vitis 2024.2 does not accept --target, so HLS csynth
-# intentionally does not pass it; add_anvil_kernel_xclbin uses it by default.
+# intentionally does not pass it; add_anvil_xclbin uses it by default.
 # These checks are FATAL_ERROR with a helpful hint because skipping the check
 # produces obscure failures deep in v++ runs.
 # ---------------------------------------------------------------------------

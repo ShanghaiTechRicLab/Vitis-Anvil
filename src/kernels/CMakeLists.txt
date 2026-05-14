@@ -8,7 +8,7 @@ set(_saxpy_kernel_args
   SOURCES       saxpy_kernel.cpp
   PLATFORM_KIND ${ANVIL_PLATFORM_KIND})
 
-if(ANVIL_BUILD_TESTS AND ANVIL_PLATFORM_KIND STREQUAL "alveo_u250")
+if(ANVIL_BUILD_TESTS AND ANVIL_PLATFORM_KIND STREQUAL "u250")
   # Cosim is currently validated only for U250; other platforms still csynth
   # without wiring the U250-only testbench/part mapping.
   list(APPEND _saxpy_kernel_args
@@ -17,8 +17,8 @@ endif()
 
 add_anvil_kernel(${_saxpy_kernel_args})
 
-if(ANVIL_PLATFORM_KIND STREQUAL "alveo_u250")
-  add_anvil_kernel_xclbin(
+if(ANVIL_PLATFORM_KIND STREQUAL "u250")
+  add_anvil_xclbin(
     NAME saxpy
     KERNEL_TARGETS saxpy_xo
     PLATFORM_KIND ${ANVIL_PLATFORM_KIND})

@@ -3,7 +3,7 @@ project(vitis_anvil LANGUAGES CXX)
 
 # host / gold / hls_model run C++20 (std::span). The Vitis HLS kernel
 # synthesizer is constrained to ANVIL_HLS_STD (default c++14) and is
-# driven separately via cmake/VitisKernel.cmake (Phase 2).
+# driven separately via cmake/AnvilKernel.cmake (Phase 2).
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -53,7 +53,7 @@ endif()
 
 if(ANVIL_BUILD_KERNELS)
   find_package(Python3 COMPONENTS Interpreter REQUIRED)
-  include(VitisKernel)
+  include(AnvilKernel)
   add_subdirectory(src/kernels)
 endif()
 

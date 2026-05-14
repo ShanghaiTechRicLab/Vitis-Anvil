@@ -1,4 +1,4 @@
-# cmake/VitisKernel.cmake
+# cmake/AnvilKernel.cmake
 # Phase 2 Vitis HLS kernel helpers.
 
 function(_anvil_kernel_reject_space_path kernel_name path_label path_value)
@@ -34,7 +34,7 @@ function(add_anvil_kernel)
   endif()
   if(NOT AK_PLATFORM_KIND)
     message(FATAL_ERROR
-      "add_anvil_kernel(${AK_NAME}): PLATFORM_KIND required (e.g. alveo_u250) "
+      "add_anvil_kernel(${AK_NAME}): PLATFORM_KIND required (e.g. u250) "
       "or set ANVIL_PLATFORM_KIND")
   endif()
   if(AK_UNPARSED_ARGUMENTS)
@@ -98,7 +98,7 @@ function(add_anvil_kernel)
         "add_anvil_kernel(${AK_NAME}): testbench not found: ${_ak_abs_testbench}")
     endif()
 
-    if(AK_PLATFORM_KIND STREQUAL "alveo_u250")
+    if(AK_PLATFORM_KIND STREQUAL "u250")
       set(_ak_cosim_part "xcu250-figd2104-2L-e")
     else()
       message(FATAL_ERROR
@@ -267,29 +267,29 @@ function(add_anvil_kernel)
   endif()
 endfunction()
 
-function(add_anvil_kernel_xclbin)
+function(add_anvil_xclbin)
   set(options)
   set(one_value_args NAME PLATFORM_KIND LINK_CFG MODE)
   set(multi_value_args KERNEL_TARGETS)
   cmake_parse_arguments(AKX "${options}" "${one_value_args}" "${multi_value_args}" ${ARGN})
 
   if(NOT AKX_NAME)
-    message(FATAL_ERROR "add_anvil_kernel_xclbin: NAME is required")
+    message(FATAL_ERROR "add_anvil_xclbin: NAME is required")
   endif()
   if(NOT AKX_KERNEL_TARGETS)
-    message(FATAL_ERROR "add_anvil_kernel_xclbin(${AKX_NAME}): KERNEL_TARGETS required")
+    message(FATAL_ERROR "add_anvil_xclbin(${AKX_NAME}): KERNEL_TARGETS required")
   endif()
   if(NOT AKX_PLATFORM_KIND)
     set(AKX_PLATFORM_KIND "${ANVIL_PLATFORM_KIND}")
   endif()
   if(NOT AKX_PLATFORM_KIND)
     message(FATAL_ERROR
-      "add_anvil_kernel_xclbin(${AKX_NAME}): PLATFORM_KIND required (e.g. alveo_u250) "
+      "add_anvil_xclbin(${AKX_NAME}): PLATFORM_KIND required (e.g. u250) "
       "or set ANVIL_PLATFORM_KIND")
   endif()
   if(AKX_UNPARSED_ARGUMENTS)
     message(FATAL_ERROR
-      "add_anvil_kernel_xclbin(${AKX_NAME}): unexpected arguments: ${AKX_UNPARSED_ARGUMENTS}")
+      "add_anvil_xclbin(${AKX_NAME}): unexpected arguments: ${AKX_UNPARSED_ARGUMENTS}")
   endif()
 
   if(NOT AKX_LINK_CFG)
@@ -300,7 +300,7 @@ function(add_anvil_kernel_xclbin)
   endif()
   if(NOT EXISTS "${AKX_LINK_CFG}")
     message(FATAL_ERROR
-      "add_anvil_kernel_xclbin(${AKX_NAME}): LINK_CFG not found: ${AKX_LINK_CFG}")
+      "add_anvil_xclbin(${AKX_NAME}): LINK_CFG not found: ${AKX_LINK_CFG}")
   endif()
 
   if(NOT AKX_MODE)
@@ -312,7 +312,7 @@ function(add_anvil_kernel_xclbin)
   endif()
   if(NOT AKX_MODE MATCHES "^(hw|hw_emu|sw_emu)$")
     message(FATAL_ERROR
-      "add_anvil_kernel_xclbin(${AKX_NAME}): MODE must be one of hw, hw_emu, or sw_emu; "
+      "add_anvil_xclbin(${AKX_NAME}): MODE must be one of hw, hw_emu, or sw_emu; "
       "got '${AKX_MODE}'")
   endif()
 
@@ -320,12 +320,12 @@ function(add_anvil_kernel_xclbin)
   foreach(_akx_target IN LISTS AKX_KERNEL_TARGETS)
     if(NOT TARGET "${_akx_target}")
       message(FATAL_ERROR
-        "add_anvil_kernel_xclbin(${AKX_NAME}): kernel target not found: ${_akx_target}")
+        "add_anvil_xclbin(${AKX_NAME}): kernel target not found: ${_akx_target}")
     endif()
     get_target_property(_akx_artifact "${_akx_target}" ANVIL_KERNEL_ARTIFACT)
     if(NOT _akx_artifact)
       message(FATAL_ERROR
-        "add_anvil_kernel_xclbin(${AKX_NAME}): target '${_akx_target}' does not set "
+        "add_anvil_xclbin(${AKX_NAME}): target '${_akx_target}' does not set "
         "ANVIL_KERNEL_ARTIFACT")
     endif()
     list(APPEND _akx_artifacts "${_akx_artifact}")
