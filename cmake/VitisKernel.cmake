@@ -11,7 +11,7 @@ endfunction()
 
 function(add_accel_kernel)
   set(options)
-  set(one_value_args NAME TOP CLOCK_HZ PLATFORM_KIND CONFIG)
+  set(one_value_args NAME TOP CLOCK_HZ PLATFORM_KIND)
   set(multi_value_args SOURCES)
   cmake_parse_arguments(AK "${options}" "${one_value_args}" "${multi_value_args}" ${ARGN})
 
@@ -40,6 +40,12 @@ function(add_accel_kernel)
   if(AK_UNPARSED_ARGUMENTS)
     message(FATAL_ERROR
       "add_accel_kernel(${AK_NAME}): unexpected arguments: ${AK_UNPARSED_ARGUMENTS}")
+  endif()
+  list(FIND AK_SOURCES CONFIG _ak_config_source_index)
+  if(NOT _ak_config_source_index EQUAL -1)
+    list(SUBLIST AK_SOURCES ${_ak_config_source_index} -1 _ak_unexpected_sources)
+    message(FATAL_ERROR
+      "add_accel_kernel(${AK_NAME}): unexpected arguments: ${_ak_unexpected_sources}")
   endif()
 
   if(NOT AK_TOP)
@@ -85,6 +91,7 @@ function(add_accel_kernel)
   _accel_kernel_reject_space_path("${AK_NAME}" "build directory" "${CMAKE_CURRENT_BINARY_DIR}")
   _accel_kernel_reject_space_path("${AK_NAME}" "Vitis platform path" "${ACCEL_VITIS_PLATFORM}")
   _accel_kernel_reject_space_path("${AK_NAME}" "public include path" "${PROJECT_SOURCE_DIR}/include")
+  _accel_kernel_reject_space_path("${AK_NAME}" "generated include path" "${CMAKE_BINARY_DIR}/generated")
   _accel_kernel_reject_space_path("${AK_NAME}" "hlslib include path" "${PROJECT_SOURCE_DIR}/third_party/hlslib/include")
   foreach(_ak_abs_src IN LISTS _ak_abs_sources)
     _accel_kernel_reject_space_path("${AK_NAME}" "kernel source path" "${_ak_abs_src}")
@@ -100,7 +107,7 @@ function(add_accel_kernel)
   endforeach()
 
   set(_ak_cflags
-    "-std=${ACCEL_HLS_STD} -DHLSLIB_SYNTHESIS -I${PROJECT_SOURCE_DIR}/include -I${PROJECT_SOURCE_DIR}/third_party/hlslib/include")
+    "-std=${ACCEL_HLS_STD} -DHLSLIB_SYNTHESIS -I${PROJECT_SOURCE_DIR}/include -I${CMAKE_BINARY_DIR}/generated -I${PROJECT_SOURCE_DIR}/third_party/hlslib/include")
 
   file(WRITE "${_ak_cfg}"
     "platform=${ACCEL_VITIS_PLATFORM}\n"
