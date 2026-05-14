@@ -66,7 +66,8 @@
         "ANVIL_PARALLELISM": "16",
         "ANVIL_CLOCK_MHZ": "300",
         "ANVIL_VITIS_PLATFORM": "/opt/xilinx/platforms/xilinx_u250_gen3x16_xdma_4_1_202210_1/xilinx_u250_gen3x16_xdma_4_1_202210_1.xpfm",
-        "ANVIL_VITIS_TARGET": "hw"
+        "ANVIL_VITIS_TARGET": "hw",
+        "ANVIL_VITIS_PART": "xcu250-figd2104-2L-e"
       }
     },
     {
@@ -95,7 +96,9 @@
         "ANVIL_BUILD_TESTS": "OFF",
         "ANVIL_BUILD_XRT": "OFF",
         "ANVIL_BUILD_KERNELS": "ON",
-        "ANVIL_VITIS_PLATFORM": "/path/to/zcu104.xpfm"
+        "ANVIL_VITIS_PLATFORM": "/tools/Xilinx/Vitis/2024.2/base_platforms/xilinx_zcu104_base_202420_1/xilinx_zcu104_base_202420_1.xpfm",
+        "ANVIL_VITIS_PART": "xczu7ev-ffvc1156-2-e",
+        "ANVIL_VITIS_TARGET": "hw_emu"
       }
     }
   ],
@@ -119,6 +122,10 @@
     {
       "name": "u250-host",
       "configurePreset": "u250-host"
+    },
+    {
+      "name": "zcu104-kernel",
+      "configurePreset": "zcu104-kernel"
     }
   ],
   "testPresets": [
@@ -153,6 +160,13 @@
     {
       "name": "u250-host",
       "configurePreset": "u250-host",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "zcu104-kernel",
+      "configurePreset": "zcu104-kernel",
       "output": {
         "outputOnFailure": true
       }

@@ -98,14 +98,12 @@ function(add_anvil_kernel)
         "add_anvil_kernel(${AK_NAME}): testbench not found: ${_ak_abs_testbench}")
     endif()
 
-    if(AK_PLATFORM_KIND STREQUAL "u250")
-      set(_ak_cosim_part "xcu250-figd2104-2L-e")
-    else()
+    if(NOT ANVIL_VITIS_PART)
       message(FATAL_ERROR
-        "add_anvil_kernel(${AK_NAME}): TESTBENCH cosim does not yet support "
-        "PLATFORM_KIND='${AK_PLATFORM_KIND}'. Add a Vitis part mapping before "
-        "enabling cosim for this platform kind.")
+        "add_anvil_kernel(${AK_NAME}): ANVIL_VITIS_PART is not set. "
+        "Set it via config/<target>/anvil.mk, CMakePresets.json, or -DANVIL_VITIS_PART=...")
     endif()
+    set(_ak_cosim_part "${ANVIL_VITIS_PART}")
   endif()
 
   set(_ak_work_dir "${CMAKE_CURRENT_BINARY_DIR}/${AK_NAME}_hls")

@@ -11,6 +11,7 @@ option(ANVIL_BUILD_KERNELS    "Build Vitis HLS kernels"  OFF)   # Phase 2
 set(ANVIL_PLATFORM_KIND  "native"  CACHE STRING
     "Target platform: native|u250|alveo_u55c|zcu104|kv260")
 set(ANVIL_VITIS_PLATFORM ""        CACHE STRING "Path to .xpfm (Phase 2)")
+set(ANVIL_VITIS_PART     ""        CACHE STRING "Xilinx device part for HLS cosim (e.g. xcu250-figd2104-2L-e)")
 set(ANVIL_VITIS_TARGET   "hw"      CACHE STRING
     "Vitis compile/link target for packaged artifacts: hw|hw_emu|sw_emu")
 set_property(CACHE ANVIL_VITIS_TARGET PROPERTY STRINGS hw hw_emu sw_emu)
@@ -35,30 +36,18 @@ if(NOT ANVIL_VITIS_TARGET MATCHES "^(hw|hw_emu|sw_emu)$")
 endif()
 
 if(ANVIL_BUILD_KERNELS)
-  find_program(VPP_EXECUTABLE v++)
-  if(NOT VPP_EXECUTABLE)
-    message(FATAL_ERROR
-      "Phase 2 (ANVIL_BUILD_KERNELS=ON) requires v++ in PATH.\n"
-      "Source the Vitis settings first:\n"
-      "  source /tools/Xilinx/Vitis/2024.2/settings64.sh\n"
-      "then re-configure (rm -rf build/<preset> first).")
-  endif()
-  find_program(VITIS_RUN_EXECUTABLE vitis-run)
+  find_package(Vitis REQUIRED)
+  find_program(VITIS_RUN_EXECUTABLE vitis-run
+    HINTS $ENV{XILINX_VITIS}/bin)
   if(NOT VITIS_RUN_EXECUTABLE)
     message(FATAL_ERROR
-      "Phase 2 cosim requires vitis-run in PATH (expected in the same Vitis "
-      "install as v++).\n  Found v++: ${VPP_EXECUTABLE}\nSource "
-      "/tools/Xilinx/Vitis/2024.2/settings64.sh to get vitis-run too.")
+      "ANVIL_BUILD_KERNELS=ON requires vitis-run in PATH.\n"
+      "Source the Vitis settings before configuring.")
   endif()
   if(NOT ANVIL_VITIS_PLATFORM OR NOT EXISTS "${ANVIL_VITIS_PLATFORM}")
     message(FATAL_ERROR
-      "ANVIL_VITIS_PLATFORM not set or .xpfm missing:\n"
-      "  '${ANVIL_VITIS_PLATFORM}'\n"
-      "Set it in the preset cacheVariables or via "
-      "-DANVIL_VITIS_PLATFORM=/path/to/xpfm.")
+      "ANVIL_VITIS_PLATFORM not set or .xpfm missing: '${ANVIL_VITIS_PLATFORM}'")
   endif()
-  message(STATUS "Phase 2 toolchain: v++ = ${VPP_EXECUTABLE}")
-  message(STATUS "Phase 2 toolchain: vitis-run = ${VITIS_RUN_EXECUTABLE}")
-  message(STATUS "Phase 2 platform: ${ANVIL_VITIS_PLATFORM}")
-  message(STATUS "Phase 2 Vitis target: ${ANVIL_VITIS_TARGET} (used by xclbin link; not passed to v++ --mode hls)")
+  message(STATUS "Vitis target: ${ANVIL_VITIS_TARGET}")
+  message(STATUS "Vitis platform: ${ANVIL_VITIS_PLATFORM}")
 endif()
