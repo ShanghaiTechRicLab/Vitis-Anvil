@@ -93,3 +93,6 @@ __pycache__/
 .venv/
 venv/
 !/Makefile
+
+# Generated demo datasets
+data/*/

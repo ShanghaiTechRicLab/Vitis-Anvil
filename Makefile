@@ -1,8 +1,8 @@
 # Vitis-Anvil top-level Makefile
-# Usage: make [target] [TARGET=u250|zcu104] [LANG=cpp|python] [DATASET=tiny]
+# Usage: make [target] [TARGET=u250|zcu104] [ANVIL_LANG=cpp|python] [DATASET=tiny]
 
 TARGET  ?= u250
-LANG    ?= cpp
+ANVIL_LANG ?= cpp
 DATASET ?= tiny
 
 include config/$(TARGET)/anvil.mk
@@ -46,17 +46,17 @@ xclbin-hwemu: configure
 	rtk cmake --build $(BUILD_DIR) --target saxpy_xclbin
 
 gen:
-	@rtk test -f scripts/gen_dataset.py || { rtk echo "scripts/gen_dataset.py is added in Task 15" >&2; exit 1; }
+	@if [ ! -f scripts/gen_dataset.py ]; then rtk echo "scripts/gen_dataset.py is added in Task 15" >&2; exit 1; fi
 	rtk $(MAKE) build-python
 	rtk $(PYTHON) scripts/gen_dataset.py --dataset $(DATASET)
 
 gold: build gen
-	@rtk test -f scripts/run_gold.sh || { rtk echo "scripts/run_gold.sh is added in Task 15" >&2; exit 1; }
-	rtk env LANG=$(LANG) DATASET=$(DATASET) ANVIL_PRESET=$(ANVIL_PRESET) bash scripts/run_gold.sh
+	@if [ ! -f scripts/run_gold.sh ]; then rtk echo "scripts/run_gold.sh is added in Task 15" >&2; exit 1; fi
+	rtk env ANVIL_LANG=$(ANVIL_LANG) DATASET=$(DATASET) ANVIL_PRESET=$(ANVIL_PRESET) bash scripts/run_gold.sh
 
 run-host: build
-	@rtk test -x $(HOST_BIN) || { rtk echo "$(HOST_BIN) not built; use a preset with ANVIL_BUILD_XRT=ON" >&2; exit 1; }
-	@rtk test -f $(XCLBIN_PATH) || { rtk echo "$(XCLBIN_PATH) not found; run make xclbin first" >&2; exit 1; }
+	@if [ ! -x $(HOST_BIN) ]; then rtk echo "$(HOST_BIN) not built; use a preset with ANVIL_BUILD_XRT=ON" >&2; exit 1; fi
+	@if [ ! -f $(XCLBIN_PATH) ]; then rtk echo "$(XCLBIN_PATH) not found; run make xclbin first" >&2; exit 1; fi
 	rtk $(HOST_BIN) --xclbin $(XCLBIN_PATH)
 
 xrt-emu: build
@@ -66,12 +66,12 @@ xrt-hw: build
 	rtk $(MAKE) run-host
 
 compare:
-	@rtk test -f scripts/compare.py || { rtk echo "scripts/compare.py is added in Task 16" >&2; exit 1; }
+	@if [ ! -f scripts/compare.py ]; then rtk echo "scripts/compare.py is added in Task 16" >&2; exit 1; fi
 	rtk $(MAKE) build-python
 	rtk $(PYTHON) scripts/compare.py --dataset $(DATASET)
 
 analyze:
-	@rtk test -f scripts/analyze.py || { rtk echo "scripts/analyze.py is added in Task 16" >&2; exit 1; }
+	@if [ ! -f scripts/analyze.py ]; then rtk echo "scripts/analyze.py is added in Task 16" >&2; exit 1; fi
 	rtk $(MAKE) build-python
 	rtk $(PYTHON) scripts/analyze.py --build-dir $(BUILD_DIR)
 
@@ -114,7 +114,7 @@ help:
 	@rtk echo "  make cosim                        — HLS co-simulation"
 	@rtk echo "  make xclbin                       — link .xclbin"
 	@rtk echo "  make gen                          — generate dataset"
-	@rtk echo "  make gold [LANG=cpp|python]       — run gold reference"
+	@rtk echo "  make gold [ANVIL_LANG=cpp|python]       — run gold reference"
 	@rtk echo "  make xrt-emu                      — run on hw_emu"
 	@rtk echo "  make xrt-hw                       — run on real hardware"
 	@rtk echo "  make compare                      — compare outputs vs gold"
