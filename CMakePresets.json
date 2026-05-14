@@ -1,0 +1,105 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "gold-linux-debug",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/gold-linux-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ACCEL_BUILD_GOLD": "ON",
+        "ACCEL_BUILD_HLS_MODEL": "OFF",
+        "ACCEL_BUILD_APPS": "ON",
+        "ACCEL_BUILD_TESTS": "ON",
+        "ACCEL_BUILD_XRT": "OFF",
+        "ACCEL_BUILD_KERNELS": "OFF"
+      }
+    },
+    {
+      "name": "gold-linux-release",
+      "inherits": "gold-linux-debug",
+      "binaryDir": "${sourceDir}/build/gold-linux-release",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "hls-model-linux-debug",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/hls-model-linux-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ACCEL_BUILD_GOLD": "ON",
+        "ACCEL_BUILD_HLS_MODEL": "ON",
+        "ACCEL_BUILD_APPS": "ON",
+        "ACCEL_BUILD_TESTS": "ON",
+        "ACCEL_BUILD_XRT": "OFF",
+        "ACCEL_BUILD_KERNELS": "OFF"
+      }
+    },
+    {
+      "name": "hls-model-linux-release",
+      "inherits": "hls-model-linux-debug",
+      "binaryDir": "${sourceDir}/build/hls-model-linux-release",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "alveo-u250-host",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/alveo-u250-host",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ACCEL_PLATFORM_KIND": "alveo_u250",
+        "ACCEL_BUILD_XRT": "ON",
+        "ACCEL_BUILD_KERNELS": "OFF",
+        "ACCEL_BUILD_TESTS": "OFF"
+      }
+    },
+    {
+      "name": "zcu104-host-aarch64",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/zcu104-host-aarch64",
+      "toolchainFile": "${sourceDir}/cmake/Toolchain-aarch64-linux.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ACCEL_PLATFORM_KIND": "zcu104",
+        "ACCEL_BUILD_XRT": "ON",
+        "ACCEL_BUILD_KERNELS": "OFF",
+        "ACCEL_BUILD_TESTS": "OFF"
+      }
+    },
+    {
+      "name": "zcu104-kernel",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/zcu104-kernel",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ACCEL_PLATFORM_KIND": "zcu104",
+        "ACCEL_BUILD_GOLD": "OFF",
+        "ACCEL_BUILD_HLS_MODEL": "OFF",
+        "ACCEL_BUILD_APPS": "OFF",
+        "ACCEL_BUILD_TESTS": "OFF",
+        "ACCEL_BUILD_XRT": "OFF",
+        "ACCEL_BUILD_KERNELS": "ON",
+        "ACCEL_VITIS_PLATFORM": "/path/to/zcu104.xpfm"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "gold-linux-debug",       "configurePreset": "gold-linux-debug" },
+    { "name": "gold-linux-release",     "configurePreset": "gold-linux-release" },
+    { "name": "hls-model-linux-debug",  "configurePreset": "hls-model-linux-debug" },
+    { "name": "hls-model-linux-release","configurePreset": "hls-model-linux-release" }
+  ],
+  "testPresets": [
+    {
+      "name": "gold-linux-debug",
+      "configurePreset": "gold-linux-debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "hls-model-linux-debug",
+      "configurePreset": "hls-model-linux-debug",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}
