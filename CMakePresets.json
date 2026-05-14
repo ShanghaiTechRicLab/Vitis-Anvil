@@ -152,6 +152,11 @@
       "configurePreset": "gold-linux-debug",
       "output": {
         "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "label": "csynth|cosim|xrt_emu|build"
+        }
       }
     },
     {
@@ -159,6 +164,11 @@
       "configurePreset": "hls-model-linux-debug",
       "output": {
         "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "label": "csynth|cosim|xrt_emu|build"
+        }
       }
     },
     {
@@ -166,6 +176,11 @@
       "configurePreset": "gold-linux-release",
       "output": {
         "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "label": "csynth|cosim|xrt_emu|build"
+        }
       }
     },
     {
@@ -173,6 +188,11 @@
       "configurePreset": "hls-model-linux-release",
       "output": {
         "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "label": "csynth|cosim|xrt_emu|build"
+        }
       }
     },
     {
@@ -180,6 +200,11 @@
       "configurePreset": "u250-host",
       "output": {
         "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "label": "csynth|cosim|xrt_emu|build"
+        }
       }
     },
     {
@@ -187,6 +212,11 @@
       "configurePreset": "u250-host-hwemu",
       "output": {
         "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "label": "csynth|cosim|xrt_emu|build"
+        }
       }
     },
     {
@@ -194,6 +224,11 @@
       "configurePreset": "zcu104-kernel",
       "output": {
         "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "label": "csynth|cosim|xrt_emu|build"
+        }
       }
     }
   ]

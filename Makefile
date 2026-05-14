@@ -110,7 +110,7 @@ test-xrt-emu:
 
 test-slow: configure
 	rtk ctest --test-dir $(BUILD_DIR) -L "csynth|cosim|xrt_emu" -V
-	rtk $(PYTHON) -m pytest -m slow tests/python -v
+	@rtk $(PYTHON) -m pytest -m slow tests/python -v; status=$$?; if [ $$status -eq 5 ]; then rtk echo "No slow Python tests selected"; elif [ $$status -ne 0 ]; then exit $$status; fi
 
 test-all: test test-slow
 
