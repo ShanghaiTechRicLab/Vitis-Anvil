@@ -1,9 +1,17 @@
 # cmake/VitisKernel.cmake
 # Phase 2 Vitis HLS kernel helpers.
 
+function(_accel_kernel_reject_space_path kernel_name path_label path_value)
+  if("${path_value}" MATCHES "[ \t]")
+    message(FATAL_ERROR
+      "add_accel_kernel(${kernel_name}): ${path_label} contains whitespace, "
+      "which is not supported by the generated Vitis HLS config: '${path_value}'")
+  endif()
+endfunction()
+
 function(add_accel_kernel)
   set(options)
-  set(one_value_args NAME TOP CLOCK_HZ PLATFORM_KIND)
+  set(one_value_args NAME TOP CLOCK_HZ PLATFORM_KIND CONFIG)
   set(multi_value_args SOURCES)
   cmake_parse_arguments(AK "${options}" "${one_value_args}" "${multi_value_args}" ${ARGN})
 
@@ -22,8 +30,12 @@ function(add_accel_kernel)
     message(FATAL_ERROR "add_accel_kernel(${AK_NAME}): SOURCES required")
   endif()
   if(NOT AK_PLATFORM_KIND)
+    set(AK_PLATFORM_KIND "${ACCEL_PLATFORM_KIND}")
+  endif()
+  if(NOT AK_PLATFORM_KIND)
     message(FATAL_ERROR
-      "add_accel_kernel(${AK_NAME}): PLATFORM_KIND required (e.g. alveo_u250)")
+      "add_accel_kernel(${AK_NAME}): PLATFORM_KIND required (e.g. alveo_u250) "
+      "or set ACCEL_PLATFORM_KIND")
   endif()
   if(AK_UNPARSED_ARGUMENTS)
     message(FATAL_ERROR
@@ -34,7 +46,23 @@ function(add_accel_kernel)
     set(AK_TOP "${AK_NAME}")
   endif()
   if(NOT AK_CLOCK_HZ)
-    set(AK_CLOCK_HZ 300000000)
+    if(NOT ACCEL_CLOCK_MHZ MATCHES "^[0-9]+$")
+      message(FATAL_ERROR
+        "add_accel_kernel(${AK_NAME}): ACCEL_CLOCK_MHZ must be a positive integer, "
+        "got '${ACCEL_CLOCK_MHZ}'")
+    endif()
+    if(ACCEL_CLOCK_MHZ LESS_EQUAL 0)
+      message(FATAL_ERROR
+        "add_accel_kernel(${AK_NAME}): ACCEL_CLOCK_MHZ must be greater than zero, "
+        "got '${ACCEL_CLOCK_MHZ}'")
+    endif()
+    math(EXPR AK_CLOCK_HZ "${ACCEL_CLOCK_MHZ} * 1000000")
+  elseif(NOT AK_CLOCK_HZ MATCHES "^[0-9]+$")
+    message(FATAL_ERROR
+      "add_accel_kernel(${AK_NAME}): CLOCK_HZ must be a positive integer, got '${AK_CLOCK_HZ}'")
+  elseif(AK_CLOCK_HZ LESS_EQUAL 0)
+    message(FATAL_ERROR
+      "add_accel_kernel(${AK_NAME}): CLOCK_HZ must be greater than zero, got '${AK_CLOCK_HZ}'")
   endif()
 
   set(_ak_abs_sources)
@@ -52,6 +80,17 @@ function(add_accel_kernel)
   set(_ak_cfg "${_ak_work_dir}/hls.cfg")
   set(_ak_xo "${_ak_work_dir}/${AK_NAME}.xo")
   set(_ak_csynth_xml "${_ak_work_dir}/hls/syn/report/${AK_TOP}_csynth.xml")
+
+  _accel_kernel_reject_space_path("${AK_NAME}" "source directory" "${CMAKE_CURRENT_SOURCE_DIR}")
+  _accel_kernel_reject_space_path("${AK_NAME}" "build directory" "${CMAKE_CURRENT_BINARY_DIR}")
+  _accel_kernel_reject_space_path("${AK_NAME}" "Vitis platform path" "${ACCEL_VITIS_PLATFORM}")
+  _accel_kernel_reject_space_path("${AK_NAME}" "public include path" "${PROJECT_SOURCE_DIR}/include")
+  _accel_kernel_reject_space_path("${AK_NAME}" "hlslib include path" "${PROJECT_SOURCE_DIR}/third_party/hlslib/include")
+  foreach(_ak_abs_src IN LISTS _ak_abs_sources)
+    _accel_kernel_reject_space_path("${AK_NAME}" "kernel source path" "${_ak_abs_src}")
+  endforeach()
+  _accel_kernel_reject_space_path("${AK_NAME}" "kernel work directory" "${_ak_work_dir}")
+  _accel_kernel_reject_space_path("${AK_NAME}" "kernel artifact path" "${_ak_xo}")
 
   file(MAKE_DIRECTORY "${_ak_work_dir}")
 
@@ -106,13 +145,22 @@ function(add_accel_kernel)
     endif()
 
     add_test(
+      NAME "${AK_NAME}_csynth_build"
+      COMMAND "${CMAKE_COMMAND}"
+              --build "${CMAKE_BINARY_DIR}"
+              --target "${AK_NAME}_xo")
+    add_test(
       NAME "${AK_NAME}_csynth_check"
       COMMAND "${Python3_EXECUTABLE}"
               "${PROJECT_SOURCE_DIR}/cmake/parse_hls_report.py"
               "${_ak_csynth_xml}"
               --max-ii 1)
+    set_tests_properties("${AK_NAME}_csynth_build" PROPERTIES
+      LABELS "csynth;build"
+      FIXTURES_SETUP "${AK_NAME}_csynth_fixture")
     set_tests_properties("${AK_NAME}_csynth_check" PROPERTIES
-      LABELS csynth)
+      LABELS csynth
+      FIXTURES_REQUIRED "${AK_NAME}_csynth_fixture")
   endif()
 endfunction()
 
