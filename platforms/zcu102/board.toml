@@ -1,0 +1,21 @@
+[board]
+name        = "zcu102"
+device_kind = "embedded"
+arch        = "aarch64"
+vitis_part  = "xczu9eg-ffvb1156-2-e"
+ddr_size_gb = 4
+
+[vitis]
+platform     = "xilinx_zcu102_base_202420_1"
+platform_dir = "${XILINX_VITIS}/base_platforms/xilinx_zcu102_base_202420_1"
+clock_hz     = 200_000_000
+xclbin_mode  = "hw_emu"
+
+[connect]
+hp_ports = ["HP0", "HP1", "HP2", "HP3"]
+
+[deploy]
+default_ip  = ""
+ssh_user    = "root"
+deploy_dir  = "~/anvil-deploy"
+xrt_setup   = ". /etc/profile.d/xrt_setup.sh"
