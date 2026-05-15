@@ -33,3 +33,10 @@ def test_zcu102_xrt_ini_exists():
     assert ini.exists(), f"xrt.ini not found: {ini}"
     content = ini.read_text()
     assert "[Runtime]" in content
+
+
+@pytest.mark.fast
+def test_kv260_board_toml_parses():
+    data = toml.load_file(PLATFORMS / "kv260" / "board.toml")
+    assert data["board"]["name"] == "kv260"
+    assert data["board"]["device_kind"] == "embedded"
