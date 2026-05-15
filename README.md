@@ -1,55 +1,72 @@
 # Vitis-Anvil
 
-A CMake + Vitis HLS + XRT template for heterogeneous accelerator projects.
-Use this as the starting point for FPGA/HLS acceleration work targeting
-Alveo PCIe cards or Zynq UltraScale+ / Kria / Versal embedded SoCs.
+A Vitis + XRT HLS project **template** with batteries included.
 
-## Status
+Clone this repo, replace the saxpy demo with your kernel, and get working
+HLS synthesis → co-simulation → FPGA execution with gold comparison — in minutes.
 
-**Phase 0+1 implemented** — CMake skeleton, vendored third-party libs,
-gold reference (`saxpy_gold`), HLS-friendly CPU model (`saxpy_hls_model`),
-Catch2 test suite, and CLI apps (`gen_dataset`, `run_gold`,
-`compare_gold_hls_model`).
-
-**Phase 2 implemented** — Vitis HLS `saxpy_xo` csynth/cosim targets and an
-explicit U250 `saxpy_xclbin` link target are registered. The xclbin link is
-long-running, is not part of `ALL`, and is not driven by default ctest.
-
-**Phase 3 in progress** — the `anvil::runtime` XRT wrapper layer is available
-and wired behind `ANVIL_BUILD_XRT=ON`. Host binaries, packaging, embedded
-deployment, and Python automation continue to land in later Phase 3 tasks.
-
-## Requirements
-
-- CMake ≥ 3.21
-- C++20 compiler (GCC ≥ 10 or Clang ≥ 13)
-- Ninja (recommended)
-- No Vitis / XRT / Xilinx tools required for CPU-only native builds
-- Vitis and a platform `.xpfm` are required only when `ANVIL_BUILD_KERNELS=ON`
-
-## Quickstart
+## Quick start
 
 ```bash
-rtk cmake --preset hls-model-linux-debug
-rtk cmake --build --preset hls-model-linux-debug
-rtk ctest --preset hls-model-linux-debug --output-on-failure
+rtk git clone <repo>
+rtk pip install -e .
+make test                   # fast, CPU-only — no Vitis or FPGA needed
 ```
 
-See `docs/build.md` for presets and build/test usage.
+## What's inside
 
-## Layout
+| Role | What you get |
+|------|-------------|
+| **Template** | Working saxpy demo; replace the listed demo touch-points to use your own kernel |
+| **Library** | `anvil::*` C++ (11 sub-namespaces) + `anvil.*` Python (9 modules) |
+| **Scaffold** | CMake modules, `TARGET=<platform>` Makefile, per-device config |
 
-- `include/anvil/` — public headers
-- `src/gold/` — algorithmic reference (`saxpy_gold`)
-- `src/hls_model/` — HLS-friendly CPU model (`saxpy_hls_model`)
-- `src/apps/` — CLI tools (`gen_dataset`, `run_gold`, `compare_gold_hls_model`)
-- `src/kernels/` — Vitis HLS saxpy kernel and explicit U250 xclbin target
-- `tests/` — Catch2 unit tests
-- `third_party/` — vendored dependencies (see `third_party/THIRD_PARTY_NOTICES.md`)
-- `cmake/` — CMake helpers and toolchain files
-- `docs/` — design and build documentation
+## Target platforms
+
+| `TARGET=` | Device | Status |
+|-----------|--------|--------|
+| `u250` | Alveo U250 | First-class |
+| `zcu104` | ZCU104 (AArch64) | First-class |
+
+## Key commands
+
+```bash
+make build TARGET=u250       # configure + build (needs Vitis + U250 .xpfm + XRT)
+make csynth                  # v++ HLS synthesis → .xo
+make xclbin-hwemu            # link .xclbin for hw_emu
+make xrt-emu DATASET=tiny    # run on hw_emu
+make compare DATASET=tiny    # compare outputs already produced for the dataset
+make gold ANVIL_LANG=python  # run Python gold reference
+```
+
+## Replacing the saxpy demo
+
+Edit these demo touch-points:
+
+1. `src/kernels/saxpy_kernel.cpp` — your HLS kernel
+2. `src/host/run_saxpy.cpp` — your XRT host
+3. `src/hls_model/saxpy_hls_model.cpp` — CPU parity model (optional)
+4. `src/gold/cpp/saxpy_gold.cpp` — C++ reference
+5. `src/gold/python/saxpy_gold.py` — Python reference
+6. `config/u250/link.cfg` / `config/zcu104/link.cfg` — kernel port→memory/interface mapping
+7. `scripts/gen_dataset.py` — input data format
+8. `scripts/compare.py` — output comparison format
+
+See `docs/user-guide.md` for details.
+
+## C++ library (`anvil::*`)
+
+`#include <anvil/log/anvil_log.hpp>` (and 10 more sub-modules).
+Link: `target_link_libraries(... PRIVATE anvil::log anvil::compare anvil::runtime)`
+
+## Python library (`anvil.*`)
+
+```python
+import anvil.log
+import anvil.compare
+```
 
 ## License
 
-See `LICENSE`. Vendored third-party code retains its upstream licenses
-under `third_party/<lib>/LICENSE*`.
+See `LICENSE`. Vendored third-party code retains its upstream licenses under
+`third_party/<lib>/LICENSE*` and is summarized in `third_party/THIRD_PARTY_NOTICES.md`.

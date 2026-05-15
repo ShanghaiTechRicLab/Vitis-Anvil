@@ -1,120 +1,75 @@
 # Build Guide
 
-## Requirements
+## Prerequisites
 
-- CMake ≥ 3.21
-- Ninja
-- C++20 compiler (GCC ≥ 10 or Clang ≥ 13)
-- No Vitis, XRT, or Xilinx tools required for CPU-only native builds
+| Component | Required for |
+|-----------|-------------|
+| cmake ≥ 3.21, ninja | All builds |
+| Python ≥ 3.10, pip | `make test`, `make compare`, scripts |
+| Vitis 2023.x or 2024.x (`v++`, `vitis-run`) | `make csynth`, `make cosim`, `make xclbin` |
+| U250 platform file (.xpfm) | `make build TARGET=u250`, `make csynth`, `make cosim`, `make xclbin` |
+| XRT (`/opt/xilinx/xrt`) | `TARGET=u250` configure/build, `make xrt-emu`, `make xrt-hw` |
+| PetaLinux sysroot (`SYSROOT`) | direct `zcu104-host` cross preset |
 
-## Available presets
-
-| Preset                    | Purpose                                      |
-|---------------------------|----------------------------------------------|
-| `gold-linux-debug`        | Debug build with gold reference only         |
-| `gold-linux-release`      | Release build with gold reference only       |
-| `hls-model-linux-debug`   | Debug build with gold + HLS CPU model        |
-| `hls-model-linux-release` | Release build with gold + HLS CPU model      |
-| `u250-host`         | Phase 2 U250 Vitis HLS csynth preset         |
-| `zcu104-host`          | AArch64 host/XRT preset (requires SYSROOT + XRT in sysroot) |
-| `zcu104-kernel`           | Future embedded/ZCU104 kernel preset; fail-fast until xpfm / Phase 4+ platform work lands |
-
-## Typical workflow
+## Day-0 fast test (no Vitis, no FPGA)
 
 ```bash
-# Configure + build + test the recommended preset:
-rtk cmake --preset hls-model-linux-debug
-rtk cmake --build --preset hls-model-linux-debug
-rtk ctest --preset hls-model-linux-debug --output-on-failure
-
-# Run the CLI smoke pipeline manually:
-rtk ./build/hls-model-linux-debug/src/apps/gen_dataset \
-  --manifest tests/data/tiny_case_001.json \
-  --data-dir build/hls-model-linux-debug/tests/data
-rtk ./build/hls-model-linux-debug/src/apps/run_gold \
-  --case tests/data/tiny_case_001.json \
-  --data-dir build/hls-model-linux-debug/tests/data
-rtk ./build/hls-model-linux-debug/src/apps/compare_gold_hls_model \
-  --case tests/data/tiny_case_001.json \
-  --data-dir build/hls-model-linux-debug/tests/data
+rtk pip install -e .
+make test
 ```
 
-## CMake options
+Runs `ctest --preset hls-model-linux-debug` (C++ unit tests + CLI smoke) and
+`pytest -m fast tests/python`. It is CPU-only and does not touch Vitis, XRT, a
+platform `.xpfm`, or FPGA hardware.
 
-- `ANVIL_BUILD_GOLD=ON` — build `anvil_gold`
-- `ANVIL_BUILD_HLS_MODEL=ON` — build `anvil_hls_model` (requires gold)
-- `ANVIL_BUILD_APPS=ON` — build CLI tools
-- `ANVIL_BUILD_TESTS=ON` — build Catch2 tests
-- `ANVIL_BUILD_XRT=OFF` — Phase 3 runtime wrapper
-- `ANVIL_BUILD_KERNELS=OFF` — Phase 2 kernel/csynth generation
-- `ANVIL_PLATFORM_KIND=native` — `native|u250|alveo_u55c|zcu104|kv260`
-- `ANVIL_VITIS_PLATFORM=` — Vitis `.xpfm` path for Phase 2 kernel presets
-- `ANVIL_VITIS_TARGET=hw` — Vitis xclbin link target (`hw|hw_emu|sw_emu`); HLS csynth does not pass `--target`
-- `ANVIL_PARALLELISM=8` — DataPack lane width; `u250-host` overrides this to `16`
-- `ANVIL_MAX_ELEMENTS=131072` — maximum saxpy frame length
-- `ANVIL_HLS_STD=c++14` — kernel-synthesis C++ standard (Phase 2)
+## CMake preset matrix
 
-## Alveo U250 Phase 2 preset
+| Preset | `ANVIL_BUILD_KERNELS` | `ANVIL_BUILD_XRT` | Use |
+|--------|-----------------------|-------------------|-----|
+| `gold-linux-debug` | OFF | OFF | gold reference only |
+| `hls-model-linux-debug` | OFF | OFF | CPU model + all unit tests |
+| `u250-host` | ON | ON | U250 Vitis HLS/xclbin + native XRT host |
+| `u250-host-hwemu` | ON | ON | U250 hw_emu xclbin + native XRT host |
+| `zcu104-host` | OFF | ON | ZCU104 AArch64 XRT host cross-compile |
+| `zcu104-kernel` | ON | OFF | ZCU104 kernel build preset (tests/cosim off) |
 
-`u250-host` enables the Phase 2 U250 Vitis HLS kernel flow. It builds the
-native gold/HLS-model libraries, CLI apps, Catch2 tests, and Vitis kernel
-csynthesis (`ANVIL_BUILD_KERNELS=ON`) while keeping the Phase 3 XRT host runtime
-off (`ANVIL_BUILD_XRT=OFF`). Source Vitis 2024.2 before configuring so `v++`
-and `vitis-run` are on `PATH`:
+## ctest label matrix
+
+| Label | `ctest --preset` runs? | Triggered by |
+|-------|------------------------|-------------|
+| (none) | ✓ | default fast CPU tests |
+| `csynth` | ✗ | `make test-csynth` |
+| `cosim` | ✗ | `make test-cosim` |
+| `xrt_emu` | ✗ | reserved label; current `make test-xrt-emu` calls `make xrt-emu` directly |
+| `build` | ✗ | internal HLS build fixture |
+
+All CTest presets exclude `csynth|cosim|xrt_emu|build` labels by default.
+Label-specific Makefile targets use `ctest --test-dir build/<preset>` to bypass
+that preset filter intentionally.
+
+## Selecting target platform
 
 ```bash
-source /tools/Xilinx/Vitis/2024.2/settings64.sh
+make build TARGET=u250     # Alveo U250; requires Vitis + U250 .xpfm + XRT
+make build TARGET=zcu104   # ZCU104 kernel preset; requires Vitis + ZCU104 .xpfm
 ```
 
-The preset defaults `ANVIL_VITIS_PLATFORM` to the lab U250 platform file:
+`config/<target>/anvil.mk` defines the platform variables consumed by the
+Makefile. `TARGET=zcu104` selects the kernel preset; use the `zcu104-host` CMake preset directly for AArch64 host cross-compiles and set `SYSROOT` to your PetaLinux sysroot. Override `ANVIL_PLATFORM` or CMake cache values when your local tool installation differs from the lab defaults.
 
-```text
-/opt/xilinx/platforms/xilinx_u250_gen3x16_xdma_4_1_202210_1/xilinx_u250_gen3x16_xdma_4_1_202210_1.xpfm
-```
-
-If the platform is installed elsewhere, override it at configure time:
+## Common workflows
 
 ```bash
-rtk cmake --preset u250-host -DANVIL_VITIS_PLATFORM=/path/to/xilinx_u250.xpfm
+make gen DATASET=tiny
+make gold DATASET=tiny
+make xrt-emu TARGET=u250 DATASET=tiny
+make compare DATASET=tiny
+
+make csynth TARGET=u250
+make cosim TARGET=u250
+make xclbin-hwemu TARGET=u250
+make xrt-emu TARGET=u250 DATASET=tiny
 ```
 
-Typical Phase 2 usage is configure, build, then run the preset test matrix:
-
-```bash
-rtk cmake --preset u250-host
-rtk cmake --build --preset u250-host
-rtk ctest --preset u250-host --output-on-failure
-```
-
-The default build includes `saxpy_xo`, so `rtk cmake --build --preset
-u250-host` runs Vitis HLS csynth and packages the `.xo`. The full ctest
-matrix includes the native unit/app tests plus Vitis csynth build/check tests
-and U250 HLS cosimulation. The current cosim testbench uses `n=65`.
-
-| Target | Trigger | Rough time |
-|--------|---------|------------|
-| `saxpy_xo` | Default `u250-host` build; also ctest `saxpy_csynth_build` | Minutes |
-| `saxpy_cosim` | ctest `saxpy_cosim_vs_gold` builds this target after csynth | Minutes to tens of minutes |
-| `saxpy_xclbin` | Manual `rtk cmake --build --preset u250-host --target saxpy_xclbin` | Long-running hardware link; tens of minutes or more |
-
-CTest labels distinguish the Vitis checks from native tests:
-
-- Unlabeled tests (`anvil_tests`, `gen_tiny_dataset_smoke`, `run_gold_smoke`,
-  `compare_gold_hls_model_smoke`) are native unit/app smoke tests.
-- `csynth` tests build `saxpy_xo` and parse the generated HLS report;
-  `saxpy_csynth_build` is also labeled `build` and provides the shared fixture.
-- `cosim` tests run `vitis-run --cosim` against the U250 testbench and require
-  the csynth fixture.
-
-`ANVIL_VITIS_TARGET` controls only the xclbin link mode (`hw`, `hw_emu`, or
-`sw_emu`) and defaults to `hw`; Vitis 2024.2 HLS csynth/cosim do not receive
-`--target`. `saxpy_xclbin` is intentionally manual-only: it is not an `ALL`
-target, is not registered with ctest, and is long-running. The XRT host flow consumes
-that artifact when the XRT host runtime is enabled.
-
-## Exit codes (apps)
-
-- `0` success
-- `1` algorithm verdict failed (tolerance)
-- `2` input validation failed (bad manifest, file size, n > kMaxElements)
-- `3` unexpected internal error
+`make xclbin` links a hardware `.xclbin` and is intentionally manual and
+long-running; it is not part of the default fast test path.
