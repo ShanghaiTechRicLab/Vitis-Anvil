@@ -17,7 +17,7 @@ endif()
 
 add_anvil_kernel(${_saxpy_kernel_args})
 
-if(ANVIL_PLATFORM_KIND MATCHES "^(u250|zcu104)$")
+if(ANVIL_PLATFORM_KIND MATCHES "^(u250|zcu104|zcu102)$")
   add_anvil_xclbin(
     NAME saxpy
     KERNEL_TARGETS saxpy_xo
