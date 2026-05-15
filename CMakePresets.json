@@ -114,6 +114,42 @@
         "ANVIL_VITIS_TARGET": "hw_emu",
         "ANVIL_NEEDS_CROSS": "OFF"
       }
+    },
+    {
+      "name": "zcu102-host",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/zcu102-host",
+      "toolchainFile": "${sourceDir}/cmake/Toolchain-aarch64-linux.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ANVIL_PLATFORM_KIND": "zcu102",
+        "ANVIL_BUILD_XRT": "ON",
+        "ANVIL_BUILD_KERNELS": "OFF",
+        "ANVIL_BUILD_TESTS": "OFF",
+        "ANVIL_BUILD_GOLD": "ON",
+        "ANVIL_BUILD_HLS_MODEL": "OFF",
+        "ANVIL_BUILD_APPS": "ON",
+        "ANVIL_NEEDS_CROSS": "ON"
+      }
+    },
+    {
+      "name": "zcu102-kernel",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/zcu102-kernel",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ANVIL_PLATFORM_KIND": "zcu102",
+        "ANVIL_BUILD_GOLD": "OFF",
+        "ANVIL_BUILD_HLS_MODEL": "OFF",
+        "ANVIL_BUILD_APPS": "OFF",
+        "ANVIL_BUILD_TESTS": "OFF",
+        "ANVIL_BUILD_XRT": "OFF",
+        "ANVIL_BUILD_KERNELS": "ON",
+        "ANVIL_VITIS_PLATFORM": "/tools/Xilinx/Vitis/2024.2/base_platforms/xilinx_zcu102_base_202420_1/xilinx_zcu102_base_202420_1.xpfm",
+        "ANVIL_VITIS_PART": "xczu9eg-ffvb1156-2-e",
+        "ANVIL_VITIS_TARGET": "hw_emu",
+        "ANVIL_NEEDS_CROSS": "OFF"
+      }
     }
   ],
   "buildPresets": [
@@ -144,6 +180,18 @@
     {
       "name": "zcu104-kernel",
       "configurePreset": "zcu104-kernel"
+    },
+    {
+      "name": "zcu104-host",
+      "configurePreset": "zcu104-host"
+    },
+    {
+      "name": "zcu102-kernel",
+      "configurePreset": "zcu102-kernel"
+    },
+    {
+      "name": "zcu102-host",
+      "configurePreset": "zcu102-host"
     }
   ],
   "testPresets": [
@@ -222,6 +270,18 @@
     {
       "name": "zcu104-kernel",
       "configurePreset": "zcu104-kernel",
+      "output": {
+        "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "label": "csynth|cosim|xrt_emu|build"
+        }
+      }
+    },
+    {
+      "name": "zcu102-kernel",
+      "configurePreset": "zcu102-kernel",
       "output": {
         "outputOnFailure": true
       },
