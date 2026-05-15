@@ -9,7 +9,7 @@
 | Vitis 2023.x or 2024.x (`v++`, `vitis-run`) | `make csynth`, `make cosim`, `make xclbin` |
 | U250 platform file (.xpfm) | `make build TARGET=u250`, `make csynth`, `make cosim`, `make xclbin` |
 | XRT (`/opt/xilinx/xrt`) | `TARGET=u250` configure/build, `make xrt-emu`, `make xrt-hw` |
-| PetaLinux sysroot (`SYSROOT`) | direct `zcu104-host` cross preset |
+| PetaLinux sysroot (`PETALINUX_SYSROOT`) | `make build TARGET=zcu104` / `make build TARGET=zcu102` host cross-compile |
 
 ## Day-0 fast test (no Vitis, no FPGA)
 
@@ -32,6 +32,8 @@ platform `.xpfm`, or FPGA hardware.
 | `u250-host-hwemu` | ON | ON | U250 hw_emu xclbin + native XRT host |
 | `zcu104-host` | OFF | ON | ZCU104 AArch64 XRT host cross-compile |
 | `zcu104-kernel` | ON | OFF | ZCU104 kernel build preset (tests/cosim off) |
+| `zcu102-host`     | OFF | ON  | ZCU102 AArch64 XRT host cross-compile |
+| `zcu102-kernel`   | ON  | OFF | ZCU102 kernel build preset (tests/cosim off) |
 
 ## ctest label matrix
 
@@ -51,11 +53,12 @@ that preset filter intentionally.
 
 ```bash
 make build TARGET=u250     # Alveo U250; requires Vitis + U250 .xpfm + XRT
-make build TARGET=zcu104   # ZCU104 kernel preset; requires Vitis + ZCU104 .xpfm
+make build TARGET=zcu104   # ZCU104 kernel+host presets; requires Vitis + ZCU104 .xpfm + PETALINUX_SYSROOT
+make build TARGET=zcu102   # ZCU102 kernel+host presets; requires Vitis + ZCU102 .xpfm + PETALINUX_SYSROOT
 ```
 
 `config/<target>/anvil.mk` defines the platform variables consumed by the
-Makefile. `TARGET=zcu104` selects the kernel preset; use the `zcu104-host` CMake preset directly for AArch64 host cross-compiles and set `SYSROOT` to your PetaLinux sysroot. Override `ANVIL_PLATFORM` or CMake cache values when your local tool installation differs from the lab defaults.
+Makefile. `TARGET=zcu104` selects the kernel preset and `zcu104-host` for the AArch64 host cross-compile; set `PETALINUX_SYSROOT` to your PetaLinux sysroot. `TARGET=zcu102` behaves the same: it selects the `zcu102-kernel` preset for Vitis kernel synthesis and `zcu102-host` for the AArch64 XRT host binary. Set `PETALINUX_SYSROOT` before configuring the host preset. See `platforms/zcu102/README.md` for board-specific sysroot paths. Override `ANVIL_PLATFORM` or CMake cache values when your local tool installation differs from the lab defaults.
 
 ## Common workflows
 

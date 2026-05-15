@@ -27,6 +27,7 @@ make test                   # fast, CPU-only — no Vitis or FPGA needed
 |-----------|--------|--------|
 | `u250` | Alveo U250 | First-class |
 | `zcu104` | ZCU104 (AArch64) | First-class |
+| `zcu102` | ZCU102 (AArch64) | First-class |
 
 ## Key commands
 
@@ -48,7 +49,7 @@ Edit these demo touch-points:
 3. `src/hls_model/saxpy_hls_model.cpp` — CPU parity model (optional)
 4. `src/gold/cpp/saxpy_gold.cpp` — C++ reference
 5. `src/gold/python/saxpy_gold.py` — Python reference
-6. `config/u250/link.cfg` / `config/zcu104/link.cfg` — kernel port→memory/interface mapping
+6. `config/u250/link.cfg` / `config/zcu104/link.cfg` / `config/zcu102/link.cfg` — kernel port→memory/interface mapping
 7. `scripts/gen_dataset.py` — input data format
 8. `scripts/compare.py` — output comparison format
 
