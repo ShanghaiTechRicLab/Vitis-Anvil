@@ -180,17 +180,17 @@ deploy-check:
 
 deploy-bin: deploy-check
 	@if [ ! -f "$(HOST_BIN)" ]; then rtk echo "ERROR: $(HOST_BIN) not found. Run: make build TARGET=$(TARGET) first." >&2; exit 1; fi
-	rtk ssh $(BOARD_SSH_USER)@$(BOARD_IP) "mkdir -p '$(BOARD_DEPLOY_DIR)'"
+	rtk ssh $(BOARD_SSH_USER)@$(BOARD_IP) "mkdir -p $(BOARD_DEPLOY_DIR)"
 	rtk scp "$(HOST_BIN)" "$(BOARD_SSH_USER)@$(BOARD_IP):$(BOARD_DEPLOY_DIR)/run_saxpy"
 
 deploy-xclbin: deploy-check
 	@if [ ! -f "$(XCLBIN_PATH)" ]; then rtk echo "ERROR: $(XCLBIN_PATH) not found. Run: make xclbin TARGET=$(TARGET) first." >&2; exit 1; fi
-	rtk ssh $(BOARD_SSH_USER)@$(BOARD_IP) "mkdir -p '$(BOARD_DEPLOY_DIR)'"
+	rtk ssh $(BOARD_SSH_USER)@$(BOARD_IP) "mkdir -p $(BOARD_DEPLOY_DIR)"
 	rtk scp "$(XCLBIN_PATH)" "$(BOARD_SSH_USER)@$(BOARD_IP):$(BOARD_DEPLOY_DIR)/saxpy.xclbin"
 
 deploy-data: deploy-check
 	@if [ ! -d "data/$(DATASET)" ]; then rtk echo "ERROR: data/$(DATASET) not found. Run: make gen DATASET=$(DATASET) first." >&2; exit 1; fi
-	rtk ssh $(BOARD_SSH_USER)@$(BOARD_IP) "mkdir -p '$(BOARD_DEPLOY_DIR)/data/$(DATASET)'"
+	rtk ssh $(BOARD_SSH_USER)@$(BOARD_IP) "mkdir -p $(BOARD_DEPLOY_DIR)/data/$(DATASET)"
 	rtk scp -r "data/$(DATASET)/." "$(BOARD_SSH_USER)@$(BOARD_IP):$(BOARD_DEPLOY_DIR)/data/$(DATASET)/"
 
 deploy: deploy-bin deploy-xclbin deploy-data
