@@ -143,8 +143,22 @@ test-cosim: configure
 test-xrt-emu:
 	rtk $(MAKE) xrt-emu
 
+# test-xrt-hw: build (cross-compile + xclbin) → gen → deploy+run via board_run.py → compare.
+# Requires BOARD_IP and (for zcu102) PETALINUX_SYSROOT + Vitis env.
 test-xrt-hw:
-	@rtk echo "test-xrt-hw is added in Task 10" >&2; exit 1
+	@if [ -z "$(BOARD_IP)" ]; then rtk echo "ERROR: BOARD_IP not set. Usage: make test-xrt-hw BOARD_IP=<ip> [TARGET=zcu102] [DATASET=tiny]" >&2; exit 1; fi
+	rtk $(MAKE) build TARGET=$(TARGET)
+	rtk $(MAKE) xclbin TARGET=$(TARGET)
+	rtk $(MAKE) gen DATASET=$(DATASET)
+	rtk $(MAKE) build-python
+	rtk $(PYTHON) scripts/board_run.py \
+		--board-ip "$(BOARD_IP)" \
+		--ssh-user "$(BOARD_SSH_USER)" \
+		--deploy-dir "$(BOARD_DEPLOY_DIR)" \
+		--xclbin "$(XCLBIN_PATH)" \
+		--host-bin "$(HOST_BIN)" \
+		--dataset "$(DATASET)"
+	rtk $(MAKE) compare DATASET=$(DATASET)
 
 test-slow: configure
 	rtk ctest --test-dir $(BUILD_DIR) -L "csynth|cosim|xrt_emu" -V
@@ -199,3 +213,6 @@ help:
 	@rtk echo "  make test-csynth/cosim/xrt-emu    — label-specific hardware tests"
 	@rtk echo "  make clean [TARGET=...]           — remove preset build dir"
 	@rtk echo "  make clean-all                    — remove all build dirs + eggs"
+	@rtk echo "  make deploy [TARGET=zcu102] BOARD_IP=<ip>     — scp bin+xclbin+data to board"
+	@rtk echo "  make deploy-bin/xclbin/data BOARD_IP=<ip>     — deploy individual artifact"
+	@rtk echo "  make test-xrt-hw BOARD_IP=<ip> [DATASET=tiny] — build+xclbin+gen+deploy+run+compare on board"
