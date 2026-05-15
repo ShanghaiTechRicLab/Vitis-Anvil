@@ -18,11 +18,15 @@ HWEMU_HOST_BIN     := $(HWEMU_BUILD_DIR)/src/host/run_saxpy
 HWEMU_XCLBIN_PATH  := $(HWEMU_BUILD_DIR)/src/kernels/saxpy_xclbin/saxpy.xclbin
 PYTHON      := .venv/bin/python
 PIP         := $(PYTHON) -m pip
+BOARD_IP          ?=
+BOARD_SSH_USER    ?= root
+BOARD_DEPLOY_DIR  ?= ~/anvil-deploy
 
 .PHONY: all configure build build-cpp build-python clean clean-all help \
         csynth cosim xclbin xclbin-hwemu \
         gen gold run-host xrt-emu xrt-hw compare analyze emconfig \
-        test test-csynth test-cosim test-xrt-emu test-slow test-all
+        deploy deploy-bin deploy-xclbin deploy-data deploy-check \
+        test test-csynth test-cosim test-xrt-emu test-xrt-hw test-slow test-all
 
 all: build
 
@@ -139,6 +143,9 @@ test-cosim: configure
 test-xrt-emu:
 	rtk $(MAKE) xrt-emu
 
+test-xrt-hw:
+	@rtk echo "test-xrt-hw is added in Task 10" >&2; exit 1
+
 test-slow: configure
 	rtk ctest --test-dir $(BUILD_DIR) -L "csynth|cosim|xrt_emu" -V
 	@rtk $(PYTHON) -m pytest -m slow tests/python -v; status=$$?; if [ $$status -eq 5 ]; then rtk echo "No slow Python tests selected"; elif [ $$status -ne 0 ]; then exit $$status; fi
@@ -153,6 +160,27 @@ clean:
 
 clean-all:
 	rtk rm -rf build/ *.egg-info python/anvil.egg-info
+
+deploy-check:
+	@if [ -z "$(BOARD_IP)" ]; then rtk echo "ERROR: BOARD_IP not set. Usage: make deploy BOARD_IP=<ip> [BOARD_SSH_USER=root] [DATASET=tiny]" >&2; exit 1; fi
+
+deploy-bin: deploy-check
+	@if [ ! -f "$(HOST_BIN)" ]; then rtk echo "ERROR: $(HOST_BIN) not found. Run: make build TARGET=$(TARGET) first." >&2; exit 1; fi
+	rtk ssh $(BOARD_SSH_USER)@$(BOARD_IP) "mkdir -p '$(BOARD_DEPLOY_DIR)'"
+	rtk scp "$(HOST_BIN)" "$(BOARD_SSH_USER)@$(BOARD_IP):$(BOARD_DEPLOY_DIR)/run_saxpy"
+
+deploy-xclbin: deploy-check
+	@if [ ! -f "$(XCLBIN_PATH)" ]; then rtk echo "ERROR: $(XCLBIN_PATH) not found. Run: make xclbin TARGET=$(TARGET) first." >&2; exit 1; fi
+	rtk ssh $(BOARD_SSH_USER)@$(BOARD_IP) "mkdir -p '$(BOARD_DEPLOY_DIR)'"
+	rtk scp "$(XCLBIN_PATH)" "$(BOARD_SSH_USER)@$(BOARD_IP):$(BOARD_DEPLOY_DIR)/saxpy.xclbin"
+
+deploy-data: deploy-check
+	@if [ ! -d "data/$(DATASET)" ]; then rtk echo "ERROR: data/$(DATASET) not found. Run: make gen DATASET=$(DATASET) first." >&2; exit 1; fi
+	rtk ssh $(BOARD_SSH_USER)@$(BOARD_IP) "mkdir -p '$(BOARD_DEPLOY_DIR)/data/$(DATASET)'"
+	rtk scp -r "data/$(DATASET)/." "$(BOARD_SSH_USER)@$(BOARD_IP):$(BOARD_DEPLOY_DIR)/data/$(DATASET)/"
+
+deploy: deploy-bin deploy-xclbin deploy-data
+	@rtk echo "[deploy] complete: $(BOARD_SSH_USER)@$(BOARD_IP):$(BOARD_DEPLOY_DIR)"
 
 help:
 	@rtk echo "Targets:"
