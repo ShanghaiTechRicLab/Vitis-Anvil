@@ -1,5 +1,5 @@
 # Vitis-Anvil top-level Makefile
-# Usage: make [target] [TARGET=u250|zcu104] [ANVIL_LANG=cpp|python] [DATASET=tiny]
+# Usage: make [target] [TARGET=u250|zcu104|zcu102] [ANVIL_LANG=cpp|python] [DATASET=tiny]
 
 TARGET  ?= u250
 ANVIL_LANG ?= cpp
@@ -8,7 +8,9 @@ DATASET ?= tiny
 include config/$(TARGET)/anvil.mk
 
 BUILD_DIR   := build/$(ANVIL_PRESET)
-HOST_BIN    := $(BUILD_DIR)/src/host/run_saxpy
+ANVIL_HOST_PRESET  ?= $(ANVIL_PRESET)
+HOST_BUILD_DIR     := build/$(ANVIL_HOST_PRESET)
+HOST_BIN    := $(HOST_BUILD_DIR)/src/host/run_saxpy
 XCLBIN_PATH := $(BUILD_DIR)/src/kernels/saxpy_xclbin/saxpy.xclbin
 ANVIL_HWEMU_PRESET ?= $(ANVIL_PRESET)-hwemu
 HWEMU_BUILD_DIR    := build/$(ANVIL_HWEMU_PRESET)
@@ -122,7 +124,7 @@ clean-all:
 
 help:
 	@rtk echo "Targets:"
-	@rtk echo "  make build [TARGET=u250|zcu104]  — configure + build C++ + pip install"
+	@rtk echo "  make build [TARGET=u250|zcu104|zcu102]  — configure + build C++ + pip install"
 	@rtk echo "  make test                         — CPU-only fast tests (no Vitis/XRT)"
 	@rtk echo "  make csynth                       — v++ HLS synthesis"
 	@rtk echo "  make cosim                        — HLS co-simulation"

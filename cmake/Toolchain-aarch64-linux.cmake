@@ -1,5 +1,5 @@
 # cmake/Toolchain-aarch64-linux.cmake
-# Cross-compile for aarch64 embedded Linux (ZCU104 / KV260 / Versal).
+# Cross-compile for aarch64 embedded Linux (ZCU102 / ZCU104 / KV260 / Versal).
 # Used in Phase 4. Requires SYSROOT environment variable pointing to a
 # rootfs/sysroot that contains aarch64 libc, libstdc++, and (optionally) XRT.
 
