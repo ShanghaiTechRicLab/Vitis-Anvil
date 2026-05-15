@@ -79,6 +79,24 @@ run-host: build gen
 emconfig:
 	rtk env ANVIL_PLATFORM=$(ANVIL_PLATFORM) BUILD_DIR=$(HWEMU_BUILD_DIR) bash scripts/emconfig.sh
 
+ifeq ($(ANVIL_DEVICE_KIND),embedded)
+xrt-emu: gen
+	rtk echo "[xrt-emu] TARGET=$(TARGET): building kernel ($(ANVIL_PRESET)) + AArch64 host ($(ANVIL_HOST_PRESET))..."
+	rtk cmake --preset $(ANVIL_PRESET)
+	rtk cmake --build --preset $(ANVIL_PRESET) --target saxpy_xclbin
+	@if [ -n "$(ANVIL_SYSROOT)" ]; then \
+		rtk env SYSROOT="$(ANVIL_SYSROOT)" cmake --preset $(ANVIL_HOST_PRESET); \
+	else \
+		rtk cmake --preset $(ANVIL_HOST_PRESET); \
+	fi
+	rtk cmake --build --preset $(ANVIL_HOST_PRESET) --target run_saxpy
+	rtk env ANVIL_PLATFORM=$(ANVIL_PLATFORM) BUILD_DIR=$(HWEMU_BUILD_DIR) bash scripts/emconfig.sh
+	rtk echo ""
+	rtk echo "Embedded hw_emu requires QEMU — see docs/deploy.md#qemu-emulation"
+	rtk echo "  xclbin : $(XCLBIN_PATH)"
+	rtk echo "  host   : $(HOST_BIN)  (AArch64)"
+	rtk echo "  emcfg  : $(HWEMU_BUILD_DIR)/emconfig.json"
+else
 xrt-emu: gen
 	@if [ "$(ANVIL_DEVICE_KIND)" != "accelerator" ]; then rtk echo "make xrt-emu currently requires an accelerator target with a combined host+kernel hw_emu preset; got TARGET=$(TARGET) ($(ANVIL_DEVICE_KIND))" >&2; exit 1; fi
 	rtk cmake --preset $(ANVIL_HWEMU_PRESET)
@@ -87,6 +105,7 @@ xrt-emu: gen
 	@if [ ! -x $(HWEMU_HOST_BIN) ]; then rtk echo "$(HWEMU_HOST_BIN) not built; use a hw_emu preset with ANVIL_BUILD_XRT=ON" >&2; exit 1; fi
 	@if [ ! -f $(HWEMU_XCLBIN_PATH) ]; then rtk echo "$(HWEMU_XCLBIN_PATH) not found; make xrt-emu should have built saxpy_xclbin" >&2; exit 1; fi
 	rtk env XCL_EMULATION_MODE=hw_emu EMCONFIG_PATH=$(HWEMU_BUILD_DIR) $(HWEMU_HOST_BIN) --xclbin $(HWEMU_XCLBIN_PATH) --data-dir data/$(DATASET) --output data/$(DATASET)/xrt_emu_out.bin
+endif
 
 xrt-hw: build
 	rtk $(MAKE) run-host
@@ -144,7 +163,7 @@ help:
 	@rtk echo "  make xclbin                       — link .xclbin"
 	@rtk echo "  make gen                          — generate dataset"
 	@rtk echo "  make gold [ANVIL_LANG=cpp|python]       — run gold reference"
-	@rtk echo "  make xrt-emu                      — build/run accelerator hw_emu preset"
+	@rtk echo "  make xrt-emu                      — run accelerator hw_emu or build embedded + print QEMU note"
 	@rtk echo "  make xrt-hw                       — run on real hardware"
 	@rtk echo "  make compare                      — compare outputs vs gold"
 	@rtk echo "  make analyze                      — parse HLS csynth report"
