@@ -28,11 +28,21 @@ all: build
 
 configure:
 	rtk cmake --preset $(ANVIL_PRESET)
+	@if [ "$(ANVIL_HOST_PRESET)" != "$(ANVIL_PRESET)" ]; then \
+		if [ -n "$(ANVIL_SYSROOT)" ]; then \
+			rtk env SYSROOT="$(ANVIL_SYSROOT)" cmake --preset $(ANVIL_HOST_PRESET); \
+		else \
+			rtk cmake --preset $(ANVIL_HOST_PRESET); \
+		fi; \
+	fi
 
 build: configure build-cpp build-python
 
 build-cpp:
 	rtk cmake --build --preset $(ANVIL_PRESET)
+	@if [ "$(ANVIL_HOST_PRESET)" != "$(ANVIL_PRESET)" ]; then \
+		rtk cmake --build --preset $(ANVIL_HOST_PRESET); \
+	fi
 
 build-python:
 	rtk rm -rf .venv
@@ -118,6 +128,9 @@ test-all: test test-slow
 
 clean:
 	rtk rm -rf $(BUILD_DIR)
+	@if [ "$(ANVIL_HOST_PRESET)" != "$(ANVIL_PRESET)" ]; then \
+		rtk rm -rf $(HOST_BUILD_DIR); \
+	fi
 
 clean-all:
 	rtk rm -rf build/ *.egg-info python/anvil.egg-info
