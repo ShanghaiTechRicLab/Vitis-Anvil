@@ -6,8 +6,8 @@
 
 按这个顺序：
 
-1. **CPU unit tests** — 抓普通 C++/Python 错误。
-2. **Gold vs HLS model** — 在 Vitis 前抓数据布局错误。
+1. **Gold 和 CPU unit tests** — 抓普通 C++/Python 错误。
+2. **HLS 模型 (`make test-hls-model`)** — 运行 Vitis 前 CPU 测试：gold + FPGA 形状的 HLS 模型 + HLS helper 测试。
 3. **HLS 综合 (`csynth`)** — 抓 HLS 不兼容 C++，查看硬件估算。
 4. **HLS cosim (`cosim`)** — 抓 RTL 行为不一致。
 5. **xclbin link** — 抓 platform/connectivity/memory-bank 问题。
@@ -25,6 +25,12 @@
 make test
 ```
 
+`make test` 和 `make test-hls-model` 目前运行同一套 Vitis 前 CPU 测试。需要明确表达“HLS 模型是 gold/unit tests 之后第一个 FPGA 形状检查”时，用显式名字：
+
+```bash
+make test-hls-model
+```
+
 如果涉及 Python 工具：
 
 ```bash
@@ -39,6 +45,7 @@ make test
 运行：
 
 ```bash
+make test-hls-model
 make csynth TARGET=u250 KERNEL=<kernel>
 make analyze-flow TARGET=u250 KERNEL=<kernel>
 make cosim TARGET=u250 KERNEL=<kernel>

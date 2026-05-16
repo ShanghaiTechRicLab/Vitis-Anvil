@@ -6,8 +6,8 @@ This page gives the day-to-day order for changing code. The main rule is: use th
 
 Use this order:
 
-1. **CPU unit tests** — catches normal C++/Python mistakes.
-2. **Gold vs HLS model** — catches data-layout mistakes before Vitis.
+1. **Gold and CPU unit tests** — catches normal C++/Python mistakes.
+2. **HLS model (`make test-hls-model`)** — runs the pre-Vitis CPU suite: gold + FPGA-shaped HLS model + HLS helper tests.
 3. **HLS synthesis (`csynth`)** — catches HLS-incompatible C++ and reports estimated hardware.
 4. **HLS cosim (`cosim`)** — catches RTL behavior mismatch.
 5. **xclbin link** — catches platform/connectivity/memory-bank problems.
@@ -25,6 +25,12 @@ Run:
 make test
 ```
 
+`make test` and `make test-hls-model` currently run the same pre-Vitis CPU suite. Use the explicit name when you want to document that the HLS model is the first FPGA-shaped check after the plain gold/unit tests:
+
+```bash
+make test-hls-model
+```
+
 If Python tools are involved:
 
 ```bash
@@ -39,6 +45,7 @@ This should be fast and should not need Vitis or XRT.
 Run:
 
 ```bash
+make test-hls-model
 make csynth TARGET=u250 KERNEL=<kernel>
 make analyze-flow TARGET=u250 KERNEL=<kernel>
 make cosim TARGET=u250 KERNEL=<kernel>

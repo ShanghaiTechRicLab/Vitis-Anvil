@@ -104,7 +104,7 @@ BOARD_DEPLOY_DIR  ?= ~/anvil-deploy
         require-pipeline-demo csynth-stream cosim-stream pipeline-demo \
         gen gold run-host xrt-emu xrt-hw compare analyze analyze-legacy analyze-flow analyze-cosim check-hls compare-hls emconfig \
         deploy deploy-bin deploy-xclbin deploy-data deploy-check \
-        test test-csynth test-cosim test-xrt-emu test-xrt-hw test-slow test-all
+        test test-hls-model test-csynth test-cosim test-xrt-emu test-xrt-hw test-slow test-all
 
 # ============================================================================
 # Top-level targets / 顶层目标
@@ -371,6 +371,10 @@ test:
 	$(MAKE) build-python
 	$(PYTHON) -m pytest -m fast tests/python -v
 
+# test-hls-model — Explicit pre-Vitis CPU suite: gold + HLS model + HLS helper tests
+#                  显式的 Vitis 前 CPU 测试：gold + HLS 模型 + HLS helper 测试
+test-hls-model: test
+
 # Label-specific CTest targets / 按标签筛选的 CTest 目标
 # Run CTest with csynth label / 使用 csynth 标签运行 CTest
 test-csynth: configure-kernel
@@ -485,6 +489,7 @@ help-en:
 	@echo ""
 	@echo "Fast local development:"
 	@echo "  make test                                      CPU-only tests; no Vitis/XRT/platform"
+	@echo "  make test-hls-model                            Explicit pre-Vitis CPU suite; alias for make test"
 	@echo "  make build TARGET=u250 HOST_APP=run_saxpy     Build selected host binary only"
 	@echo "  make python-env [PYPI_INDEX=]                  Create/update .venv; uv first, venv fallback"
 	@echo "  make rebuild-python [PYPI_INDEX=]              Recreate .venv"
@@ -524,7 +529,8 @@ help-en:
 	@echo "  make configure|configure-kernel|configure-host  Configure CMake presets"
 	@echo "  make build-kernel|build-all|build-cpp           Build aliases"
 	@echo "  make analyze|analyze-legacy|analyze-flow        Analysis entrypoints"
-	@echo "  make test-csynth|test-cosim|test-xrt-emu        Label-specific tests"
+	@echo "  make test-hls-model|test-csynth|test-cosim      HLS model and Vitis test entrypoints"
+	@echo "  make test-xrt-emu                               Hardware-emulation test"
 	@echo "  make clean|clean-all                            Remove build artifacts"
 	@echo "  make help-zh                                    Chinese help"
 	@echo ""
@@ -546,6 +552,7 @@ help-zh:
 	@echo ""
 	@echo "快速本地开发:"
 	@echo "  make test                                      CPU-only 测试；不需要 Vitis/XRT/platform"
+	@echo "  make test-hls-model                            显式 Vitis 前 CPU 测试；make test 的别名"
 	@echo "  make build TARGET=u250 HOST_APP=run_saxpy     只构建选定 host binary"
 	@echo "  make python-env [PYPI_INDEX=]                  创建/更新 .venv；优先 uv，fallback venv"
 	@echo "  make rebuild-python [PYPI_INDEX=]              重建 .venv"
@@ -585,7 +592,8 @@ help-zh:
 	@echo "  make configure|configure-kernel|configure-host  配置 CMake presets"
 	@echo "  make build-kernel|build-all|build-cpp           构建别名"
 	@echo "  make analyze|analyze-legacy|analyze-flow        分析入口"
-	@echo "  make test-csynth|test-cosim|test-xrt-emu        按标签/流程测试"
+	@echo "  make test-hls-model|test-csynth|test-cosim      HLS 模型和 Vitis 测试入口"
+	@echo "  make test-xrt-emu                               硬件仿真测试"
 	@echo "  make clean|clean-all                            清理构建产物"
 	@echo "  make help-en                                    英文帮助"
 	@echo ""
