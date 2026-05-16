@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<profile>
+  <PerformanceEstimates>
+    <SummaryOfTimingAnalysis>
+      <EstimatedClockPeriod>2.50</EstimatedClockPeriod>
+      <TargetClockPeriod>3.33</TargetClockPeriod>
+    </SummaryOfTimingAnalysis>
+    <SummaryOfOverallLatency>
+      <Best-caseLatency>4096</Best-caseLatency>
+      <Worst-caseLatency>4096</Worst-caseLatency>
+    </SummaryOfOverallLatency>
+    <SummaryOfLoopLatency>
+      <VITIS_LOOP_1_1>
+        <Name>VITIS_LOOP_1_1</Name>
+        <PipelineII>1</PipelineII>
+        <TripCount>256</TripCount>
+        <Latency>256</Latency>
+      </VITIS_LOOP_1_1>
+    </SummaryOfLoopLatency>
+  </PerformanceEstimates>
+  <AreaEstimates>
+    <Resources>
+      <LUT>1234</LUT>
+      <FF>2345</FF>
+      <DSP>2</DSP>
+      <BRAM_18K>0</BRAM_18K>
+      <URAM>0</URAM>
+    </Resources>
+    <AvailableResources>
+      <LUT>433200</LUT>
+      <FF>866400</FF>
+      <DSP>1920</DSP>
+      <BRAM_18K>1344</BRAM_18K>
+      <URAM>320</URAM>
+    </AvailableResources>
+  </AreaEstimates>
+</profile>
