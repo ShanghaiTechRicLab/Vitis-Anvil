@@ -3,7 +3,7 @@
 # Vitis-Anvil 顶层 Makefile
 # ============================================================================
 # Usage / 使用方法:
-#   make [target] [TARGET=u250|u55c|zcu104|zcu102] [ANVIL_LANG=cpp|python] [DATASET=tiny]
+#   make [target] [TARGET=u250|u55c|zcu104|zcu102|kv260] [ANVIL_LANG=cpp|python] [DATASET=tiny]
 
 # --- User-configurable variables / 用户可配置变量 ---
 # Target board / 目标板卡
@@ -314,9 +314,9 @@ test-xrt-emu:
 
 # test-xrt-hw — Full end-to-end hardware test / 完整的端到端硬件测试
 # Steps / 步骤: build (cross-compile + xclbin) → gen → deploy+run via board_run.py → compare
-# Requires / 需要: BOARD_IP and (for zcu102) PETALINUX_SYSROOT + Vitis env
+# Requires / 需要: BOARD_IP and (for embedded targets) PETALINUX_SYSROOT + Vitis env
 test-xrt-hw:
-	@if [ -z "$(BOARD_IP)" ]; then echo "ERROR: BOARD_IP not set. Usage: make test-xrt-hw BOARD_IP=<ip> [TARGET=zcu102] [DATASET=tiny]" >&2; exit 1; fi
+	@if [ -z "$(BOARD_IP)" ]; then echo "ERROR: BOARD_IP not set. Usage: make test-xrt-hw BOARD_IP=<ip> [TARGET=zcu102|kv260] [DATASET=tiny]" >&2; exit 1; fi
 	$(MAKE) build-host TARGET=$(TARGET)
 	$(MAKE) xclbin TARGET=$(TARGET)
 	$(MAKE) gen DATASET=$(DATASET)
