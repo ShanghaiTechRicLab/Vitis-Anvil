@@ -14,7 +14,7 @@ set(_vadd_kernel_args
   SOURCES       vadd_kernel.cpp
   PLATFORM_KIND ${ANVIL_PLATFORM_KIND})
 
-if(ANVIL_BUILD_TESTS AND ANVIL_PLATFORM_KIND STREQUAL "u250")
+if(ANVIL_BUILD_TESTS)
   list(APPEND _saxpy_kernel_args
     TESTBENCH ${CMAKE_SOURCE_DIR}/tests/kernels/saxpy_cosim_tb.cpp)
   list(APPEND _vadd_kernel_args

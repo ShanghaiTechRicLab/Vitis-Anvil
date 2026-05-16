@@ -8,4 +8,4 @@ ANVIL_NEEDS_CROSS      := no
 ANVIL_XCLBIN_MODE      := hw
 ANVIL_XRT_LIB          := /opt/xilinx/xrt
 ANVIL_KERNEL_TARGETS   := saxpy_xo vadd_xo
-ANVIL_COSIM_TARGETS    :=
+ANVIL_COSIM_TARGETS ?= saxpy_cosim vadd_cosim

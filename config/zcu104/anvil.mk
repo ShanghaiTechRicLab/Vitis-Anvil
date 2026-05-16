@@ -9,5 +9,4 @@ ANVIL_SYSROOT     := $(PETALINUX_SYSROOT)
 ANVIL_XCLBIN_MODE := hw_emu
 ANVIL_HOST_PRESET  := zcu104-host
 
-# Cosim testbenches are currently wired only for u250.
-ANVIL_COSIM_TARGETS :=
+ANVIL_COSIM_TARGETS ?= saxpy_cosim vadd_cosim

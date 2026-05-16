@@ -9,5 +9,4 @@ ANVIL_NEEDS_CROSS  := yes
 ANVIL_SYSROOT      := $(PETALINUX_SYSROOT)
 ANVIL_XCLBIN_MODE  := hw_emu
 
-# Cosim testbenches are currently wired only for u250.
-ANVIL_COSIM_TARGETS :=
+ANVIL_COSIM_TARGETS ?= saxpy_cosim vadd_cosim

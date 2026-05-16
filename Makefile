@@ -38,7 +38,12 @@ BUILD_DIR   := build/$(ANVIL_PRESET)
 # CMake targets for HLS synthesis / HLS 综合的 CMake target
 ANVIL_KERNEL_TARGETS ?= saxpy_xo
 # CMake targets for co-simulation / 协同仿真的 CMake target
-ANVIL_COSIM_TARGETS ?= saxpy_cosim
+ANVIL_COSIM_TARGETS ?= saxpy_cosim vadd_cosim
+ifeq ($(KERNEL),all)
+SELECTED_COSIM_TARGETS := $(ANVIL_COSIM_TARGETS)
+else
+SELECTED_COSIM_TARGETS := $(KERNEL)_cosim
+endif
 # Host (cross-compilation) preset / 主机端（交叉编译）preset
 ANVIL_HOST_PRESET  ?= $(ANVIL_PRESET)
 HOST_BUILD_DIR     := build/$(ANVIL_HOST_PRESET)
@@ -158,9 +163,9 @@ csynth: build-kernel
 
 # cosim — Run HLS co-simulation / 运行 HLS 协同仿真
 cosim:
-	@if [ -z "$(strip $(ANVIL_COSIM_TARGETS))" ]; then echo "cosim is not configured for TARGET=$(TARGET)" >&2; exit 1; fi
+	@if [ -z "$(strip $(SELECTED_COSIM_TARGETS))" ]; then echo "cosim is not configured for TARGET=$(TARGET)" >&2; exit 1; fi
 	$(MAKE) configure-kernel TARGET=$(TARGET)
-	cmake --build $(BUILD_DIR) --target $(ANVIL_COSIM_TARGETS)
+	cmake --build $(BUILD_DIR) --target $(SELECTED_COSIM_TARGETS)
 
 # xclbin — Link kernel into .xclbin bitstream / 将内核链接为 .xclbin 比特流
 xclbin: configure-kernel
@@ -322,7 +327,7 @@ test-csynth: configure-kernel
 	ctest --test-dir $(BUILD_DIR) -L csynth -V
 
 test-cosim:
-	@if [ -z "$(strip $(ANVIL_COSIM_TARGETS))" ]; then echo "cosim is not configured for TARGET=$(TARGET)" >&2; exit 1; fi
+	@if [ -z "$(strip $(SELECTED_COSIM_TARGETS))" ]; then echo "cosim is not configured for TARGET=$(TARGET)" >&2; exit 1; fi
 	$(MAKE) configure-kernel TARGET=$(TARGET)
 	ctest --test-dir $(BUILD_DIR) -L cosim -V
 
@@ -414,7 +419,7 @@ help:
 	@echo "  make build-all [TARGET=...]         — build kernel + host + Python"
 	@echo "  make test                         — CPU-only fast tests (no Vitis/XRT)"
 	@echo "  make csynth                       — v++ HLS synthesis"
-	@echo "  make cosim                        — HLS co-simulation"
+	@echo "  make cosim [KERNEL=saxpy|vadd|all] — HLS co-simulation"
 	@echo "  make xclbin                       — link .xclbin"
 	@echo "  make csynth-stream/cosim-stream   — opt-in U250 k2k stream kernel checks"
 	@echo "  make pipeline-demo                — link U250 saxpy_stream→vadd_stream xclbin"
