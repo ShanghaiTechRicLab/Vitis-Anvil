@@ -7,6 +7,10 @@ from rich.table import Table
 from hlsflow.database import RunRecord
 
 
+def _is_number(v: object) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
 def _delta(a: float | int | None, b: float | int | None) -> str:
     if a is None or b is None:
         return "—"
@@ -26,9 +30,9 @@ def render_diff(baseline: RunRecord, candidate: RunRecord, console: Console) -> 
     for key in keys:
         a = baseline.metrics.get(key)
         b = candidate.metrics.get(key)
-        delta = _delta(a, b) if isinstance(a, (int, float)) and isinstance(b, (int, float)) else "—"
+        delta = _delta(a, b) if _is_number(a) and _is_number(b) else "—"
         style = ""
-        if isinstance(a, (int, float)) and isinstance(b, (int, float)) and key in worse_keys:
+        if _is_number(a) and _is_number(b) and key in worse_keys:
             if b > a:
                 style = "red"
             elif b < a:

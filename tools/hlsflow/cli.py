@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import click
+
+from hlsflow import __version__
 from rich.console import Console
 
 from hlsflow.check import run_checks
@@ -19,7 +21,7 @@ from hlsflow.report_md import render
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
-@click.version_option(package_name=None, prog_name="hlsflow")
+@click.version_option(version=__version__, prog_name="hlsflow")
 def cli() -> None:
     """Vitis-Anvil HLS report analysis."""
 

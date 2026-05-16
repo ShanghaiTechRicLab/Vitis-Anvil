@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import io
 
 from rich.console import Console
 from rich.panel import Panel
@@ -65,7 +66,7 @@ def _build_loops(rpt: CsynthReport) -> Tree:
 
 def render(rpt: CsynthReport, *, kernel: str, platform: str, vitis_version: str,
            html_path: Path, txt_path: Path, console: Console | None = None) -> None:
-    rec_console = Console(record=True, width=100)
+    rec_console = Console(record=True, width=100, file=io.StringIO())
     header = f"HLS Synthesis: {kernel} / {platform}"
     clk = ""
     if rpt.target_clock_ns and rpt.estimated_clock_ns:
