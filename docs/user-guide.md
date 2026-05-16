@@ -137,7 +137,7 @@ After running `make csynth TARGET=u250`, collect a rich-formatted snapshot:
 
 ```bash
 make analyze-flow TARGET=u250                # collect all kernels in this build
-PYTHONPATH=tools python -m hlsflow check --max-ii 1  # threshold gate
+make check-hls                                  # threshold gate
 ```
 
 Each `collect` appends to `reports/runs.jsonl` and saves matching

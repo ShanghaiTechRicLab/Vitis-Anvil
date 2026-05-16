@@ -7,11 +7,11 @@ saves HTML + plain-text snapshots, and appends a JSONL record to
 ## Usage
 
 ```bash
-python -m hlsflow collect --build-dir build/u250-host --kernel saxpy
-python -m hlsflow collect --build-dir build/u250-host --kernel all
-python -m hlsflow collect --build-dir build/u250-host --kernel saxpy --target cosim
-python -m hlsflow check --max-ii 1 --max-lut 240000 --max-dsp 1920
-python -m hlsflow compare --baseline saxpy_u250_20260515_093000 \
+PYTHONPATH=tools python -m hlsflow collect --build-dir build/u250-host --kernel saxpy
+PYTHONPATH=tools python -m hlsflow collect --build-dir build/u250-host --kernel all
+PYTHONPATH=tools python -m hlsflow collect --build-dir build/u250-host --kernel saxpy --target cosim
+PYTHONPATH=tools python -m hlsflow check --max-ii 1 --max-lut 240000 --max-dsp 1920
+PYTHONPATH=tools python -m hlsflow compare --baseline saxpy_u250_20260515_093000 \
                           --candidate saxpy_u250_20260516_103000
 ```
 

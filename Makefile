@@ -4,6 +4,7 @@
 TARGET  ?= u250
 ANVIL_LANG ?= cpp
 DATASET ?= tiny
+KERNEL ?= all
 
 include config/$(TARGET)/anvil.mk
 
@@ -131,7 +132,7 @@ analyze:
 analyze-flow:
 	@if [ ! -d tools/hlsflow ]; then rtk echo "tools/hlsflow not present" >&2; exit 1; fi
 	rtk $(MAKE) build-python
-	rtk env $(HLSFLOW_PYTHON) -m hlsflow collect --build-dir $(BUILD_DIR) --kernel $${KERNEL:-all}
+	rtk env $(HLSFLOW_PYTHON) -m hlsflow collect --build-dir $(BUILD_DIR) --kernel $(KERNEL)
 
 check-hls:
 	rtk $(MAKE) build-python
