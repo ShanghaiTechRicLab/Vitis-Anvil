@@ -7,6 +7,16 @@ import xml.etree.ElementTree as ET
 
 
 @dataclass
+class InterfaceInfo:
+    name: str
+    obj: str | None
+    protocol: str | None
+    direction: str | None
+    bits: int | None
+    ctype: str | None
+
+
+@dataclass
 class LoopInfo:
     name: str
     pipeline_ii: int | None
@@ -19,15 +29,23 @@ class LoopInfo:
 class CsynthReport:
     report_path: Path
     top: str
+    version: str | None
+    family: str | None
+    part: str | None
+    clock_uncertainty_ns: float | None
     target_clock_ns: float | None
     estimated_clock_ns: float | None
     timing_met: bool | None
     latency_min: int | None
     latency_max: int | None
+    interval_min: int | None
+    interval_max: int | None
     worst_loop_ii: int
     resources: dict[str, int] = field(default_factory=dict)
     available: dict[str, int] = field(default_factory=dict)
     loops: list[LoopInfo] = field(default_factory=list)
+    interfaces: list[InterfaceInfo] = field(default_factory=list)
+    violations: list[str] = field(default_factory=list)
 
     @property
     def utilization(self) -> dict[str, float]:
@@ -95,6 +113,36 @@ def _sibling_aggregate_ii(report: Path) -> int:
     return _worst_loop_ii(tree.getroot())
 
 
+def _collect_interfaces(root: ET.Element) -> list[InterfaceInfo]:
+    interfaces: list[InterfaceInfo] = []
+    for elem in root.iterfind(".//InterfaceSummary/RtlPorts"):
+        name = _find_text(elem, ["name"]) or elem.tag
+        interfaces.append(InterfaceInfo(
+            name=name,
+            obj=_find_text(elem, ["Object"]),
+            protocol=_find_text(elem, ["IOProtocol"]),
+            direction=_find_text(elem, ["Dir"]),
+            bits=_find_int(elem, ["Bits"]),
+            ctype=_find_text(elem, ["CType"]),
+        ))
+    return interfaces
+
+
+def _collect_violations(root: ET.Element) -> list[str]:
+    out: list[str] = []
+    summary = root.find(".//SummaryOfViolations")
+    if summary is None:
+        return out
+    issue = _find_text(summary, ["IssueType"])
+    vtype = _find_text(summary, ["ViolationType"])
+    if issue in (None, "-") and vtype in (None, "-"):
+        return out
+    for elem in list(summary):
+        if elem.text and elem.text.strip() and elem.text.strip() != "-":
+            out.append(f"{elem.tag}: {elem.text.strip()}")
+    return out
+
+
 def _collect_loops(root: ET.Element) -> list[LoopInfo]:
     loops: list[LoopInfo] = []
     for elem in root.iterfind(".//SummaryOfLoopLatency/*"):
@@ -114,6 +162,10 @@ def parse_csynth_report(report_path: Path) -> CsynthReport:
 
     top_node = root.find(".//UserAssignments/TopModelName")
     top = top_node.text.strip() if (top_node is not None and top_node.text) else report_path.stem.replace("_csynth", "")
+    version = _find_text(root, [".//ReportVersion/Version"])
+    family = _find_text(root, [".//UserAssignments/ProductFamily"])
+    part = _find_text(root, [".//UserAssignments/Part"])
+    clock_uncertainty = _find_float(root, [".//UserAssignments/ClockUncertainty"])
 
     target_clk = _find_float(root, [".//SummaryOfTimingAnalysis/TargetClockPeriod", ".//UserAssignments/TargetClockPeriod"])
     est_clk = _find_float(root, [".//SummaryOfTimingAnalysis/EstimatedClockPeriod"])
@@ -121,6 +173,8 @@ def parse_csynth_report(report_path: Path) -> CsynthReport:
 
     lat_min = _find_int(root, [".//SummaryOfOverallLatency/Best-caseLatency"])
     lat_max = _find_int(root, [".//SummaryOfOverallLatency/Worst-caseLatency"])
+    interval_min = _find_int(root, [".//SummaryOfOverallLatency/Interval-min"])
+    interval_max = _find_int(root, [".//SummaryOfOverallLatency/Interval-max"])
 
     ii = _worst_loop_ii(root)
     if ii == 0:
@@ -139,15 +193,23 @@ def parse_csynth_report(report_path: Path) -> CsynthReport:
     return CsynthReport(
         report_path=report_path,
         top=top,
+        version=version,
+        family=family,
+        part=part,
+        clock_uncertainty_ns=clock_uncertainty,
         target_clock_ns=target_clk,
         estimated_clock_ns=est_clk,
         timing_met=timing_met,
         latency_min=lat_min,
         latency_max=lat_max,
+        interval_min=interval_min,
+        interval_max=interval_max,
         worst_loop_ii=ii,
         resources=resources,
         available=available,
         loops=_collect_loops(root),
+        interfaces=_collect_interfaces(root),
+        violations=_collect_violations(root),
     )
 
 

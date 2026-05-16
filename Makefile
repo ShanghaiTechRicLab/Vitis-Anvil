@@ -49,11 +49,11 @@ BOARD_SSH_USER    ?= root
 BOARD_DEPLOY_DIR  ?= ~/anvil-deploy
 
 # --- Phony targets declaration / 伪目标声明 ---
-.PHONY: all configure build build-cpp build-python python-env python-install rebuild-python clean clean-all help \
+.PHONY: all configure build build-cpp build-python python-env python-install rebuild-python require-python-env clean clean-all help \
         configure-kernel configure-host build-host build-kernel build-all \
         csynth cosim xclbin xclbin-hwemu \
         require-u250-stream csynth-stream cosim-stream pipeline-demo \
-        gen gold run-host xrt-emu xrt-hw compare analyze analyze-flow check-hls compare-hls emconfig \
+        gen gold run-host xrt-emu xrt-hw compare analyze analyze-legacy analyze-flow analyze-cosim check-hls compare-hls emconfig \
         deploy deploy-bin deploy-xclbin deploy-data deploy-check \
         test test-csynth test-cosim test-xrt-emu test-xrt-hw test-slow test-all
 
@@ -128,6 +128,12 @@ rebuild-python:
 		$(PIP) install $(PIP_INDEX_ARGS) -e ".[test]" --quiet; \
 	fi
 	@touch $(VENV_STAMP)
+
+require-python-env:
+	@if [ ! -x "$(PYTHON)" ]; then \
+		echo "ERROR: Python environment missing. Run: make python-env" >&2; \
+		exit 1; \
+	fi
 
 # ============================================================================
 # HLS / Vitis targets / HLS / Vitis 目标
@@ -253,21 +259,26 @@ compare:
 	$(MAKE) build-python
 	$(PYTHON) scripts/compare.py --dataset $(DATASET)
 
-# analyze — Parse HLS synthesis reports / 解析 HLS 综合报告
-analyze:
+# analyze — Deep HLS flow analysis via hlsflow / 通过 hlsflow 进行深度 HLS 流程分析
+analyze: require-python-env
+	@if [ ! -d tools/hlsflow ]; then echo "tools/hlsflow not present" >&2; exit 1; fi
+	env $(HLSFLOW_PYTHON) -m hlsflow collect --build-dir $(BUILD_DIR) --kernel $(KERNEL) --target csynth --platform $(TARGET)
+
+# analyze-flow — Backward-compatible alias / 兼容旧入口
+analyze-flow: analyze
+
+# analyze-cosim — Collect cosim report into hlsflow database
+analyze-cosim: require-python-env
+	@if [ ! -d tools/hlsflow ]; then echo "tools/hlsflow not present" >&2; exit 1; fi
+	env $(HLSFLOW_PYTHON) -m hlsflow collect --build-dir $(BUILD_DIR) --kernel $(KERNEL) --target cosim --platform $(TARGET)
+
+# analyze-legacy — Old simple parser / 旧版简易解析器
+analyze-legacy: require-python-env
 	@if [ ! -f scripts/analyze.py ]; then echo "scripts/analyze.py is added in Task 16" >&2; exit 1; fi
-	$(MAKE) build-python
 	$(PYTHON) scripts/analyze.py --build-dir $(BUILD_DIR)
 
-# analyze-flow — Deep HLS flow analysis via hlsflow / 通过 hlsflow 进行深度 HLS 流程分析
-analyze-flow:
-	@if [ ! -d tools/hlsflow ]; then echo "tools/hlsflow not present" >&2; exit 1; fi
-	$(MAKE) build-python
-	env $(HLSFLOW_PYTHON) -m hlsflow collect --build-dir $(BUILD_DIR) --kernel $(KERNEL)
-
 # check-hls — Run HLS threshold checks / 运行 HLS 阈值检查
-check-hls:
-	$(MAKE) build-python
+check-hls: require-python-env
 	env $(HLSFLOW_PYTHON) -m hlsflow check --max-ii 1
 
 # compare-hls — Diff two HLS runs / 对比两次 HLS 运行结果
@@ -393,8 +404,9 @@ help:
 	@echo "  make xrt-emu                      — run accelerator hw_emu or build embedded + print QEMU note"
 	@echo "  make xrt-hw                       — run on real hardware"
 	@echo "  make compare                      — compare outputs vs gold"
-	@echo "  make analyze                      — parse HLS csynth report"
-	@echo "  make analyze-flow [KERNEL=all]    — hlsflow collect csynth (rich + HTML + JSONL)"
+	@echo "  make analyze [KERNEL=all]         — hlsflow collect csynth (rich + HTML + JSONL)"
+	@echo "  make analyze-cosim [KERNEL=all]   — hlsflow collect cosim"
+	@echo "  make analyze-legacy               — old simple analyzer"
 	@echo "  make check-hls                    — hlsflow threshold check on latest run"
 	@echo "  make compare-hls BASELINE=<id> CANDIDATE=<id> — diff two runs"
 	@echo "  make emconfig                     — generate emconfig.json for hw_emu"
