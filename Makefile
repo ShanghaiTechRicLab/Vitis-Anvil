@@ -28,6 +28,7 @@ BOARD_DEPLOY_DIR  ?= ~/anvil-deploy
 
 .PHONY: all configure build build-cpp build-python clean clean-all help \
         csynth cosim xclbin xclbin-hwemu \
+        require-u250-stream csynth-stream cosim-stream pipeline-demo \
         gen gold run-host xrt-emu xrt-hw compare analyze analyze-flow check-hls compare-hls emconfig \
         deploy deploy-bin deploy-xclbin deploy-data deploy-check \
         test test-csynth test-cosim test-xrt-emu test-xrt-hw test-slow test-all
@@ -71,6 +72,26 @@ xclbin: configure
 xclbin-hwemu:
 	rtk cmake --preset $(ANVIL_HWEMU_PRESET)
 	rtk cmake --build --preset $(ANVIL_HWEMU_PRESET) --target saxpy_xclbin
+
+require-u250-stream:
+	@if [ "$(TARGET)" != "u250" ]; then \
+		rtk echo "error: csynth-stream / cosim-stream / pipeline-demo require TARGET=u250 (got TARGET=$(TARGET))" >&2; exit 1; \
+	fi
+
+csynth-stream:
+	rtk $(MAKE) require-u250-stream TARGET=$(TARGET)
+	rtk $(MAKE) configure TARGET=$(TARGET)
+	rtk cmake --build $(BUILD_DIR) --target saxpy_stream_xo vadd_stream_xo
+
+cosim-stream:
+	rtk $(MAKE) require-u250-stream TARGET=$(TARGET)
+	rtk $(MAKE) configure TARGET=$(TARGET)
+	rtk cmake --build $(BUILD_DIR) --target saxpy_stream_cosim vadd_stream_cosim
+
+pipeline-demo:
+	rtk $(MAKE) require-u250-stream TARGET=$(TARGET)
+	rtk $(MAKE) configure TARGET=$(TARGET)
+	rtk cmake --build $(BUILD_DIR) --target pipeline_demo_xclbin
 
 gen:
 	@if [ ! -f scripts/gen_dataset.py ]; then rtk echo "scripts/gen_dataset.py is added in Task 15" >&2; exit 1; fi
@@ -225,6 +246,8 @@ help:
 	@rtk echo "  make csynth                       — v++ HLS synthesis"
 	@rtk echo "  make cosim                        — HLS co-simulation"
 	@rtk echo "  make xclbin                       — link .xclbin"
+	@rtk echo "  make csynth-stream/cosim-stream   — opt-in U250 k2k stream kernel checks"
+	@rtk echo "  make pipeline-demo                — link U250 saxpy_stream→vadd_stream xclbin"
 	@rtk echo "  make gen                          — generate dataset"
 	@rtk echo "  make gold [ANVIL_LANG=cpp|python]       — run gold reference"
 	@rtk echo "  make xrt-emu                      — run accelerator hw_emu or build embedded + print QEMU note"
