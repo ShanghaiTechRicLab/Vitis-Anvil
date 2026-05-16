@@ -215,6 +215,158 @@
         "ANVIL_VITIS_TARGET": "hw_emu",
         "ANVIL_BUILD_XRT": "ON"
       }
+    },
+    {
+      "name": "u50-host",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/u50-host",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ANVIL_PLATFORM_KIND": "u50",
+        "ANVIL_BUILD_GOLD": "ON",
+        "ANVIL_BUILD_HLS_MODEL": "ON",
+        "ANVIL_BUILD_APPS": "ON",
+        "ANVIL_BUILD_TESTS": "ON",
+        "ANVIL_BUILD_KERNELS": "ON",
+        "ANVIL_BUILD_XRT": "ON",
+        "ANVIL_PARALLELISM": "16",
+        "ANVIL_CLOCK_MHZ": "300",
+        "ANVIL_VITIS_PLATFORM": "/opt/xilinx/platforms/xilinx_u50_gen3x16_xdma_5_202210_1/xilinx_u50_gen3x16_xdma_5_202210_1.xpfm",
+        "ANVIL_VITIS_TARGET": "hw",
+        "ANVIL_VITIS_PART": "xcu50-fsvh2104-2-e"
+      }
+    },
+    {
+      "name": "u50-host-hwemu",
+      "inherits": "u50-host",
+      "binaryDir": "${sourceDir}/build/u50-host-hwemu",
+      "cacheVariables": {
+        "ANVIL_VITIS_TARGET": "hw_emu",
+        "ANVIL_BUILD_XRT": "ON"
+      }
+    },
+    {
+      "name": "u200-host",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/u200-host",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ANVIL_PLATFORM_KIND": "u200",
+        "ANVIL_BUILD_GOLD": "ON",
+        "ANVIL_BUILD_HLS_MODEL": "ON",
+        "ANVIL_BUILD_APPS": "ON",
+        "ANVIL_BUILD_TESTS": "ON",
+        "ANVIL_BUILD_KERNELS": "ON",
+        "ANVIL_BUILD_XRT": "ON",
+        "ANVIL_PARALLELISM": "16",
+        "ANVIL_CLOCK_MHZ": "300",
+        "ANVIL_VITIS_PLATFORM": "/opt/xilinx/platforms/xilinx_u200_gen3x16_xdma_2_202110_1/xilinx_u200_gen3x16_xdma_2_202110_1.xpfm",
+        "ANVIL_VITIS_TARGET": "hw",
+        "ANVIL_VITIS_PART": "xcu200-fsgd2104-2-e"
+      }
+    },
+    {
+      "name": "u200-host-hwemu",
+      "inherits": "u200-host",
+      "binaryDir": "${sourceDir}/build/u200-host-hwemu",
+      "cacheVariables": {
+        "ANVIL_VITIS_TARGET": "hw_emu",
+        "ANVIL_BUILD_XRT": "ON"
+      }
+    },
+    {
+      "name": "u280-host",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/u280-host",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ANVIL_PLATFORM_KIND": "u280",
+        "ANVIL_BUILD_GOLD": "ON",
+        "ANVIL_BUILD_HLS_MODEL": "ON",
+        "ANVIL_BUILD_APPS": "ON",
+        "ANVIL_BUILD_TESTS": "ON",
+        "ANVIL_BUILD_KERNELS": "ON",
+        "ANVIL_BUILD_XRT": "ON",
+        "ANVIL_PARALLELISM": "16",
+        "ANVIL_CLOCK_MHZ": "300",
+        "ANVIL_VITIS_PLATFORM": "/opt/xilinx/platforms/xilinx_u280_xdma_201920_3/xilinx_u280_xdma_201920_3.xpfm",
+        "ANVIL_VITIS_TARGET": "hw",
+        "ANVIL_VITIS_PART": "xcu280-fsvh2892-2L-e"
+      }
+    },
+    {
+      "name": "u280-host-hwemu",
+      "inherits": "u280-host",
+      "binaryDir": "${sourceDir}/build/u280-host-hwemu",
+      "cacheVariables": {
+        "ANVIL_VITIS_TARGET": "hw_emu",
+        "ANVIL_BUILD_XRT": "ON"
+      }
+    },
+    {
+      "name": "zcu106-host",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/zcu106-host",
+      "toolchainFile": "${sourceDir}/cmake/Toolchain-aarch64-linux.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ANVIL_PLATFORM_KIND": "zcu106",
+        "ANVIL_BUILD_XRT": "ON",
+        "ANVIL_BUILD_KERNELS": "OFF",
+        "ANVIL_BUILD_TESTS": "OFF",
+        "ANVIL_BUILD_GOLD": "ON",
+        "ANVIL_BUILD_HLS_MODEL": "OFF",
+        "ANVIL_BUILD_APPS": "ON",
+        "ANVIL_NEEDS_CROSS": "ON"
+      }
+    },
+    {
+      "name": "zcu106-kernel",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/zcu106-kernel",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ANVIL_PLATFORM_KIND": "zcu106",
+        "ANVIL_BUILD_GOLD": "OFF",
+        "ANVIL_BUILD_HLS_MODEL": "OFF",
+        "ANVIL_BUILD_APPS": "OFF",
+        "ANVIL_BUILD_TESTS": "OFF",
+        "ANVIL_BUILD_XRT": "OFF",
+        "ANVIL_BUILD_KERNELS": "ON",
+        "ANVIL_VITIS_PLATFORM": "/tools/Xilinx/Vitis/2024.2/base_platforms/xilinx_zcu106_base_202420_1/xilinx_zcu106_base_202420_1.xpfm",
+        "ANVIL_VITIS_PART": "xczu7ev-ffvc1156-2-e",
+        "ANVIL_VITIS_TARGET": "hw_emu",
+        "ANVIL_NEEDS_CROSS": "OFF"
+      }
+    },
+    {
+      "name": "vck5000-host",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/vck5000-host",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ANVIL_PLATFORM_KIND": "vck5000",
+        "ANVIL_BUILD_GOLD": "ON",
+        "ANVIL_BUILD_HLS_MODEL": "ON",
+        "ANVIL_BUILD_APPS": "ON",
+        "ANVIL_BUILD_TESTS": "ON",
+        "ANVIL_BUILD_KERNELS": "ON",
+        "ANVIL_BUILD_XRT": "ON",
+        "ANVIL_PARALLELISM": "16",
+        "ANVIL_CLOCK_MHZ": "300",
+        "ANVIL_VITIS_PLATFORM": "/opt/xilinx/platforms/xilinx_vck5000_gen4x8_qdma_2_202220_1/xilinx_vck5000_gen4x8_qdma_2_202220_1.xpfm",
+        "ANVIL_VITIS_TARGET": "hw",
+        "ANVIL_VITIS_PART": "xcvc1902-vsva2197-2MP-e-S"
+      }
+    },
+    {
+      "name": "vck5000-host-hwemu",
+      "inherits": "vck5000-host",
+      "binaryDir": "${sourceDir}/build/vck5000-host-hwemu",
+      "cacheVariables": {
+        "ANVIL_VITIS_TARGET": "hw_emu",
+        "ANVIL_BUILD_XRT": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -273,6 +425,46 @@
     {
       "name": "u55c-host-hwemu",
       "configurePreset": "u55c-host-hwemu"
+    },
+    {
+      "name": "u50-host",
+      "configurePreset": "u50-host"
+    },
+    {
+      "name": "u50-host-hwemu",
+      "configurePreset": "u50-host-hwemu"
+    },
+    {
+      "name": "u200-host",
+      "configurePreset": "u200-host"
+    },
+    {
+      "name": "u200-host-hwemu",
+      "configurePreset": "u200-host-hwemu"
+    },
+    {
+      "name": "u280-host",
+      "configurePreset": "u280-host"
+    },
+    {
+      "name": "u280-host-hwemu",
+      "configurePreset": "u280-host-hwemu"
+    },
+    {
+      "name": "zcu106-kernel",
+      "configurePreset": "zcu106-kernel"
+    },
+    {
+      "name": "zcu106-host",
+      "configurePreset": "zcu106-host"
+    },
+    {
+      "name": "vck5000-host",
+      "configurePreset": "vck5000-host"
+    },
+    {
+      "name": "vck5000-host-hwemu",
+      "configurePreset": "vck5000-host-hwemu"
     }
   ],
   "testPresets": [
@@ -399,6 +591,114 @@
     {
       "name": "u55c-host-hwemu",
       "configurePreset": "u55c-host-hwemu",
+      "output": {
+        "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "label": "csynth|cosim|xrt_emu|build"
+        }
+      }
+    },
+    {
+      "name": "u50-host",
+      "configurePreset": "u50-host",
+      "output": {
+        "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "label": "csynth|cosim|xrt_emu|build"
+        }
+      }
+    },
+    {
+      "name": "u50-host-hwemu",
+      "configurePreset": "u50-host-hwemu",
+      "output": {
+        "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "label": "csynth|cosim|xrt_emu|build"
+        }
+      }
+    },
+    {
+      "name": "u200-host",
+      "configurePreset": "u200-host",
+      "output": {
+        "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "label": "csynth|cosim|xrt_emu|build"
+        }
+      }
+    },
+    {
+      "name": "u200-host-hwemu",
+      "configurePreset": "u200-host-hwemu",
+      "output": {
+        "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "label": "csynth|cosim|xrt_emu|build"
+        }
+      }
+    },
+    {
+      "name": "u280-host",
+      "configurePreset": "u280-host",
+      "output": {
+        "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "label": "csynth|cosim|xrt_emu|build"
+        }
+      }
+    },
+    {
+      "name": "u280-host-hwemu",
+      "configurePreset": "u280-host-hwemu",
+      "output": {
+        "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "label": "csynth|cosim|xrt_emu|build"
+        }
+      }
+    },
+    {
+      "name": "zcu106-kernel",
+      "configurePreset": "zcu106-kernel",
+      "output": {
+        "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "label": "csynth|cosim|xrt_emu|build"
+        }
+      }
+    },
+    {
+      "name": "vck5000-host",
+      "configurePreset": "vck5000-host",
+      "output": {
+        "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "label": "csynth|cosim|xrt_emu|build"
+        }
+      }
+    },
+    {
+      "name": "vck5000-host-hwemu",
+      "configurePreset": "vck5000-host-hwemu",
       "output": {
         "outputOnFailure": true
       },
