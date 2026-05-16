@@ -38,6 +38,7 @@ HWEMU_XCLBIN_PATH  := $(HWEMU_BUILD_DIR)/src/kernels/saxpy_xclbin/saxpy.xclbin
 # Python venv / Python 虚拟环境
 PYTHON      := .venv/bin/python
 PIP         := $(PYTHON) -m pip
+VENV_STAMP  := .venv/.anvil-install.stamp
 # HLS flow Python entry / HLS 流程 Python 入口
 HLSFLOW_PYTHON := PYTHONPATH=tools $(PYTHON)
 # Deployment to physical board / 部署到物理板卡
@@ -46,7 +47,7 @@ BOARD_SSH_USER    ?= root
 BOARD_DEPLOY_DIR  ?= ~/anvil-deploy
 
 # --- Phony targets declaration / 伪目标声明 ---
-.PHONY: all configure build build-cpp build-python clean clean-all help \
+.PHONY: all configure build build-cpp build-python rebuild-python clean clean-all help \
         configure-kernel configure-host build-host build-kernel build-all \
         csynth cosim xclbin xclbin-hwemu \
         require-u250-stream csynth-stream cosim-stream pipeline-demo \
@@ -98,10 +99,18 @@ build-kernel: configure-kernel
 	cmake --build --preset $(ANVIL_PRESET) --target $(ANVIL_KERNEL_TARGETS)
 
 # Build Python venv and install the package / 构建 Python 虚拟环境并安装包
-build-python:
+build-python: $(VENV_STAMP)
+
+$(VENV_STAMP): pyproject.toml
+	@test -x $(PYTHON) || python3 -m venv .venv
+	$(PIP) install -e ".[test]" --quiet
+	@touch $(VENV_STAMP)
+
+rebuild-python:
 	rm -rf .venv
 	python3 -m venv .venv
 	$(PIP) install -e ".[test]" --quiet
+	@touch $(VENV_STAMP)
 
 # ============================================================================
 # HLS / Vitis targets / HLS / Vitis 目标
@@ -353,6 +362,7 @@ help:
 	@echo "Targets:"
 	@echo "  make build [TARGET=...]             — build host binary + Python only (no HLS synth)"
 	@echo "  make build-kernel [TARGET=...]      — HLS synth kernel target(s)"
+	@echo "  make rebuild-python                 — recreate .venv from scratch"
 	@echo "  make build-all [TARGET=...]         — build kernel + host + Python"
 	@echo "  make test                         — CPU-only fast tests (no Vitis/XRT)"
 	@echo "  make csynth                       — v++ HLS synthesis"
