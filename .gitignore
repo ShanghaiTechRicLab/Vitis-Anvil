@@ -82,6 +82,8 @@ tests/data/synthetic/*.bin
 reports/*.jsonl
 reports/*.csv
 reports/*.md
+reports/runs.csv
+reports/summary.md
 !reports/.gitkeep
 
 # Python generated artifacts
@@ -97,6 +99,7 @@ venv/
 # Generated demo datasets
 data/*/
 docs/superpower/
+docs/superpowers/
 docs/donotcommit/
 reports/*.html
 reports/*.txt

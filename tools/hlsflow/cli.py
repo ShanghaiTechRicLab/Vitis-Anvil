@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import os
 import subprocess
+import csv
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -13,10 +15,12 @@ from rich.console import Console
 
 from hlsflow.check import run_checks
 from hlsflow.compare import render_diff
-from hlsflow.database import RunRecord, append as db_append, find_by_id, latest, now_run_id
+from hlsflow.compare_gold import compare_gold_hw
+from hlsflow.database import RunRecord, append as db_append, find_by_id, latest, load_all, now_run_id
 from hlsflow.discover import find_cosim_dir, find_csynth_for_kernel, find_csynth_reports
 from hlsflow.parse_cosim import parse_cosim_dir
 from hlsflow.parse_csynth import parse_csynth_report
+from hlsflow.parse_vitis import find_and_parse_logs
 from hlsflow.report_md import render
 
 
@@ -61,6 +65,14 @@ def _do_collect_csynth(build_dir: Path, kernel: str, platform: str, reports_dir:
     vitis_v = _vitis_version()
     render(rpt, kernel=kernel, platform=platform, vitis_version=vitis_v,
            html_path=html, txt_path=txt, console=console)
+    vlog = find_and_parse_logs(build_dir, kernel)
+    v_errors = [e for lr in vlog for e in lr.errors]
+    v_warnings = [w for lr in vlog for w in lr.warnings]
+    v_timing = [t for lr in vlog for t in lr.timing_violations]
+    if v_errors:
+        console.print(f"[red]vitis errors ({len(v_errors)})[/red]: {v_errors[0]}")
+    elif v_warnings:
+        console.print(f"[yellow]vitis warnings ({len(v_warnings)})[/yellow]: {v_warnings[0]}")
     rec = RunRecord(
         run_id=run_id, kernel=kernel, platform=platform, target="csynth",
         git_commit=_git_commit(), build_dir=str(build_dir), vitis_version=vitis_v,
@@ -75,6 +87,9 @@ def _do_collect_csynth(build_dir: Path, kernel: str, platform: str, reports_dir:
             "worst_loop_ii": rpt.worst_loop_ii,
             **{k.lower(): v for k, v in rpt.resources.items()},
             **{f"{k.lower()}_avail": v for k, v in rpt.available.items()},
+            "vitis_errors": v_errors[:5],
+            "vitis_warnings": v_warnings[:5],
+            "vitis_timing_violations": v_timing[:5],
         },
     )
     db_append(rec, reports_dir / "runs.jsonl")
@@ -178,3 +193,121 @@ def compare(baseline: str, candidate: str, reports_dir: Path) -> None:
         console.print(f"[red]error[/red]: baseline={b is not None} candidate={c is not None}")
         raise SystemExit(2)
     render_diff(b, c, console)
+
+
+@cli.command()
+@click.option("--reports-dir", default="reports", type=click.Path(path_type=Path))
+@click.option("--output", "-o", default=None, type=click.Path(path_type=Path),
+              help="Output CSV path (default: reports/runs.csv)")
+def export(reports_dir: Path, output: Path | None) -> None:
+    """Export runs.jsonl to a flat CSV (metrics become columns)."""
+    store = reports_dir / "runs.jsonl"
+    records = load_all(store)
+    if not records:
+        click.echo("No records found.", err=True)
+        raise SystemExit(0)
+
+    base_cols = ["run_id", "kernel", "platform", "target",
+                 "git_commit", "build_dir", "vitis_version", "status", "timestamp"]
+    metric_keys: list[str] = []
+    for rec in records:
+        for k in rec.metrics:
+            if k not in metric_keys:
+                metric_keys.append(k)
+
+    out_path = output or (reports_dir / "runs.csv")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=base_cols + metric_keys, extrasaction="ignore")
+        writer.writeheader()
+        for rec in records:
+            row = {col: getattr(rec, col, "") for col in base_cols}
+            row.update(rec.metrics)
+            writer.writerow(row)
+
+    click.echo(f"Exported {len(records)} records → {out_path}")
+
+
+@cli.command()
+@click.option("--reports-dir", default="reports", type=click.Path(path_type=Path))
+@click.option("--output", "-o", default=None, type=click.Path(path_type=Path),
+              help="Output Markdown path (default: reports/summary.md)")
+def summary(reports_dir: Path, output: Path | None) -> None:
+    """Generate summary.md — latest run per kernel/platform/target."""
+    records = load_all(reports_dir / "runs.jsonl")
+    if not records:
+        click.echo("No records found.", err=True)
+        raise SystemExit(0)
+
+    # last record per (kernel, platform, target) wins (JSONL is append-only)
+    latest_records: dict[tuple[str, str, str], RunRecord] = {}
+    for rec in records:
+        latest_records[(rec.kernel, rec.platform, rec.target)] = rec
+
+    csynth_cols = ["kernel", "platform", "status", "worst_loop_ii", "latency_max",
+                   "lut", "ff", "dsp", "bram_18k", "uram", "estimated_clock_ns", "timing_met"]
+    cosim_cols = ["kernel", "platform", "status", "cosim_status", "cosim_latency_cycles"]
+    hw_cols = ["kernel", "platform", "status", "mae", "rms", "tol"]
+
+    def _md_row(rec: RunRecord, cols: list[str]) -> str:
+        vals = []
+        for c in cols:
+            v = getattr(rec, c, None)
+            if v is None:
+                v = rec.metrics.get(c, "—")
+            vals.append(str(v) if v not in (None, "") else "—")
+        return "| " + " | ".join(vals) + " |"
+
+    def _md_table(recs: list[RunRecord], cols: list[str]) -> str:
+        header = "| " + " | ".join(cols) + " |"
+        sep = "| " + " | ".join(["---"] * len(cols)) + " |"
+        return "\n".join([header, sep] + [_md_row(r, cols) for r in recs]) + "\n"
+
+    by_target: dict[str, list[RunRecord]] = defaultdict(list)
+    for rec in sorted(latest_records.values(), key=lambda r: (r.kernel, r.platform)):
+        by_target[rec.target].append(rec)
+
+    lines = [f"# HLS Flow Summary\n\n_Source: `{reports_dir}/runs.jsonl`_\n\n"]
+    target_cols = {"csynth": csynth_cols, "cosim": cosim_cols, "hw": hw_cols}
+    for target in sorted(by_target):
+        cols = target_cols.get(target, ["kernel", "platform", "status"])
+        lines.append(f"## {target.upper()}\n\n")
+        lines.append(_md_table(by_target[target], cols))
+        lines.append("\n")
+
+    out_path = output or (reports_dir / "summary.md")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text("".join(lines), encoding="utf-8")
+    click.echo(f"Summary → {out_path}")
+
+
+@cli.command("compare-gold")
+@click.option("--dataset", required=True, help="Dataset name under data/ (e.g. tiny)")
+@click.option("--kernel", required=True, help="Kernel name (e.g. saxpy)")
+@click.option("--platform", required=True, help="Platform tag (e.g. u250)")
+@click.option("--tol", default=1e-5, type=float,
+              help="Max-abs-error pass threshold (default: 1e-5)")
+@click.option("--reports-dir", default="reports", type=click.Path(path_type=Path))
+@click.option("--data-dir", default="data", type=click.Path(path_type=Path))
+def compare_gold_cmd(dataset: str, kernel: str, platform: str, tol: float,
+                     reports_dir: Path, data_dir: Path) -> None:
+    """Compare gold_out.bin vs xrt_hw_out.bin; append hw record to runs.jsonl."""
+    console = Console()
+    try:
+        rec = compare_gold_hw(
+            data_dir / dataset, kernel, platform, tol=tol,
+            git_commit=_git_commit(), vitis_version=_vitis_version(),
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        console.print(f"[red]error[/red]: {exc}")
+        raise SystemExit(2)
+
+    color = "green" if rec.status == "pass" else "red"
+    console.print(
+        f"[{color}]{rec.status.upper()}[/{color}]  {kernel}/{platform}  "
+        f"mae={rec.metrics['mae']:.3e}  rms={rec.metrics['rms']:.3e}  (tol={tol:.0e})"
+    )
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    db_append(rec, reports_dir / "runs.jsonl")
+    console.print(f"  appended run_id={rec.run_id}")
+    raise SystemExit(0 if rec.status == "pass" else 1)
