@@ -39,6 +39,8 @@ HWEMU_XCLBIN_PATH  := $(HWEMU_BUILD_DIR)/src/kernels/saxpy_xclbin/saxpy.xclbin
 PYTHON      := .venv/bin/python
 PIP         := $(PYTHON) -m pip
 VENV_STAMP  := .venv/.anvil-install.stamp
+PYPI_INDEX  ?= https://mirrors.ustc.edu.cn/pypi/simple
+PIP_INDEX_ARGS := $(if $(PYPI_INDEX),-i $(PYPI_INDEX),)
 # HLS flow Python entry / HLS 流程 Python 入口
 HLSFLOW_PYTHON := PYTHONPATH=tools $(PYTHON)
 # Deployment to physical board / 部署到物理板卡
@@ -47,7 +49,7 @@ BOARD_SSH_USER    ?= root
 BOARD_DEPLOY_DIR  ?= ~/anvil-deploy
 
 # --- Phony targets declaration / 伪目标声明 ---
-.PHONY: all configure build build-cpp build-python rebuild-python clean clean-all help \
+.PHONY: all configure build build-cpp build-python python-env python-install rebuild-python clean clean-all help \
         configure-kernel configure-host build-host build-kernel build-all \
         csynth cosim xclbin xclbin-hwemu \
         require-u250-stream csynth-stream cosim-stream pipeline-demo \
@@ -80,14 +82,14 @@ configure-host:
 	fi
 
 # --------------------------------------------------------------------------
-# build — fast day-to-day build: host binary + Python only, no HLS synthesis
-#         日常快速构建：只构建 host 程序 + Python，不触发 HLS 综合
+# build — fast day-to-day build: host binary only, no Python env, no HLS synthesis
+#         日常快速构建：只构建 host 程序，不创建 Python 环境，不触发 HLS 综合
 # --------------------------------------------------------------------------
-build: build-host build-python
+build: build-host
 
 # Explicit full build for users who really want kernel + host + Python.
 # 明确的完整构建：需要 kernel + host + Python 时手动调用。
-build-all: build-kernel build-host build-python
+build-all: build-kernel build-host
 
 # Backward-compatible C++ build alias: host-side C++ only, no HLS synthesis.
 build-cpp: build-host
@@ -98,18 +100,33 @@ build-host: configure-host
 build-kernel: configure-kernel
 	cmake --build --preset $(ANVIL_PRESET) --target $(ANVIL_KERNEL_TARGETS)
 
-# Build Python venv and install the package / 构建 Python 虚拟环境并安装包
-build-python: $(VENV_STAMP)
+# Python environment is explicit: normal `make build` does not create/update it.
+# Defaults to USTC PyPI mirror; disable with `make python-env PYPI_INDEX=`.
+build-python: python-env
+
+python-env: $(VENV_STAMP)
 
 $(VENV_STAMP): pyproject.toml
-	@test -x $(PYTHON) || python3 -m venv .venv
-	$(PIP) install -e ".[test]" --quiet
+	@if command -v uv >/dev/null 2>&1; then \
+		uv venv .venv; \
+		uv pip install $(PIP_INDEX_ARGS) -e ".[test]" --python $(PYTHON); \
+	else \
+		test -x $(PYTHON) || python3 -m venv .venv; \
+		$(PIP) install $(PIP_INDEX_ARGS) -e ".[test]" --quiet; \
+	fi
 	@touch $(VENV_STAMP)
+
+python-install: python-env
 
 rebuild-python:
 	rm -rf .venv
-	python3 -m venv .venv
-	$(PIP) install -e ".[test]" --quiet
+	@if command -v uv >/dev/null 2>&1; then \
+		uv venv .venv; \
+		uv pip install $(PIP_INDEX_ARGS) -e ".[test]" --python $(PYTHON); \
+	else \
+		python3 -m venv .venv; \
+		$(PIP) install $(PIP_INDEX_ARGS) -e ".[test]" --quiet; \
+	fi
 	@touch $(VENV_STAMP)
 
 # ============================================================================
@@ -360,9 +377,10 @@ deploy: deploy-bin deploy-xclbin deploy-data
 
 help:
 	@echo "Targets:"
-	@echo "  make build [TARGET=...]             — build host binary + Python only (no HLS synth)"
+	@echo "  make build [TARGET=...]             — build host binary only (no Python env, no HLS synth)"
 	@echo "  make build-kernel [TARGET=...]      — HLS synth kernel target(s)"
-	@echo "  make rebuild-python                 — recreate .venv from scratch"
+	@echo "  make python-env [PYPI_INDEX=...]    — create/update .venv via uv, fallback venv; default USTC mirror"
+	@echo "  make rebuild-python [PYPI_INDEX=]   — recreate .venv; empty PYPI_INDEX disables mirror"
 	@echo "  make build-all [TARGET=...]         — build kernel + host + Python"
 	@echo "  make test                         — CPU-only fast tests (no Vitis/XRT)"
 	@echo "  make csynth                       — v++ HLS synthesis"
