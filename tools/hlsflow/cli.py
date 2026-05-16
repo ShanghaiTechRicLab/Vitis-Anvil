@@ -12,6 +12,7 @@ import click
 
 from hlsflow import __version__
 from rich.console import Console
+from rich.table import Table
 
 from hlsflow.check import run_checks
 from hlsflow.compare import render_diff
@@ -103,6 +104,63 @@ def _do_collect_csynth(build_dir: Path, kernel: str, platform: str, reports_dir:
     return rec
 
 
+def _fmt_cycles(value: int | None) -> str:
+    return "NA" if value is None else f"{value:,}"
+
+
+def _render_cosim(cr, kernel: str, platform: str, console: Console) -> None:
+    status_style = "green" if cr.status == "pass" else ("red" if cr.status == "fail" else "yellow")
+    tool = cr.sim_tool or "unknown-sim"
+    console.print(f"[bold]COSIM {kernel}/{platform}[/bold]  status=[{status_style}]{cr.status}[/{status_style}]  tool={tool}")
+
+    if cr.rtl_results:
+        table = Table(title="RTL cosim summary", show_header=True, header_style="bold")
+        table.add_column("RTL")
+        table.add_column("Status")
+        table.add_column("Latency min/avg/max", justify="right")
+        table.add_column("Interval min/avg/max", justify="right")
+        table.add_column("Total", justify="right")
+        for row in cr.rtl_results:
+            style = "green" if row.status.lower() == "pass" else ("dim" if row.status.upper() == "NA" else "red")
+            table.add_row(
+                row.rtl,
+                f"[{style}]{row.status}[/{style}]",
+                f"{_fmt_cycles(row.latency_min)}/{_fmt_cycles(row.latency_avg)}/{_fmt_cycles(row.latency_max)}",
+                f"{_fmt_cycles(row.interval_min)}/{_fmt_cycles(row.interval_avg)}/{_fmt_cycles(row.interval_max)}",
+                _fmt_cycles(row.total_cycles),
+            )
+        console.print(table)
+    else:
+        console.print(f"  latency={_fmt_cycles(cr.latency_cycles)} cycles")
+
+    if cr.transactions:
+        latencies = [t.latency_cycles for t in cr.transactions]
+        intervals = [t.interval_cycles for t in cr.transactions if t.interval_cycles is not None]
+        interval_text = "NA" if not intervals else f"{min(intervals):,}/{max(intervals):,}"
+        console.print(
+            f"  transactions={len(cr.transactions)}  "
+            f"latency_min/max={min(latencies):,}/{max(latencies):,}  "
+            f"interval_min/max={interval_text}"
+        )
+    elif cr.lat_summary:
+        console.print(
+            "  lat.rpt: "
+            f"min={_fmt_cycles(cr.lat_summary.get('min_latency'))} "
+            f"avg={_fmt_cycles(cr.lat_summary.get('aver_latency'))} "
+            f"max={_fmt_cycles(cr.lat_summary.get('max_latency'))} "
+            f"total={_fmt_cycles(cr.lat_summary.get('total_execute_time'))}"
+        )
+
+    preferred_messages = sorted(
+        dict.fromkeys(cr.messages),
+        key=lambda msg: ("COSIM-1000" not in msg, "finished" not in msg.lower(), msg),
+    )
+    for msg in preferred_messages[:3]:
+        console.print(f"  [dim]{msg}[/dim]")
+    rel_files = [str(p.relative_to(cr.report_dir)) for p in cr.found_files]
+    console.print(f"  artifacts: {', '.join(rel_files[:6])}" + (" ..." if len(rel_files) > 6 else ""))
+
+
 def _do_collect_cosim(build_dir: Path, kernel: str, platform: str, reports_dir: Path,
                       console: Console) -> RunRecord | None:
     hit = find_csynth_for_kernel(build_dir, kernel)
@@ -115,15 +173,25 @@ def _do_collect_cosim(build_dir: Path, kernel: str, platform: str, reports_dir: 
         return None
     cr = parse_cosim_dir(sim_dir)
     run_id = now_run_id(kernel, platform)
-    console.print(f"COSIM {kernel}/{platform}  status={cr.status}  latency={cr.latency_cycles}")
-    console.print(f"  files: {[str(p.relative_to(sim_dir)) for p in cr.found_files]}")
+    _render_cosim(cr, kernel, platform, console)
     vitis_v = _vitis_version()
+    pass_row = cr.passing_rtl
+    metrics = {
+        "cosim_status": cr.status,
+        "cosim_latency_cycles": cr.latency_cycles,
+        "cosim_tool": cr.sim_tool,
+        "cosim_solution": cr.solution,
+        "cosim_transaction_count": cr.transaction_count,
+        "cosim_total_cycles": pass_row.total_cycles if pass_row else None,
+        "cosim_interval_min": pass_row.interval_min if pass_row else None,
+        "cosim_interval_max": pass_row.interval_max if pass_row else None,
+    }
     rec = RunRecord(
         run_id=run_id, kernel=kernel, platform=platform, target="cosim",
         git_commit=_git_commit(), build_dir=str(build_dir), vitis_version=vitis_v,
         status=cr.status, timestamp=datetime.now(timezone.utc).isoformat(),
         reports={"cosim_dir": str(sim_dir)},
-        metrics={"cosim_status": cr.status, "cosim_latency_cycles": cr.latency_cycles},
+        metrics=metrics,
     )
     db_append(rec, reports_dir / "runs.jsonl")
     return rec
