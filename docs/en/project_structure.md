@@ -67,6 +67,7 @@ Each board (u250, zcu102, etc.) has its own directory with device-specific files
 
 | File | What it is |
 |---|---|
+| `include/gold/saxpy_gold.hpp` | Project-owned saxpy golden reference API. |
 | `cpp/saxpy_gold.cpp` | C++ implementation of the saxpy golden reference (CPU-only, no XRT). |
 | `cpp/saxpy_gold_main.cpp` | Command-line wrapper that reads dataset and writes gold output. |
 | `cpp/metrics.cpp` | Optional metric computation used by some tests. |
@@ -98,14 +99,16 @@ Each board (u250, zcu102, etc.) has its own directory with device-specific files
 
 ## `include/anvil/` — C++ headers
 
+Framework-owned public API. Do not place project-specific kernel/model/gold headers here; use `src/kernels/include/`, `src/hls_model/include/`, and `src/gold/include/`.
+
+
 Headers are organized by component. Each subdirectory has a `*.hpp` file for that component.
 
 | Directory | What it provides |
 |---|---|
 | `runtime/` | `xrt_context.hpp`, `xrt_buffer.hpp`, `kernel_handle.hpp` — XRT runtime wrappers. |
-| `kernels/` | `saxpy.hpp`, `vadd.hpp`, `pipeline_types.hpp` — kernel interface structs and ABI types. |
-| `gold/` | `saxpy_gold.hpp`, `gold_interface.hpp` — gold reference interfaces. |
-| `hls/` | `hls_types.hpp`, `data_pack.hpp`, `fixed_config.hpp`, `stream_utils.hpp` — HLS utility types. |
+| `gold/` | Generic gold helpers such as metrics/interfaces. Project-specific gold APIs live under `src/gold/include/`. |
+| `hls/` | Generic hlslib-based helpers: `pack.hpp`, `stream.hpp`, `dataflow.hpp`, `packed_ops.hpp`, `axis.hpp`. |
 | `cli/` | `argparse.hpp` — command-line argument parsing wrapper. |
 | `compare/` | Comparators for verifying output data (bitwise, element-wise, classification, signal). |
 | `json/` | JSON serialization/deserialization. |

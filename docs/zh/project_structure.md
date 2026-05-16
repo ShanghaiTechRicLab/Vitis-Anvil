@@ -67,6 +67,7 @@
 
 | 文件 | 说明 |
 |---|---|
+| `include/gold/saxpy_gold.hpp` | 项目拥有的 SAXPY golden reference API。 |
 | `cpp/saxpy_gold.cpp` | SAXPY golden reference 的 C++ 实现（仅 CPU，不需要 XRT）。 |
 | `cpp/saxpy_gold_main.cpp` | 命令行封装，读取数据集并写 gold 输出。 |
 | `cpp/metrics.cpp` | 可选的指标计算，部分测试用到。 |
@@ -98,14 +99,16 @@
 
 ## `include/anvil/` — C++ 头文件
 
+框架拥有的公共 API。不要把项目专用 kernel/model/gold 头文件放在这里；改用 `src/kernels/include/`、`src/hls_model/include/` 和 `src/gold/include/`。
+
+
 按组件组织头文件。每个子目录有一个 `*.hpp` 文件。
 
 | 目录 | 提供什么 |
 |---|---|
 | `runtime/` | `xrt_context.hpp`、`xrt_buffer.hpp`、`kernel_handle.hpp` — XRT 运行时封装。 |
-| `kernels/` | `saxpy.hpp`、`vadd.hpp`、`pipeline_types.hpp` — kernel 接口结构体和 ABI 类型。 |
-| `gold/` | `saxpy_gold.hpp`、`gold_interface.hpp` — gold reference 接口。 |
-| `hls/` | `hls_types.hpp`、`data_pack.hpp`、`fixed_config.hpp`、`stream_utils.hpp` — HLS 工具类型。 |
+| `gold/` | 通用 gold 辅助，例如 metrics/interfaces。项目专用 gold API 放在 `src/gold/include/`。 |
+| `hls/` | 基于 hlslib 的通用辅助：`pack.hpp`、`stream.hpp`、`dataflow.hpp`、`packed_ops.hpp`、`axis.hpp`。 |
 | `cli/` | `argparse.hpp` — 命令行参数解析封装。 |
 | `compare/` | 验证输出数据的比较器（bitwise、element-wise、classification、signal）。 |
 | `json/` | JSON 序列化/反序列化。 |
