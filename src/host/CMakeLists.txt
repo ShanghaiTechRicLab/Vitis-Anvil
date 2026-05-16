@@ -10,3 +10,23 @@ add_anvil_host(
         anvil_cli
         anvil_json
         anvil_compare)
+
+add_anvil_host(
+    NAME run_vadd
+    SOURCES run_vadd.cpp
+    LINK_LIBRARIES
+        anvil_runtime
+        anvil_log
+        anvil_cli
+        anvil_json
+        anvil_compare)
+
+add_anvil_host(
+    NAME run_pipeline_demo
+    SOURCES run_pipeline_demo.cpp
+    LINK_LIBRARIES
+        anvil_runtime
+        anvil_log
+        anvil_cli
+        anvil_json
+        anvil_compare)

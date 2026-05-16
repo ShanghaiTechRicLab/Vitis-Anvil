@@ -14,9 +14,16 @@ ANVIL_LANG ?= cpp
 DATASET ?= tiny
 # Kernel filter for analysis / 分析时筛选的 kernel 名称
 KERNEL ?= all
+HOST_APP ?= run_saxpy
 
 # Include board-specific configuration / 引入板卡专用配置
 include config/$(TARGET)/anvil.mk
+
+ifeq ($(HOST_APP),run_pipeline_demo)
+XCLBIN_NAME := pipeline_demo
+else
+XCLBIN_NAME := saxpy
+endif
 
 # --- Derived variables / 派生变量 ---
 # Build directory for the selected preset / 当前 preset 的构建目录
@@ -28,13 +35,13 @@ ANVIL_COSIM_TARGETS ?= saxpy_cosim
 # Host (cross-compilation) preset / 主机端（交叉编译）preset
 ANVIL_HOST_PRESET  ?= $(ANVIL_PRESET)
 HOST_BUILD_DIR     := build/$(ANVIL_HOST_PRESET)
-HOST_BIN    := $(HOST_BUILD_DIR)/src/host/run_saxpy
-XCLBIN_PATH := $(BUILD_DIR)/src/kernels/saxpy_xclbin/saxpy.xclbin
+HOST_BIN    := $(HOST_BUILD_DIR)/src/host/$(HOST_APP)
+XCLBIN_PATH := $(BUILD_DIR)/src/kernels/$(XCLBIN_NAME)_xclbin/$(XCLBIN_NAME).xclbin
 # Hardware emulation preset / 硬件仿真 preset
 ANVIL_HWEMU_PRESET ?= $(ANVIL_PRESET)-hwemu
 HWEMU_BUILD_DIR    := build/$(ANVIL_HWEMU_PRESET)
-HWEMU_HOST_BIN     := $(HWEMU_BUILD_DIR)/src/host/run_saxpy
-HWEMU_XCLBIN_PATH  := $(HWEMU_BUILD_DIR)/src/kernels/saxpy_xclbin/saxpy.xclbin
+HWEMU_HOST_BIN     := $(HWEMU_BUILD_DIR)/src/host/$(HOST_APP)
+HWEMU_XCLBIN_PATH  := $(HWEMU_BUILD_DIR)/src/kernels/$(XCLBIN_NAME)_xclbin/$(XCLBIN_NAME).xclbin
 # Python venv / Python 虚拟环境
 PYTHON      := .venv/bin/python
 PIP         := $(PYTHON) -m pip
@@ -95,7 +102,7 @@ build-all: build-kernel build-host
 build-cpp: build-host
 
 build-host: configure-host
-	cmake --build --preset $(ANVIL_HOST_PRESET) --target run_saxpy
+	cmake --build --preset $(ANVIL_HOST_PRESET) --target $(HOST_APP)
 
 build-kernel: configure-kernel
 	cmake --build --preset $(ANVIL_PRESET) --target $(ANVIL_KERNEL_TARGETS)
@@ -150,12 +157,12 @@ cosim:
 
 # xclbin — Link kernel into .xclbin bitstream / 将内核链接为 .xclbin 比特流
 xclbin: configure-kernel
-	cmake --build $(BUILD_DIR) --target saxpy_xclbin
+	cmake --build $(BUILD_DIR) --target $(XCLBIN_NAME)_xclbin
 
 # xclbin-hwemu — Build xclbin for hardware emulation / 构建硬件仿真用的 xclbin
 xclbin-hwemu:
 	cmake --preset $(ANVIL_HWEMU_PRESET)
-	cmake --build --preset $(ANVIL_HWEMU_PRESET) --target saxpy_xclbin
+	cmake --build --preset $(ANVIL_HWEMU_PRESET) --target $(XCLBIN_NAME)_xclbin
 
 # --------------------------------------------------------------------------
 # U250 streaming kernel targets (require TARGET=u250)
@@ -221,13 +228,13 @@ ifeq ($(ANVIL_DEVICE_KIND),embedded)
 xrt-emu: gen
 	echo "[xrt-emu] TARGET=$(TARGET): building kernel ($(ANVIL_PRESET)) + AArch64 host ($(ANVIL_HOST_PRESET))..."
 	cmake --preset $(ANVIL_PRESET)
-	cmake --build --preset $(ANVIL_PRESET) --target saxpy_xclbin
+	cmake --build --preset $(ANVIL_PRESET) --target $(XCLBIN_NAME)_xclbin
 	@if [ -n "$(ANVIL_SYSROOT)" ]; then \
 		env SYSROOT="$(ANVIL_SYSROOT)" cmake --preset $(ANVIL_HOST_PRESET); \
 	else \
 		cmake --preset $(ANVIL_HOST_PRESET); \
 	fi
-	cmake --build --preset $(ANVIL_HOST_PRESET) --target run_saxpy
+	cmake --build --preset $(ANVIL_HOST_PRESET) --target $(HOST_APP)
 	env ANVIL_PLATFORM=$(ANVIL_PLATFORM) BUILD_DIR=$(HWEMU_BUILD_DIR) bash scripts/emconfig.sh
 	echo ""
 	echo "Embedded hw_emu requires QEMU — see docs/deploy.md#qemu-emulation"
@@ -238,10 +245,10 @@ else
 xrt-emu: gen
 	@if [ "$(ANVIL_DEVICE_KIND)" != "accelerator" ]; then echo "make xrt-emu currently requires an accelerator target with a combined host+kernel hw_emu preset; got TARGET=$(TARGET) ($(ANVIL_DEVICE_KIND))" >&2; exit 1; fi
 	cmake --preset $(ANVIL_HWEMU_PRESET)
-	cmake --build --preset $(ANVIL_HWEMU_PRESET) --target run_saxpy saxpy_xclbin
+	cmake --build --preset $(ANVIL_HWEMU_PRESET) --target $(HOST_APP) $(XCLBIN_NAME)_xclbin
 	env ANVIL_PLATFORM=$(ANVIL_PLATFORM) BUILD_DIR=$(HWEMU_BUILD_DIR) bash scripts/emconfig.sh
 	@if [ ! -x $(HWEMU_HOST_BIN) ]; then echo "$(HWEMU_HOST_BIN) not built; use a hw_emu preset with ANVIL_BUILD_XRT=ON" >&2; exit 1; fi
-	@if [ ! -f $(HWEMU_XCLBIN_PATH) ]; then echo "$(HWEMU_XCLBIN_PATH) not found; make xrt-emu should have built saxpy_xclbin" >&2; exit 1; fi
+	@if [ ! -f $(HWEMU_XCLBIN_PATH) ]; then echo "$(HWEMU_XCLBIN_PATH) not found; make xrt-emu should have built $(XCLBIN_NAME)_xclbin" >&2; exit 1; fi
 	env XCL_EMULATION_MODE=hw_emu EMCONFIG_PATH=$(HWEMU_BUILD_DIR) $(HWEMU_HOST_BIN) --xclbin $(HWEMU_XCLBIN_PATH) --data-dir data/$(DATASET) --output data/$(DATASET)/xrt_emu_out.bin
 endif
 
@@ -364,7 +371,7 @@ deploy-check:
 deploy-bin: deploy-check
 	@if [ ! -f "$(HOST_BIN)" ]; then echo "ERROR: $(HOST_BIN) not found. Run: make build TARGET=$(TARGET) first." >&2; exit 1; fi
 	ssh $(BOARD_SSH_USER)@$(BOARD_IP) "mkdir -p $(BOARD_DEPLOY_DIR)"
-	scp "$(HOST_BIN)" "$(BOARD_SSH_USER)@$(BOARD_IP):$(BOARD_DEPLOY_DIR)/run_saxpy"
+	scp "$(HOST_BIN)" "$(BOARD_SSH_USER)@$(BOARD_IP):$(BOARD_DEPLOY_DIR)/$(HOST_APP)"
 
 # deploy-xclbin — Deploy the .xclbin bitstream / 部署 .xclbin 比特流
 deploy-xclbin: deploy-check
@@ -388,7 +395,7 @@ deploy: deploy-bin deploy-xclbin deploy-data
 
 help:
 	@echo "Targets:"
-	@echo "  make build [TARGET=...]             — build host binary only (no Python env, no HLS synth)"
+	@echo "  make build [TARGET=...] [HOST_APP=run_saxpy|run_vadd|run_pipeline_demo] — build host binary only"
 	@echo "  make build-kernel [TARGET=...]      — HLS synth kernel target(s)"
 	@echo "  make python-env [PYPI_INDEX=...]    — create/update .venv via uv, fallback venv; default USTC mirror"
 	@echo "  make rebuild-python [PYPI_INDEX=]   — recreate .venv; empty PYPI_INDEX disables mirror"
@@ -402,7 +409,7 @@ help:
 	@echo "  make gen                          — generate dataset"
 	@echo "  make gold [ANVIL_LANG=cpp|python]       — run gold reference"
 	@echo "  make xrt-emu                      — run accelerator hw_emu or build embedded + print QEMU note"
-	@echo "  make xrt-hw                       — run on real hardware"
+	@echo "  make xrt-hw HOST_APP=run_vadd     — run selected host app on real hardware"
 	@echo "  make compare                      — compare outputs vs gold"
 	@echo "  make analyze [KERNEL=all]         — hlsflow collect csynth (rich + HTML + JSONL)"
 	@echo "  make analyze-cosim [KERNEL=all]   — hlsflow collect cosim"
