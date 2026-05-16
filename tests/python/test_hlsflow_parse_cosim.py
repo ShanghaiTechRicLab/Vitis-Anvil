@@ -37,7 +37,7 @@ Simulation tool   : xsim.
         encoding="utf-8",
     )
     (verilog_dir / "result.transaction.rpt").write_text(
-        "                             latency        interval\ntransaction       0:             259               0\n",
+        "                             latency        interval\ntransaction       0:             259             254\ntransaction       1:             231               x\n",
         encoding="utf-8",
     )
     (verilog_dir / "saxpy.log").write_text(
@@ -54,7 +54,10 @@ Simulation tool   : xsim.
     assert rpt.passing_rtl is not None
     assert rpt.passing_rtl.rtl == "Verilog"
     assert rpt.passing_rtl.total_cycles == 259
-    assert rpt.transaction_count == 1
+    assert rpt.transaction_count == 2
     assert rpt.transactions[0].latency_cycles == 259
+    assert rpt.transactions[0].interval_cycles == 254
+    assert rpt.transactions[1].latency_cycles == 231
+    assert rpt.transactions[1].interval_cycles is None
     assert rpt.lat_summary["max_latency"] == 259
     assert any("COSIM-1000" in msg for msg in rpt.messages)

@@ -20,7 +20,7 @@ _PASS_RE = re.compile(r"\b(PASS|PASSED|Pass)\b")
 _FAIL_RE = re.compile(r"\b(FAIL|FAILED|Fail)\b")
 _LAT_RE = re.compile(r"(?:Latency|cycle).*?(\d+)", re.IGNORECASE)
 _KV_RE = re.compile(r'^\$(?P<key>[A-Z_]+)\s*=\s*"(?P<value>-?\d+)"')
-_TRANSACTION_RE = re.compile(r"transaction\s+(?P<idx>\d+)\s*:\s*(?P<lat>\d+)\s+(?P<interval>-?\d+)", re.IGNORECASE)
+_TRANSACTION_RE = re.compile(r"transaction\s+(?P<idx>\d+)\s*:\s*(?P<lat>\d+)\s+(?P<interval>x|-?\d+)", re.IGNORECASE)
 _RTL_ROW_RE = re.compile(
     r"^\|\s*(?P<rtl>VHDL|Verilog)\s*\|\s*(?P<status>[^|]+?)\s*\|"
     r"\s*(?P<lat_min>NA|\d+)\s*\|\s*(?P<lat_avg>NA|\d+)\s*\|\s*(?P<lat_max>NA|\d+)\s*\|"
@@ -115,11 +115,12 @@ def _parse_text_report(text: str, report: CosimReport) -> None:
 
         txn = _TRANSACTION_RE.search(stripped)
         if txn:
-            interval = int(txn.group("interval"))
+            interval_text = txn.group("interval")
+            interval = None if interval_text.lower() == "x" else int(interval_text)
             report.transactions.append(CosimTransaction(
                 index=int(txn.group("idx")),
                 latency_cycles=int(txn.group("lat")),
-                interval_cycles=interval if interval >= 0 else None,
+                interval_cycles=interval if interval is not None and interval >= 0 else None,
             ))
             continue
 
