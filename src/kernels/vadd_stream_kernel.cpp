@@ -1,12 +1,12 @@
 #include "kernels/vadd_stream.hpp"
 
-using kernels::PipelinePack;
-static const int kW = kernels::kPipelinePack;
+#include "anvil/hls/axis.hpp"
+#include "anvil/hls/pack.hpp"
 
 extern "C" void vadd_stream(
-    hls::stream<PipelinePack>& s_in,
-    const PipelinePack* b,
-    PipelinePack* out,
+    hls::stream<kernels::PipelinePack>& s_in,
+    const kernels::PipelinePack* b,
+    kernels::PipelinePack* out,
     int n_packs) {
 #pragma HLS INTERFACE axis port=s_in
 #pragma HLS INTERFACE m_axi port=b bundle=gmem0 offset=slave depth=1024
@@ -18,12 +18,12 @@ extern "C" void vadd_stream(
 
   for (int i = 0; i < n_packs; ++i) {
 #pragma HLS PIPELINE II=1
-    PipelinePack pz = s_in.read();
-    PipelinePack pb = b[i];
-    PipelinePack po;
-    for (int j = 0; j < kW; ++j) {
+    kernels::PipelinePack pz = anvil::hls::ReadAxis(s_in);
+    kernels::PipelinePack pb = b[i];
+    kernels::PipelinePack po;
+    for (int j = 0; j < kernels::kPipelinePackWidth; ++j) {
 #pragma HLS UNROLL
-      po[j] = pz[j] + pb[j];
+      anvil::hls::SetLane(po, j, anvil::hls::GetLane(pz, j) + anvil::hls::GetLane(pb, j));
     }
     out[i] = po;
   }

@@ -4,6 +4,8 @@
 #include <anvil/runtime/xrt_buffer.hpp>
 #include <anvil/runtime/xrt_context.hpp>
 
+#include "kernels/kernel_types.hpp"
+
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
@@ -22,7 +24,7 @@ using anvil::runtime::XrtBuffer;
 using anvil::runtime::XrtContext;
 
 namespace {
-constexpr std::size_t kPackWidth = 16;
+constexpr std::size_t kPackWidth = static_cast<std::size_t>(kernels::kPipelinePackWidth);
 
 struct InputData { std::vector<float> x; std::vector<float> y; float a = 2.0F; };
 std::size_t RoundUpToPack(std::size_t n) { return ((n + kPackWidth - 1) / kPackWidth) * kPackWidth; }
