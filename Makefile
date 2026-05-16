@@ -39,14 +39,10 @@ BUILD_DIR   := build/$(ANVIL_PRESET)
 ANVIL_KERNEL_TARGETS ?= saxpy_xo
 # CMake targets for co-simulation / 协同仿真的 CMake target
 ANVIL_COSIM_TARGETS ?= saxpy_cosim vadd_cosim
-ifeq ($(HOST_APP),run_pipeline_demo)
-SELECTED_COSIM_TARGETS := saxpy_stream_cosim vadd_stream_cosim
-else ifeq ($(HOST_APP),run_vadd)
-SELECTED_COSIM_TARGETS := vadd_cosim
-else ifeq ($(HOST_APP),run_saxpy)
-SELECTED_COSIM_TARGETS := saxpy_cosim
-else ifeq ($(KERNEL),all)
+ifeq ($(KERNEL),all)
 SELECTED_COSIM_TARGETS := $(ANVIL_COSIM_TARGETS)
+else ifeq ($(KERNEL),pipeline_demo)
+SELECTED_COSIM_TARGETS := saxpy_stream_cosim vadd_stream_cosim
 else
 SELECTED_COSIM_TARGETS := $(KERNEL)_cosim
 endif
@@ -169,7 +165,7 @@ csynth: build-kernel
 
 # cosim — Run HLS co-simulation / 运行 HLS 协同仿真
 cosim:
-	@if [ "$(HOST_APP)" = "run_pipeline_demo" ] && [ "$(TARGET)" != "u250" ]; then echo "HOST_APP=run_pipeline_demo cosim currently requires TARGET=u250" >&2; exit 1; fi
+	@if [ "$(KERNEL)" = "pipeline_demo" ] && [ "$(TARGET)" != "u250" ]; then echo "KERNEL=pipeline_demo cosim currently requires TARGET=u250" >&2; exit 1; fi
 	@if [ -z "$(strip $(SELECTED_COSIM_TARGETS))" ]; then echo "cosim is not configured for TARGET=$(TARGET)" >&2; exit 1; fi
 	$(MAKE) configure-kernel TARGET=$(TARGET)
 	cmake --build $(BUILD_DIR) --target $(SELECTED_COSIM_TARGETS)
@@ -334,10 +330,7 @@ test-csynth: configure-kernel
 	ctest --test-dir $(BUILD_DIR) -L csynth -V
 
 test-cosim:
-	@if [ "$(HOST_APP)" = "run_pipeline_demo" ] && [ "$(TARGET)" != "u250" ]; then echo "HOST_APP=run_pipeline_demo cosim currently requires TARGET=u250" >&2; exit 1; fi
-	@if [ -z "$(strip $(SELECTED_COSIM_TARGETS))" ]; then echo "cosim is not configured for TARGET=$(TARGET)" >&2; exit 1; fi
-	$(MAKE) configure-kernel TARGET=$(TARGET)
-	ctest --test-dir $(BUILD_DIR) -L cosim -V
+	$(MAKE) cosim TARGET=$(TARGET) KERNEL=$(KERNEL)
 
 test-xrt-emu:
 	$(MAKE) xrt-emu
@@ -427,7 +420,7 @@ help:
 	@echo "  make build-all [TARGET=...]         — build kernel + host + Python"
 	@echo "  make test                         — CPU-only fast tests (no Vitis/XRT)"
 	@echo "  make csynth                       — v++ HLS synthesis"
-	@echo "  make cosim [HOST_APP=run_saxpy|run_vadd|run_pipeline_demo] [KERNEL=saxpy|vadd|all] — HLS co-simulation"
+	@echo "  make cosim [KERNEL=saxpy|vadd|pipeline_demo|all] — HLS kernel co-simulation"
 	@echo "  make xclbin                       — link .xclbin"
 	@echo "  make csynth-stream/cosim-stream   — opt-in U250 k2k stream kernel checks"
 	@echo "  make pipeline-demo                — link U250 saxpy_stream→vadd_stream xclbin"
