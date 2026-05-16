@@ -5,8 +5,12 @@ namespace anvil::runtime {
 
 XrtContext::XrtContext(unsigned device_index, const std::filesystem::path& xclbin_path) {
     device_ = xrt::device(device_index);
+#if ANVIL_XRT_HAS_EXPERIMENTAL_XCLBIN
     xclbin_ = xrt::xclbin(xclbin_path.string());
     uuid_ = device_.load_xclbin(xclbin_);
+#else
+    uuid_ = device_.load_xclbin(xclbin_path.string());
+#endif
 }
 
 KernelHandle XrtContext::GetKernel(const std::string& cu_name) {

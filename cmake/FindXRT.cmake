@@ -54,6 +54,15 @@ find_package_handle_standard_args(XRT
   REQUIRED_VARS XRT_INCLUDE_DIR XRT_COREUTIL_LIBRARY XRT_UUID_LIBRARY
   REASON_FAILURE_MESSAGE "${_xrt_fail_msg}")
 
+if(XRT_FOUND)
+  if(EXISTS "${XRT_INCLUDE_DIR}/xrt/experimental/xrt_xclbin.h")
+    set(XRT_HAS_EXPERIMENTAL_XCLBIN TRUE)
+  else()
+    set(XRT_HAS_EXPERIMENTAL_XCLBIN FALSE)
+  endif()
+  message(STATUS "XRT experimental xclbin header: ${XRT_HAS_EXPERIMENTAL_XCLBIN}")
+endif()
+
 if(XRT_FOUND AND NOT TARGET XRT::xrt_coreutil)
   add_library(XRT::xrt_coreutil UNKNOWN IMPORTED)
   set(_xrt_interface_libs "${XRT_UUID_LIBRARY};Threads::Threads")
