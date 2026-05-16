@@ -7,3 +7,5 @@ ANVIL_HWEMU_PRESET := u250-host-hwemu
 ANVIL_NEEDS_CROSS := no
 ANVIL_XCLBIN_MODE := hw
 ANVIL_XRT_LIB     := /opt/xilinx/xrt
+
+ANVIL_KERNEL_TARGETS := saxpy_xo vadd_xo

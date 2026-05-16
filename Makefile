@@ -8,6 +8,7 @@ DATASET ?= tiny
 include config/$(TARGET)/anvil.mk
 
 BUILD_DIR   := build/$(ANVIL_PRESET)
+ANVIL_KERNEL_TARGETS ?= saxpy_xo
 ANVIL_HOST_PRESET  ?= $(ANVIL_PRESET)
 HOST_BUILD_DIR     := build/$(ANVIL_HOST_PRESET)
 HOST_BIN    := $(HOST_BUILD_DIR)/src/host/run_saxpy
@@ -18,13 +19,14 @@ HWEMU_HOST_BIN     := $(HWEMU_BUILD_DIR)/src/host/run_saxpy
 HWEMU_XCLBIN_PATH  := $(HWEMU_BUILD_DIR)/src/kernels/saxpy_xclbin/saxpy.xclbin
 PYTHON      := .venv/bin/python
 PIP         := $(PYTHON) -m pip
+HLSFLOW_PYTHON := PYTHONPATH=tools $(PYTHON)
 BOARD_IP          ?=
 BOARD_SSH_USER    ?= root
 BOARD_DEPLOY_DIR  ?= ~/anvil-deploy
 
 .PHONY: all configure build build-cpp build-python clean clean-all help \
         csynth cosim xclbin xclbin-hwemu \
-        gen gold run-host xrt-emu xrt-hw compare analyze emconfig \
+        gen gold run-host xrt-emu xrt-hw compare analyze analyze-flow check-hls compare-hls emconfig \
         deploy deploy-bin deploy-xclbin deploy-data deploy-check \
         test test-csynth test-cosim test-xrt-emu test-xrt-hw test-slow test-all
 
@@ -54,7 +56,7 @@ build-python:
 	rtk $(PIP) install -e ".[test]" --quiet
 
 csynth: configure
-	rtk cmake --build $(BUILD_DIR) --target saxpy_xo
+	rtk cmake --build $(BUILD_DIR) --target $(ANVIL_KERNEL_TARGETS)
 
 cosim: configure
 	rtk cmake --build $(BUILD_DIR) --target saxpy_cosim
@@ -123,6 +125,18 @@ analyze:
 	@if [ ! -f scripts/analyze.py ]; then rtk echo "scripts/analyze.py is added in Task 16" >&2; exit 1; fi
 	rtk $(MAKE) build-python
 	rtk $(PYTHON) scripts/analyze.py --build-dir $(BUILD_DIR)
+
+analyze-flow:
+	@if [ ! -d tools/hlsflow ]; then rtk echo "tools/hlsflow not present" >&2; exit 1; fi
+	rtk $(MAKE) build-python
+	rtk env $(HLSFLOW_PYTHON) -m hlsflow collect --build-dir $(BUILD_DIR) --kernel $${KERNEL:-all}
+
+check-hls:
+	rtk env $(HLSFLOW_PYTHON) -m hlsflow check --max-ii 1
+
+compare-hls:
+	@if [ -z "$(BASELINE)" ] || [ -z "$(CANDIDATE)" ]; then rtk echo "Usage: make compare-hls BASELINE=<id> CANDIDATE=<id>" >&2; exit 1; fi
+	rtk env $(HLSFLOW_PYTHON) -m hlsflow compare --baseline "$(BASELINE)" --candidate "$(CANDIDATE)"
 
 # make test uses hls-model-linux-debug preset (CPU-only, no Vitis/XRT/xpfm).
 # TARGET variable is intentionally ignored here.
@@ -209,6 +223,9 @@ help:
 	@rtk echo "  make xrt-hw                       — run on real hardware"
 	@rtk echo "  make compare                      — compare outputs vs gold"
 	@rtk echo "  make analyze                      — parse HLS csynth report"
+	@rtk echo "  make analyze-flow [KERNEL=saxpy]  — hlsflow collect csynth (rich + HTML + JSONL)"
+	@rtk echo "  make check-hls                    — hlsflow threshold check on latest run"
+	@rtk echo "  make compare-hls BASELINE=<id> CANDIDATE=<id> — diff two runs"
 	@rtk echo "  make emconfig                     — generate emconfig.json for hw_emu"
 	@rtk echo "  make test-csynth/cosim/xrt-emu    — label-specific hardware tests"
 	@rtk echo "  make clean [TARGET=...]           — remove preset build dir"

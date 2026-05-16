@@ -1,13 +1,14 @@
 # src/kernels/
 
-Vitis HLS kernel sources live here.
+HLS kernels for Vitis-Anvil.
 
-Phase 2 currently registers the `saxpy` HLS kernel:
+| Kernel | Top | Source | Cosim TB |
+|--------|-----|--------|----------|
+| saxpy  | saxpy | saxpy_kernel.cpp | tests/kernels/saxpy_cosim_tb.cpp |
+| vadd   | vadd  | vadd_kernel.cpp  | tests/kernels/vadd_cosim_tb.cpp |
 
-- `saxpy_xo` runs Vitis HLS csynth and is included when kernel builds are enabled.
-- `saxpy_cosim` is registered for U250 test builds.
-- `saxpy_xclbin` is registered for `ANVIL_PLATFORM_KIND` in `{u250, zcu104, zcu102}`; it is
-  explicit, long-running, not part of `ALL`, and not added to ctest.
-
-The xclbin link target defaults to `ANVIL_VITIS_TARGET` (`hw`, `hw_emu`, or
-`sw_emu`).
+On u250/u55c, both kernels link into a single `saxpy.xclbin` via
+`add_anvil_xclbin(KERNEL_TARGETS saxpy_xo vadd_xo ...)`.
+Embedded targets (zcu102, zcu104) keep saxpy-only xclbin; `vadd_xo` is still
+a registered buildable target but not included in the xclbin link. See
+`config/<board>/link.cfg` for per-kernel `nk=`/`sp=` mappings.

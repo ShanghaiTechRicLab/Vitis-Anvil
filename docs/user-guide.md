@@ -130,3 +130,22 @@ log.init("my_script")
 err = cmp.max_abs_error(gold, result)
 log.info("max_abs_error = {:.3e}", err)
 ```
+
+## Analyzing HLS reports (hlsflow)
+
+After running `make csynth TARGET=u250`, collect a rich-formatted snapshot:
+
+```bash
+make analyze-flow TARGET=u250                # collect all kernels in this build
+PYTHONPATH=tools python -m hlsflow check --max-ii 1  # threshold gate
+```
+
+Each `collect` appends to `reports/runs.jsonl` and saves matching
+`<run_id>.html` and `<run_id>.txt` files. To compare two snapshots:
+
+```bash
+make compare-hls BASELINE=saxpy_u250_20260515_093000 \
+                 CANDIDATE=saxpy_u250_20260516_103000
+```
+
+See `tools/hlsflow/README.md` for the full CLI reference and run record schema.
