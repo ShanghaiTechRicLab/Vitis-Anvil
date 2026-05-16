@@ -33,6 +33,9 @@ COMPARE_AFTER_HW ?= yes
 endif
 
 # --- Derived variables / 派生变量 ---
+# CMake command-line overrides derived from config/<TARGET>/anvil.mk.
+# This lets users override ANVIL_PLATFORM=/path/to/platform.xpfm from make.
+CMAKE_PLATFORM_ARGS := -DANVIL_VITIS_PLATFORM=$(ANVIL_PLATFORM) -DANVIL_VITIS_PART=$(ANVIL_VITIS_PART)
 # Build directory for the selected preset / 当前 preset 的构建目录
 BUILD_DIR   := build/$(ANVIL_PRESET)
 # CMake targets for HLS synthesis / HLS 综合的 CMake target
@@ -93,13 +96,13 @@ all: build
 configure: configure-kernel configure-host
 
 configure-kernel:
-	cmake --preset $(ANVIL_PRESET)
+	cmake --preset $(ANVIL_PRESET) $(CMAKE_PLATFORM_ARGS)
 
 configure-host:
 	@if [ -n "$(ANVIL_SYSROOT)" ]; then \
-		env SYSROOT="$(ANVIL_SYSROOT)" cmake --preset $(ANVIL_HOST_PRESET); \
+		env SYSROOT="$(ANVIL_SYSROOT)" cmake --preset $(ANVIL_HOST_PRESET) $(CMAKE_PLATFORM_ARGS); \
 	else \
-		cmake --preset $(ANVIL_HOST_PRESET); \
+		cmake --preset $(ANVIL_HOST_PRESET) $(CMAKE_PLATFORM_ARGS); \
 	fi
 
 # --------------------------------------------------------------------------
@@ -176,7 +179,7 @@ xclbin: configure-kernel
 
 # xclbin-hwemu — Build xclbin for hardware emulation / 构建硬件仿真用的 xclbin
 xclbin-hwemu:
-	cmake --preset $(ANVIL_HWEMU_PRESET)
+	cmake --preset $(ANVIL_HWEMU_PRESET) $(CMAKE_PLATFORM_ARGS)
 	cmake --build --preset $(ANVIL_HWEMU_PRESET) --target $(XCLBIN_NAME)_xclbin
 
 # --------------------------------------------------------------------------
@@ -245,12 +248,12 @@ emconfig:
 ifeq ($(ANVIL_DEVICE_KIND),embedded)
 xrt-emu: gen
 	echo "[xrt-emu] TARGET=$(TARGET): building kernel ($(ANVIL_PRESET)) + AArch64 host ($(ANVIL_HOST_PRESET))..."
-	cmake --preset $(ANVIL_PRESET)
+	cmake --preset $(ANVIL_PRESET) $(CMAKE_PLATFORM_ARGS)
 	cmake --build --preset $(ANVIL_PRESET) --target $(XCLBIN_NAME)_xclbin
 	@if [ -n "$(ANVIL_SYSROOT)" ]; then \
-		env SYSROOT="$(ANVIL_SYSROOT)" cmake --preset $(ANVIL_HOST_PRESET); \
+		env SYSROOT="$(ANVIL_SYSROOT)" cmake --preset $(ANVIL_HOST_PRESET) $(CMAKE_PLATFORM_ARGS); \
 	else \
-		cmake --preset $(ANVIL_HOST_PRESET); \
+		cmake --preset $(ANVIL_HOST_PRESET) $(CMAKE_PLATFORM_ARGS); \
 	fi
 	cmake --build --preset $(ANVIL_HOST_PRESET) --target $(HOST_APP)
 	env ANVIL_PLATFORM=$(ANVIL_PLATFORM) BUILD_DIR=$(HWEMU_BUILD_DIR) bash scripts/emconfig.sh
@@ -262,7 +265,7 @@ xrt-emu: gen
 else
 xrt-emu: gen
 	@if [ "$(ANVIL_DEVICE_KIND)" != "accelerator" ]; then echo "make xrt-emu currently requires an accelerator target with a combined host+kernel hw_emu preset; got TARGET=$(TARGET) ($(ANVIL_DEVICE_KIND))" >&2; exit 1; fi
-	cmake --preset $(ANVIL_HWEMU_PRESET)
+	cmake --preset $(ANVIL_HWEMU_PRESET) $(CMAKE_PLATFORM_ARGS)
 	cmake --build --preset $(ANVIL_HWEMU_PRESET) --target $(HOST_APP) $(XCLBIN_NAME)_xclbin
 	env ANVIL_PLATFORM=$(ANVIL_PLATFORM) BUILD_DIR=$(HWEMU_BUILD_DIR) bash scripts/emconfig.sh
 	@if [ ! -x $(HWEMU_HOST_BIN) ]; then echo "$(HWEMU_HOST_BIN) not built; use a hw_emu preset with ANVIL_BUILD_XRT=ON" >&2; exit 1; fi

@@ -47,7 +47,9 @@ if(ANVIL_BUILD_KERNELS)
   endif()
   if(NOT ANVIL_VITIS_PLATFORM OR NOT EXISTS "${ANVIL_VITIS_PLATFORM}")
     message(FATAL_ERROR
-      "ANVIL_VITIS_PLATFORM not set or .xpfm missing: '${ANVIL_VITIS_PLATFORM}'")
+      "ANVIL_VITIS_PLATFORM not set or .xpfm missing: '${ANVIL_VITIS_PLATFORM}'\n"
+      "Find installed platforms with: find /opt /tools/Xilinx -name '*.xpfm' 2>/dev/null\n"
+      "Then override from make with: make <target> TARGET=<board> ANVIL_PLATFORM=/path/to/platform.xpfm")
   endif()
   message(STATUS "Vitis target: ${ANVIL_VITIS_TARGET}")
   message(STATUS "Vitis platform: ${ANVIL_VITIS_PLATFORM}")
