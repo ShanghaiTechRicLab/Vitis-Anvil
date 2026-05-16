@@ -6,3 +6,8 @@ target_link_libraries(anvil_hls_model PUBLIC
   hlslib::hlslib    # propagates Threads::Threads
 )
 add_library(anvil::hls_model ALIAS anvil_hls_model)
+
+
+target_include_directories(anvil_hls_model PUBLIC
+  ${PROJECT_SOURCE_DIR}/src/hls_model/include
+  ${PROJECT_SOURCE_DIR}/src/kernels/include)

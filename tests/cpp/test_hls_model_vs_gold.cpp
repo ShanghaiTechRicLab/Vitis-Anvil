@@ -1,6 +1,6 @@
 #include <catch_amalgamated.hpp>
 #include "anvil/gold/saxpy_gold.hpp"
-#include "anvil/hls/saxpy_hls_model.hpp"
+#include "hls_model/saxpy_hls_model.hpp"
 #include "anvil/config.hpp"
 
 #include <cstdint>
@@ -9,7 +9,7 @@
 
 using anvil::gold::SaxpyConfig;
 using anvil::gold::saxpy_gold;
-using anvil::hls::saxpy_hls_model;
+using hls_model::saxpy_hls_model;
 
 namespace {
 

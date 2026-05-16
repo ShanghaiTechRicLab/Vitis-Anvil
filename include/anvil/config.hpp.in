@@ -4,12 +4,15 @@
 //
 // Only platform-INDEPENDENT compile-time constants belong here.
 // DO NOT add sysroot, xpfm, or build-machine paths.
+// Keep this header C++14-clean because Vitis HLS kernel headers include it.
 
-namespace anvil::config {
+namespace anvil {
+namespace config {
 
-inline constexpr int  kParallelism    = @ANVIL_PARALLELISM@;
-inline constexpr int  kClockMHz       = @ANVIL_CLOCK_MHZ@;
-inline constexpr int  kMaxElements    = @ANVIL_MAX_ELEMENTS@;
-inline constexpr const char* kPlatformKind = "@ANVIL_PLATFORM_KIND@";
+static const int kParallelism = @ANVIL_PARALLELISM@;
+static const int kClockMHz = @ANVIL_CLOCK_MHZ@;
+static const int kMaxElements = @ANVIL_MAX_ELEMENTS@;
+static const char kPlatformKind[] = "@ANVIL_PLATFORM_KIND@";
 
-}  // namespace anvil::config
+}  // namespace config
+}  // namespace anvil

@@ -1,41 +1,27 @@
 #include "kernels/saxpy_kernel.hpp"
 
-#include <hlslib/xilinx/Simulation.h>
-#include <hlslib/xilinx/Stream.h>
+#include "anvil/hls/dataflow.hpp"
+#include "anvil/hls/packed_ops.hpp"
+#include "anvil/hls/stream.hpp"
 
 namespace {
 
-constexpr int kStreamDepth = 32;
+typedef anvil::hls::Stream<SaxpyPack, anvil::hls::kDefaultDataflowStreamDepth> SaxpyStream;
 
-void Load(const SaxpyPack* in, hlslib::Stream<SaxpyPack, kStreamDepth>& s, int n_pack) {
-  for (int i = 0; i < n_pack; ++i) {
-#pragma HLS pipeline II=1
-    s.Push(in[i]);
-  }
+struct SaxpyOp {
+  float operator()(float a, float x, float y) const { return a * x + y; }
+};
+
+void Load(const SaxpyPack* in, SaxpyStream& out, int n_pack) {
+  anvil::hls::LoadPacks(in, out, n_pack);
 }
 
-void Compute(hlslib::Stream<SaxpyPack, kStreamDepth>& xs,
-             hlslib::Stream<SaxpyPack, kStreamDepth>& ys,
-             hlslib::Stream<SaxpyPack, kStreamDepth>& os,
-             float a, int n_pack) {
-  for (int i = 0; i < n_pack; ++i) {
-#pragma HLS pipeline II=1
-    SaxpyPack xv = xs.Pop();
-    SaxpyPack yv = ys.Pop();
-    SaxpyPack r;
-    for (int j = 0; j < 16; ++j) {
-#pragma HLS unroll
-      r[j] = a * xv[j] + yv[j];
-    }
-    os.Push(r);
-  }
+void Compute(SaxpyStream& x, SaxpyStream& y, SaxpyStream& out, float a, int n_pack) {
+  anvil::hls::MapPacksWithScalar<SaxpyPack>(x, y, out, a, n_pack, SaxpyOp());
 }
 
-void Store(hlslib::Stream<SaxpyPack, kStreamDepth>& s, SaxpyPack* out, int n_pack) {
-  for (int i = 0; i < n_pack; ++i) {
-#pragma HLS pipeline II=1
-    out[i] = s.Pop();
-  }
+void Store(SaxpyStream& in, SaxpyPack* out, int n_pack) {
+  anvil::hls::StorePacks(in, out, n_pack);
 }
 
 }  // namespace
@@ -58,14 +44,14 @@ extern "C" void saxpy(
 
   if (n_total <= 0) return;
 
-  const int n_pack = (n_total - 1) / 16 + 1;
+  const int n_pack = (n_total - 1) / kernels::kSaxpyPackWidth + 1;
 
-  hlslib::Stream<SaxpyPack, kStreamDepth> sx("sx"), sy("sy"), so("so");
+  SaxpyStream sx("sx"), sy("sy"), so("so");
 
-  HLSLIB_DATAFLOW_INIT();
-  HLSLIB_DATAFLOW_FUNCTION(Load,    x,  sx, n_pack);
-  HLSLIB_DATAFLOW_FUNCTION(Load,    y,  sy, n_pack);
-  HLSLIB_DATAFLOW_FUNCTION(Compute, sx, sy, so, a, n_pack);
-  HLSLIB_DATAFLOW_FUNCTION(Store,   so, out, n_pack);
-  HLSLIB_DATAFLOW_FINALIZE();
+  ANVIL_DATAFLOW_INIT();
+  ANVIL_DATAFLOW_FUNCTION(Load, x, sx, n_pack);
+  ANVIL_DATAFLOW_FUNCTION(Load, y, sy, n_pack);
+  ANVIL_DATAFLOW_FUNCTION(Compute, sx, sy, so, a, n_pack);
+  ANVIL_DATAFLOW_FUNCTION(Store, so, out, n_pack);
+  ANVIL_DATAFLOW_FINALIZE();
 }
