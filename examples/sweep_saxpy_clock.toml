@@ -1,0 +1,7 @@
+[sweep]
+target = "u250"
+preset = "u250-host"   # cmake preset; -B overrides its binaryDir per sweep point
+kernel = "saxpy"
+
+[sweep.points]
+clock = [200, 250, 300]
