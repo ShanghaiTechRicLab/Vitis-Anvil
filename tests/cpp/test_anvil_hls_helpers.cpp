@@ -5,7 +5,10 @@
 #include "anvil/hls/pack.hpp"
 #include "anvil/hls/packed_ops.hpp"
 #include "anvil/hls/stream.hpp"
+#include "kernels/saxpy_core.hpp"
 #include "kernels/kernel_types.hpp"
+
+#include <vector>
 
 TEST_CASE("anvil hls pack exposes width and lane helpers", "[hls]") {
   anvil::hls::Pack<float, 4> pack;
@@ -105,4 +108,46 @@ TEST_CASE("packed ops map memory to memory", "[hls]") {
   anvil::hls::MapMem2Packs(a, b, out, 1, UnitVaddOp());
   REQUIRE(anvil::hls::GetLane(out[0], 0) == 1.0f);
   REQUIRE(anvil::hls::GetLane(out[0], 3) == 4.0f);
+}
+
+TEST_CASE("saxpy shared core load compute store handles pack counts", "[hls][saxpy]") {
+  const float scalar = 2.0f;
+  for (int n_pack : {0, 1, 3}) {
+    DYNAMIC_SECTION("n_pack=" << n_pack) {
+      if (n_pack == 0) {
+        SUCCEED("zero-pack saxpy core path is bypassed by the scalar adapter/top guard");
+        continue;
+      }
+
+      std::vector<kernels::SaxpyPack> x(static_cast<std::size_t>(n_pack));
+      std::vector<kernels::SaxpyPack> y(static_cast<std::size_t>(n_pack));
+      std::vector<kernels::SaxpyPack> out(static_cast<std::size_t>(n_pack));
+
+      for (int pack = 0; pack < n_pack; ++pack) {
+        for (int lane = 0; lane < kernels::kSaxpyPackWidth; ++lane) {
+          const float x_value = static_cast<float>(pack * kernels::kSaxpyPackWidth + lane);
+          const float y_value = static_cast<float>(100 + pack + lane);
+          anvil::hls::SetLane(x[static_cast<std::size_t>(pack)], lane, x_value);
+          anvil::hls::SetLane(y[static_cast<std::size_t>(pack)], lane, y_value);
+        }
+      }
+
+      kernels::saxpy_core::SaxpyStream sx("saxpy_sx"), sy("saxpy_sy"), so("saxpy_so");
+      ANVIL_DATAFLOW_INIT();
+      ANVIL_DATAFLOW_FUNCTION(kernels::saxpy_core::Load, x.data(), sx, n_pack);
+      ANVIL_DATAFLOW_FUNCTION(kernels::saxpy_core::Load, y.data(), sy, n_pack);
+      ANVIL_DATAFLOW_FUNCTION(kernels::saxpy_core::Compute, sx, sy, so, scalar, n_pack);
+      ANVIL_DATAFLOW_FUNCTION(kernels::saxpy_core::Store, so, out.data(), n_pack);
+      ANVIL_DATAFLOW_FINALIZE();
+
+      for (int pack = 0; pack < n_pack; ++pack) {
+        for (int lane = 0; lane < kernels::kSaxpyPackWidth; ++lane) {
+          const float x_value = anvil::hls::GetLane(x[static_cast<std::size_t>(pack)], lane);
+          const float y_value = anvil::hls::GetLane(y[static_cast<std::size_t>(pack)], lane);
+          const float got = anvil::hls::GetLane(out[static_cast<std::size_t>(pack)], lane);
+          REQUIRE(got == scalar * x_value + y_value);
+        }
+      }
+    }
+  }
 }
