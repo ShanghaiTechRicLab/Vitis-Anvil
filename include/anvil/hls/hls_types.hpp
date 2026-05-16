@@ -1,14 +1,9 @@
 #pragma once
-#include "anvil/config.hpp"
+// Compatibility placeholder for framework-level HLS type aliases.
+// New code should include the specific helper header it needs, such as
+// pack.hpp, stream.hpp, dataflow.hpp, packed_ops.hpp, or axis.hpp.
 
-// Phase 1 decision: HLS model uses scalar streams only (lane width = 1).
-// Phase 2 will activate the vectorized lane:
-//
-//   #include <hlslib/xilinx/DataPack.h>
-//   namespace anvil::hls {
-//   using ElemPack = hlslib::DataPack<float, anvil::config::kParallelism>;
-//   }
-//
-// See docs/build.md for current Phase 0+1 build/test usage.
-
-namespace anvil::hls {}
+namespace anvil {
+namespace hls {
+}  // namespace hls
+}  // namespace anvil
