@@ -24,6 +24,13 @@ XCLBIN_NAME := pipeline_demo
 else
 XCLBIN_NAME := saxpy
 endif
+ifeq ($(HOST_APP),run_vadd)
+COMPARE_AFTER_HW ?= no
+else ifeq ($(HOST_APP),run_pipeline_demo)
+COMPARE_AFTER_HW ?= no
+else
+COMPARE_AFTER_HW ?= yes
+endif
 
 # --- Derived variables / 派生变量 ---
 # Build directory for the selected preset / 当前 preset 的构建目录
@@ -212,7 +219,10 @@ gold: gen
 # ============================================================================
 
 # run-host — Execute host binary on real hardware / 在真实硬件上执行主机程序
-run-host: build-host gen
+run-host:
+	@if [ "$(HOST_APP)" = "run_pipeline_demo" ] && [ "$(TARGET)" != "u250" ]; then echo "HOST_APP=run_pipeline_demo currently requires TARGET=u250" >&2; exit 1; fi
+	$(MAKE) build-host TARGET=$(TARGET) HOST_APP=$(HOST_APP)
+	$(MAKE) gen DATASET=$(DATASET)
 	@if [ ! -x $(HOST_BIN) ]; then echo "$(HOST_BIN) not built; use a preset with ANVIL_BUILD_XRT=ON" >&2; exit 1; fi
 	@if [ ! -f $(XCLBIN_PATH) ]; then echo "$(XCLBIN_PATH) not found; run make xclbin first" >&2; exit 1; fi
 	$(HOST_BIN) --xclbin $(XCLBIN_PATH) --data-dir data/$(DATASET) --output data/$(DATASET)/xrt_hw_out.bin
@@ -324,8 +334,8 @@ test-xrt-emu:
 # Requires / 需要: BOARD_IP and (for embedded targets) PETALINUX_SYSROOT + Vitis env
 test-xrt-hw:
 	@if [ -z "$(BOARD_IP)" ]; then echo "ERROR: BOARD_IP not set. Usage: make test-xrt-hw BOARD_IP=<ip> [TARGET=zcu102|kv260] [DATASET=tiny]" >&2; exit 1; fi
-	$(MAKE) build-host TARGET=$(TARGET)
-	$(MAKE) xclbin TARGET=$(TARGET)
+	$(MAKE) build-host TARGET=$(TARGET) HOST_APP=$(HOST_APP)
+	$(MAKE) xclbin TARGET=$(TARGET) HOST_APP=$(HOST_APP)
 	$(MAKE) gen DATASET=$(DATASET)
 	$(MAKE) build-python
 	$(PYTHON) scripts/board_run.py \
@@ -334,8 +344,10 @@ test-xrt-hw:
 		--deploy-dir "$(BOARD_DEPLOY_DIR)" \
 		--xclbin "$(XCLBIN_PATH)" \
 		--host-bin "$(HOST_BIN)" \
+		--host-app "$(HOST_APP)" \
+		--xclbin-name "$(XCLBIN_NAME)" \
 		--dataset "$(DATASET)"
-	$(MAKE) compare DATASET=$(DATASET)
+	@if [ "$(COMPARE_AFTER_HW)" = "yes" ]; then $(MAKE) compare DATASET=$(DATASET); else echo "Skipping make compare for HOST_APP=$(HOST_APP)"; fi
 
 # test-slow — Run all slow hardware tests + slow Python tests / 运行所有慢速硬件测试和 Python 测试
 test-slow: configure

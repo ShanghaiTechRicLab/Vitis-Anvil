@@ -62,6 +62,10 @@ def _scp_remote(target: str, path: str) -> str:
 @click.option("--xclbin", required=True, type=click.Path(), help="Local .xclbin path")
 @click.option("--host-bin", required=True, type=click.Path(),
               help="Local AArch64 host binary path")
+@click.option("--host-app", default="run_saxpy", show_default=True,
+              help="Remote host executable name")
+@click.option("--xclbin-name", default="saxpy", show_default=True,
+              help="Remote xclbin basename without .xclbin")
 @click.option("--dataset", default="tiny", show_default=True, callback=_validate_dataset_name,
               help="Dataset name under data/ (safe name: letters, digits, underscore, dot, dash)")
 @click.option("--xrt-setup", default=". /etc/profile.d/xrt_setup.sh",
@@ -74,6 +78,8 @@ def main(
     deploy_dir: str,
     xclbin: str,
     host_bin: str,
+    host_app: str,
+    xclbin_name: str,
     dataset: str,
     xrt_setup: str,
     dry_run: bool,
@@ -89,15 +95,17 @@ def main(
         log.info("[DRY RUN] commands will be printed but not executed")
 
     _run(["ssh", target, f"mkdir -p {_quote_remote_path(remote_data_dir)}"], dry_run)
-    _run(["scp", host_bin, _scp_remote(target, _remote_path(deploy_dir, "run_saxpy"))], dry_run)
-    _run(["scp", xclbin, _scp_remote(target, _remote_path(deploy_dir, "saxpy.xclbin"))], dry_run)
+    remote_host = host_app
+    remote_xclbin = f"{xclbin_name}.xclbin"
+    _run(["scp", host_bin, _scp_remote(target, _remote_path(deploy_dir, remote_host))], dry_run)
+    _run(["scp", xclbin, _scp_remote(target, _remote_path(deploy_dir, remote_xclbin))], dry_run)
     _run(["scp", "-r", f"{data_dir}/.", _scp_remote(target, remote_data_dir + "/")], dry_run)
 
     remote_cmd = (
         f"{xrt_setup} && "
         f"cd {_quote_remote_path(deploy_dir)} && "
-        f"chmod +x run_saxpy && "
-        f"./run_saxpy --xclbin saxpy.xclbin "
+        f"chmod +x {shlex.quote(remote_host)} && "
+        f"./{shlex.quote(remote_host)} --xclbin {shlex.quote(remote_xclbin)} "
         f"--data-dir {shlex.quote('data/' + dataset)} "
         f"--output {shlex.quote('data/' + dataset + '/xrt_hw_out.bin')}"
     )

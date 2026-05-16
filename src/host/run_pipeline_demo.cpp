@@ -103,8 +103,10 @@ int main(int argc, char* argv[]) {
     auto vadd = ctx.GetKernel("vadd_stream:{vadd_stream_1}");
     XrtBuffer<float> x_buf(ctx, saxpy, 0, padded_n);
     XrtBuffer<float> y_buf(ctx, saxpy, 1, padded_n);
-    XrtBuffer<float> b_buf(ctx, vadd, 1, padded_n);
-    XrtBuffer<float> out_buf(ctx, vadd, 2, padded_n);
+    // Host-visible memory args for vadd_stream(hls::stream&, b, out, n_packs) are
+    // b=arg0 and out=arg1. The AXI stream argument has no host BO group.
+    XrtBuffer<float> b_buf(ctx, vadd, 0, padded_n);
+    XrtBuffer<float> out_buf(ctx, vadd, 1, padded_n);
     std::fill(x_buf.host(), x_buf.host() + padded_n, 0.0F);
     std::fill(y_buf.host(), y_buf.host() + padded_n, 0.0F);
     std::fill(b_buf.host(), b_buf.host() + padded_n, b_value);
