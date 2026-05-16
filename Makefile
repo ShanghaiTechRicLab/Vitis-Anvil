@@ -80,7 +80,7 @@ BOARD_SSH_USER    ?= root
 BOARD_DEPLOY_DIR  ?= ~/anvil-deploy
 
 # --- Phony targets declaration / 伪目标声明 ---
-.PHONY: all configure build build-cpp build-python python-env python-install rebuild-python require-python-env clean clean-all help \
+.PHONY: all configure build build-cpp build-python python-env python-install rebuild-python require-python-env clean clean-all help help-en help-zh \
         configure-kernel configure-host build-host build-kernel build-all \
         csynth cosim xclbin xclbin-hwemu \
         require-u250-stream csynth-stream cosim-stream pipeline-demo \
@@ -281,8 +281,8 @@ xrt-emu: gen
 endif
 
 # xrt-hw — Run on real hardware (alias for run-host) / 在真实硬件上运行（run-host 的别名）
-xrt-hw: build-host
-	$(MAKE) run-host
+xrt-hw:
+	$(MAKE) run-host TARGET=$(TARGET) HOST_APP=$(HOST_APP) DATASET=$(DATASET)
 
 # ============================================================================
 # Analysis and comparison / 分析与对比
@@ -397,15 +397,15 @@ deploy-check:
 
 # deploy-bin — Deploy the host binary / 部署主机端二进制文件
 deploy-bin: deploy-check
-	@if [ ! -f "$(HOST_BIN)" ]; then echo "ERROR: $(HOST_BIN) not found. Run: make build TARGET=$(TARGET) first." >&2; exit 1; fi
+	@if [ ! -f "$(HOST_BIN)" ]; then echo "ERROR: $(HOST_BIN) not found. Run: make build TARGET=$(TARGET) HOST_APP=$(HOST_APP) first." >&2; exit 1; fi
 	ssh $(BOARD_SSH_USER)@$(BOARD_IP) "mkdir -p $(BOARD_DEPLOY_DIR)"
 	scp "$(HOST_BIN)" "$(BOARD_SSH_USER)@$(BOARD_IP):$(BOARD_DEPLOY_DIR)/$(HOST_APP)"
 
 # deploy-xclbin — Deploy the .xclbin bitstream / 部署 .xclbin 比特流
 deploy-xclbin: deploy-check
-	@if [ ! -f "$(XCLBIN_PATH)" ]; then echo "ERROR: $(XCLBIN_PATH) not found. Run: make xclbin TARGET=$(TARGET) first." >&2; exit 1; fi
+	@if [ ! -f "$(XCLBIN_PATH)" ]; then echo "ERROR: $(XCLBIN_PATH) not found. Run: make xclbin TARGET=$(TARGET) HOST_APP=$(HOST_APP) first." >&2; exit 1; fi
 	ssh $(BOARD_SSH_USER)@$(BOARD_IP) "mkdir -p $(BOARD_DEPLOY_DIR)"
-	scp "$(XCLBIN_PATH)" "$(BOARD_SSH_USER)@$(BOARD_IP):$(BOARD_DEPLOY_DIR)/saxpy.xclbin"
+	scp "$(XCLBIN_PATH)" "$(BOARD_SSH_USER)@$(BOARD_IP):$(BOARD_DEPLOY_DIR)/$(XCLBIN_NAME).xclbin"
 
 # deploy-data — Deploy the dataset / 部署数据集
 deploy-data: deploy-check
@@ -421,33 +421,126 @@ deploy: deploy-bin deploy-xclbin deploy-data
 # Help / 帮助
 # ============================================================================
 
-help:
-	@echo "Targets:"
-	@echo "  make build [TARGET=...] [HOST_APP=run_saxpy|run_vadd|run_pipeline_demo] — build host binary only"
-	@echo "  make build-kernel [TARGET=...]      — HLS synth kernel target(s)"
-	@echo "  make python-env [PYPI_INDEX=...]    — create/update .venv via uv, fallback venv; default USTC mirror"
-	@echo "  make rebuild-python [PYPI_INDEX=]   — recreate .venv; empty PYPI_INDEX disables mirror"
-	@echo "  make build-all [TARGET=...]         — build kernel + host + Python"
-	@echo "  make test                         — CPU-only fast tests (no Vitis/XRT)"
-	@echo "  make csynth [KERNEL=saxpy|vadd|all] — v++ HLS synthesis"
-	@echo "  make cosim [KERNEL=saxpy|vadd|pipeline_demo|all] — HLS kernel co-simulation"
-	@echo "  make xclbin                       — link .xclbin"
-	@echo "  make csynth-stream/cosim-stream   — opt-in U250 k2k stream kernel checks"
-	@echo "  make pipeline-demo                — link U250 saxpy_stream→vadd_stream xclbin"
-	@echo "  make gen                          — generate dataset"
-	@echo "  make gold [ANVIL_LANG=cpp|python]       — run gold reference"
-	@echo "  make xrt-emu                      — run accelerator hw_emu or build embedded + print QEMU note"
-	@echo "  make xrt-hw HOST_APP=run_vadd     — run selected host app on real hardware"
-	@echo "  make compare                      — compare outputs vs gold"
-	@echo "  make analyze [KERNEL=all]         — hlsflow collect csynth (rich + HTML + JSONL)"
-	@echo "  make analyze-cosim [KERNEL=all]   — hlsflow collect cosim"
-	@echo "  make analyze-legacy               — old simple analyzer"
-	@echo "  make check-hls                    — hlsflow threshold check on latest run"
-	@echo "  make compare-hls BASELINE=<id> CANDIDATE=<id> — diff two runs"
-	@echo "  make emconfig                     — generate emconfig.json for hw_emu"
-	@echo "  make test-csynth/cosim/xrt-emu    — label-specific hardware tests"
-	@echo "  make clean [TARGET=...]           — remove preset build dir"
-	@echo "  make clean-all                    — remove all build dirs + eggs"
-	@echo "  make deploy [TARGET=zcu102] BOARD_IP=<ip>     — scp bin+xclbin+data to board"
-	@echo "  make deploy-bin/xclbin/data BOARD_IP=<ip>     — deploy individual artifact"
-	@echo "  make test-xrt-hw BOARD_IP=<ip> [DATASET=tiny] — build+xclbin+gen+deploy+run+compare on board"
+help: help-en
+
+help-en:
+	@echo "Vitis-Anvil — A CMake project template for forging Vitis/XRT FPGA accelerators."
+	@echo ""
+	@echo "Usage:"
+	@echo "  make <target> [TARGET=u250] [KERNEL=saxpy|vadd|all] [HOST_APP=run_saxpy] [DATASET=tiny]"
+	@echo ""
+	@echo "Core variables:"
+	@echo "  TARGET              Board/platform: u250,u50,u55c,u200,u280,vck5000,zcu102,zcu104,zcu106,kv260"
+	@echo "  KERNEL              HLS kernel selection for csynth/cosim/analyze"
+	@echo "  HOST_APP            XRT host program: run_saxpy, run_vadd, run_pipeline_demo"
+	@echo "  DATASET             Dataset directory under data/"
+	@echo "  ANVIL_PLATFORM      Override platform .xpfm path"
+	@echo "  PETALINUX_SYSROOT   Embedded AArch64 sysroot"
+	@echo ""
+	@echo "Fast local development:"
+	@echo "  make test                                      CPU-only tests; no Vitis/XRT/platform"
+	@echo "  make build TARGET=u250 HOST_APP=run_saxpy     Build selected host binary only"
+	@echo "  make python-env [PYPI_INDEX=]                  Create/update .venv; uv first, venv fallback"
+	@echo "  make rebuild-python [PYPI_INDEX=]              Recreate .venv"
+	@echo ""
+	@echo "HLS kernel flow:"
+	@echo "  make csynth TARGET=u250 KERNEL=saxpy           Run Vitis HLS synthesis"
+	@echo "  make cosim TARGET=u250 KERNEL=saxpy            Run HLS C/RTL cosimulation"
+	@echo "  make analyze-flow TARGET=u250 KERNEL=saxpy     Analyze csynth reports"
+	@echo "  make analyze-cosim TARGET=u250 KERNEL=saxpy    Analyze cosim reports"
+	@echo "  make check-hls                                 Check latest HLS run thresholds"
+	@echo "  make compare-hls BASELINE=<id> CANDIDATE=<id>  Compare two HLS runs"
+	@echo ""
+	@echo "XRT / hardware flow:"
+	@echo "  make gen DATASET=tiny                          Generate input dataset"
+	@echo "  make gold DATASET=tiny ANVIL_LANG=cpp          Generate gold output"
+	@echo "  make xclbin TARGET=u250                        Link hardware xclbin; long-running"
+	@echo "  make xclbin-hwemu TARGET=u250                  Link hw_emu xclbin"
+	@echo "  make xrt-emu TARGET=u250 HOST_APP=run_saxpy    Run accelerator hw_emu or print embedded QEMU note"
+	@echo "  make run-host TARGET=u250 HOST_APP=run_saxpy   Run selected host app on real hardware"
+	@echo "  make xrt-hw TARGET=u250 HOST_APP=run_saxpy     Alias for run-host"
+	@echo "  make compare DATASET=tiny                      Compare output with gold"
+	@echo ""
+	@echo "Embedded deployment flow:"
+	@echo "  PETALINUX_SYSROOT=/path make build-host TARGET=zcu102 HOST_APP=run_saxpy"
+	@echo "  make xclbin TARGET=zcu102"
+	@echo "  make deploy TARGET=zcu102 BOARD_IP=<ip> DATASET=tiny"
+	@echo "  make test-xrt-hw TARGET=zcu102 BOARD_IP=<ip> DATASET=tiny"
+	@echo "  make deploy-bin|deploy-xclbin|deploy-data TARGET=zcu102 BOARD_IP=<ip>"
+	@echo ""
+	@echo "U250 stream demo:"
+	@echo "  make csynth-stream TARGET=u250"
+	@echo "  make cosim-stream TARGET=u250"
+	@echo "  make pipeline-demo TARGET=u250"
+	@echo "  make run-host TARGET=u250 HOST_APP=run_pipeline_demo"
+	@echo ""
+	@echo "Maintenance / compatibility aliases:"
+	@echo "  make configure|configure-kernel|configure-host  Configure CMake presets"
+	@echo "  make build-kernel|build-all|build-cpp           Build aliases"
+	@echo "  make analyze|analyze-legacy|analyze-flow        Analysis entrypoints"
+	@echo "  make test-csynth|test-cosim|test-xrt-emu        Label-specific tests"
+	@echo "  make clean|clean-all                            Remove build artifacts"
+	@echo "  make help-zh                                    Chinese help"
+	@echo ""
+	@echo "Docs: README.en.md, README.zh.md, docs/en/get_started.md, docs/zh/get_started.md"
+
+help-zh:
+	@echo "Vitis-Anvil — 用于锻造 Vitis/XRT FPGA accelerators 的 CMake 工程模板。"
+	@echo ""
+	@echo "用法:"
+	@echo "  make <target> [TARGET=u250] [KERNEL=saxpy|vadd|all] [HOST_APP=run_saxpy] [DATASET=tiny]"
+	@echo ""
+	@echo "核心变量:"
+	@echo "  TARGET              板卡/platform: u250,u50,u55c,u200,u280,vck5000,zcu102,zcu104,zcu106,kv260"
+	@echo "  KERNEL              HLS kernel 选择，用于 csynth/cosim/analyze"
+	@echo "  HOST_APP            XRT host 程序: run_saxpy, run_vadd, run_pipeline_demo"
+	@echo "  DATASET             data/ 下的数据集目录名"
+	@echo "  ANVIL_PLATFORM      覆盖 platform .xpfm 路径"
+	@echo "  PETALINUX_SYSROOT   Embedded AArch64 sysroot"
+	@echo ""
+	@echo "快速本地开发:"
+	@echo "  make test                                      CPU-only 测试；不需要 Vitis/XRT/platform"
+	@echo "  make build TARGET=u250 HOST_APP=run_saxpy     只构建选定 host binary"
+	@echo "  make python-env [PYPI_INDEX=]                  创建/更新 .venv；优先 uv，fallback venv"
+	@echo "  make rebuild-python [PYPI_INDEX=]              重建 .venv"
+	@echo ""
+	@echo "HLS kernel 流程:"
+	@echo "  make csynth TARGET=u250 KERNEL=saxpy           运行 Vitis HLS synthesis"
+	@echo "  make cosim TARGET=u250 KERNEL=saxpy            运行 HLS C/RTL cosimulation"
+	@echo "  make analyze-flow TARGET=u250 KERNEL=saxpy     分析 csynth 报告"
+	@echo "  make analyze-cosim TARGET=u250 KERNEL=saxpy    分析 cosim 报告"
+	@echo "  make check-hls                                 检查最新 HLS run 阈值"
+	@echo "  make compare-hls BASELINE=<id> CANDIDATE=<id>  对比两次 HLS run"
+	@echo ""
+	@echo "XRT / 硬件流程:"
+	@echo "  make gen DATASET=tiny                          生成输入数据"
+	@echo "  make gold DATASET=tiny ANVIL_LANG=cpp          生成 gold output"
+	@echo "  make xclbin TARGET=u250                        链接硬件 xclbin；耗时较长"
+	@echo "  make xclbin-hwemu TARGET=u250                  链接 hw_emu xclbin"
+	@echo "  make xrt-emu TARGET=u250 HOST_APP=run_saxpy    跑加速卡 hw_emu；embedded 打印 QEMU 提示"
+	@echo "  make run-host TARGET=u250 HOST_APP=run_saxpy   在真实硬件上运行选定 host app"
+	@echo "  make xrt-hw TARGET=u250 HOST_APP=run_saxpy     run-host 别名"
+	@echo "  make compare DATASET=tiny                      和 gold 比较输出"
+	@echo ""
+	@echo "Embedded 部署流程:"
+	@echo "  PETALINUX_SYSROOT=/path make build-host TARGET=zcu102 HOST_APP=run_saxpy"
+	@echo "  make xclbin TARGET=zcu102"
+	@echo "  make deploy TARGET=zcu102 BOARD_IP=<ip> DATASET=tiny"
+	@echo "  make test-xrt-hw TARGET=zcu102 BOARD_IP=<ip> DATASET=tiny"
+	@echo "  make deploy-bin|deploy-xclbin|deploy-data TARGET=zcu102 BOARD_IP=<ip>"
+	@echo ""
+	@echo "U250 stream demo:"
+	@echo "  make csynth-stream TARGET=u250"
+	@echo "  make cosim-stream TARGET=u250"
+	@echo "  make pipeline-demo TARGET=u250"
+	@echo "  make run-host TARGET=u250 HOST_APP=run_pipeline_demo"
+	@echo ""
+	@echo "维护 / 兼容别名:"
+	@echo "  make configure|configure-kernel|configure-host  配置 CMake presets"
+	@echo "  make build-kernel|build-all|build-cpp           构建别名"
+	@echo "  make analyze|analyze-legacy|analyze-flow        分析入口"
+	@echo "  make test-csynth|test-cosim|test-xrt-emu        按标签/流程测试"
+	@echo "  make clean|clean-all                            清理构建产物"
+	@echo "  make help-en                                    英文帮助"
+	@echo ""
+	@echo "文档: README.en.md, README.zh.md, docs/en/get_started.md, docs/zh/get_started.md"
