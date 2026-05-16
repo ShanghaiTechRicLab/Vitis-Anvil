@@ -49,12 +49,21 @@ Recommended order:
 
 1. Keep `saxpy` working.
 2. Add your new kernel next to it.
-3. Add your host app next to existing host apps.
-4. Add your dataset/gold/compare flow.
-5. Add your board config.
-6. Only remove demos after your flow works.
+3. Add the gold reference and HLS model for the new kernel.
+4. Add your host app next to existing host apps.
+5. Add your dataset/gold/compare flow.
+6. Add your board config.
+7. Only remove demos after your flow works.
 
 This keeps a known-good reference while you are debugging your own code.
+
+For m_axi-style packed kernels, use the ladder:
+
+```text
+gold -> hls_model -> csynth -> cosim -> xclbin -> host
+```
+
+Keep the kernel core under `src/kernels/include/kernels/**` and share it between `src/hls_model/**` and the Vitis top in `src/kernels/*.cpp`. The HLS model catches packed layout and tail bugs early, but it does not replace synthesis, cosim, xclbin link, or host/XRT testing.
 
 ## 4. Define your project contract
 

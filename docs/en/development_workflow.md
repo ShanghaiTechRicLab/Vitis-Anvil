@@ -6,6 +6,10 @@ This page gives the day-to-day order for changing code. The main rule is: use th
 
 Use this order:
 
+```text
+gold -> hls_model -> csynth -> cosim -> xclbin -> host
+```
+
 1. **Gold and CPU unit tests** — catches normal C++/Python mistakes.
 2. **HLS model (`make test-hls-model`)** — runs the pre-Vitis CPU suite: gold + FPGA-shaped HLS model + HLS helper tests.
 3. **HLS synthesis (`csynth`)** — catches HLS-incompatible C++ and reports estimated hardware.
@@ -16,6 +20,8 @@ Use this order:
 8. **compare/analyze** — checks correctness and performance trends.
 
 Do not jump from editing a kernel directly to hardware run. You will wait longer and get less precise errors.
+
+The HLS model is the first FPGA-shaped check: it packs scalar data, uses the same project-owned kernel core helpers as the Vitis top, and catches pack/stream/dataflow/tail bugs before Vitis. It is still a CPU simulation, so it does not prove timing, resource use, link connectivity, XRT buffer groups, or board deployment.
 
 ## 2. When changing normal C++ or Python code
 
@@ -51,6 +57,19 @@ make analyze-flow TARGET=u250 KERNEL=<kernel>
 make cosim TARGET=u250 KERNEL=<kernel>
 make analyze-cosim TARGET=u250 KERNEL=<kernel>
 ```
+
+For `saxpy`, the files have these roles:
+
+```text
+src/gold/include/gold/saxpy_gold.hpp              # plain CPU truth
+src/kernels/include/kernels/saxpy_core.hpp        # shared kernel core and stage helpers
+src/kernels/saxpy_kernel.cpp                      # Vitis top: ABI, pragmas, explicit dataflow
+src/hls_model/include/hls_model/saxpy_hls_model.hpp
+src/hls_model/saxpy_hls_model.cpp                 # scalar adapter around the shared core
+src/host/run_saxpy.cpp                            # XRT host app
+```
+
+Keep that split for new m_axi-style packed kernels: gold first, then HLS model, then csynth/cosim/xclbin/host. Stream/k2k kernels are supported by the existing Vitis flow, but first-class stream HLS models are not yet the default pattern.
 
 Interpretation:
 

@@ -35,6 +35,7 @@ Anvil 是铁砧 — 把金属放上去锻造成型。Vitis-Anvil 对 FPGA 开发
 
 ```bash
 make test                                      # 仅 CPU 测试（不需要 Vitis/XRT/platform）
+make test-hls-model                            # 显式 Vitis 前测试：gold + HLS 模型 + helpers
 make build TARGET=u250 HOST_APP=run_saxpy     # 构建一个 host app
 make csynth TARGET=u250 KERNEL=saxpy          # HLS 综合
 make cosim TARGET=u250 KERNEL=saxpy           # HLS C/RTL 协同仿真
@@ -43,6 +44,8 @@ make analyze-cosim TARGET=u250 KERNEL=saxpy   # 查看协同仿真报告
 make xclbin TARGET=u250                       # 链接硬件 xclbin（耗时较长）
 make run-host TARGET=u250 HOST_APP=run_saxpy  # 在已安装的加速卡上运行
 ```
+
+推荐正确性阶梯：`gold -> hls_model -> csynth -> cosim -> xclbin -> host`。
 
 嵌入式板卡需要设置 `PETALINUX_SYSROOT`：
 

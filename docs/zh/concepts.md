@@ -13,24 +13,10 @@
 
 - **xclbin** — Vitis 生成的文件，里面包含 kernel 硬件和连接信息，运行时由 XRT 加载。
 
-正常开发流程是：
+正常开发流程采用 model-first 顺序：
 
 ```text
-写 CPU 真值模型
-  ↓
-写 HLS kernel C++
-  ↓
-跑 HLS 综合（csynth）
-  ↓
-跑 C/RTL 协同仿真（cosim）
-  ↓
-链接 .xclbin
-  ↓
-构建 host app
-  ↓
-在卡/板上运行
-  ↓
-和 CPU 真值对比
+gold -> hls_model -> csynth -> cosim -> xclbin -> host
 ```
 
 Vitis-Anvil 给每一步固定了目录和 Make 命令。
@@ -93,7 +79,48 @@ HLS model 放在：
 src/hls_model/**
 ```
 
-它用来在跑 Vitis 综合之前先抓算法和数据布局错误。
+它用来在跑 Vitis 综合之前先抓 pack、stream、dataflow 和尾部元素处理错误。HLS 模型不能证明 timing、资源、Vitis link、XRT 或真实板卡行为。
+
+### 内核核心（kernel core）
+
+内核核心是项目自己的 HLS 兼容代码，同时被 HLS 模型和 Vitis top 复用。`saxpy` 的共享内核核心在：
+
+```text
+src/kernels/include/kernels/saxpy_core.hpp
+```
+
+它放 packed operation 和 load/compute/store 阶段 helper；不放 host 代码、XRT 代码或板卡配置。
+
+### Vitis top
+
+Vitis top 是 `extern "C"` 包装函数，Vitis HLS 会把它变成硬件 kernel。它拥有 kernel ABI 和 interface pragmas。`saxpy` 的 top 在：
+
+```text
+src/kernels/saxpy_kernel.cpp
+```
+
+top 会调用共享内核核心，但把 `#pragma HLS INTERFACE` 和显式 dataflow 区域这类硬件边界细节留在 top-level kernel 文件中。
+
+### Saxpy 文件地图
+
+Demo `saxpy` 按职责拆成这些文件：
+
+```text
+src/gold/include/gold/saxpy_gold.hpp
+src/kernels/include/kernels/saxpy_core.hpp
+src/kernels/saxpy_kernel.cpp
+src/hls_model/include/hls_model/saxpy_hls_model.hpp
+src/hls_model/saxpy_hls_model.cpp
+src/host/run_saxpy.cpp
+```
+
+- `saxpy_gold.hpp` 声明普通 CPU 数学真值。
+- `saxpy_core.hpp` 放 HLS 兼容的 kernel core，由模型和 top 共享。
+- `saxpy_kernel.cpp` 是 Vitis top：ABI、HLS pragmas、显式 dataflow 调用。
+- `saxpy_hls_model.hpp/.cpp` 把 CPU scalar span 打包成 HLS 形状的数据，调用共享核心，再解包结果。
+- `run_saxpy.cpp` 是 XRT host app，负责在卡/板上运行 xclbin。
+
+这次 first-class HLS 模型主要覆盖 m_axi 风格的 packed kernels。现有 stream/k2k kernels 仍然支持，但 first-class stream HLS models 是后续设计。
 
 ### Dataset
 

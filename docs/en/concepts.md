@@ -13,24 +13,10 @@ Between those two programs is an FPGA binary:
 
 - **xclbin** — the file produced by Vitis that contains the compiled kernel hardware and connectivity information.
 
-A normal development flow is:
+A normal development flow is model-first:
 
 ```text
-write CPU truth model
-  ↓
-write HLS kernel C++
-  ↓
-run HLS synthesis (csynth)
-  ↓
-run C/RTL cosimulation (cosim)
-  ↓
-link .xclbin
-  ↓
-build host app
-  ↓
-run on card/board
-  ↓
-compare output with CPU truth
+gold -> hls_model -> csynth -> cosim -> xclbin -> host
 ```
 
 Vitis-Anvil gives each step a fixed place in the repository and a Make target.
@@ -93,7 +79,48 @@ HLS model code lives in:
 src/hls_model/**
 ```
 
-You use it to catch algorithm and data-layout errors before running Vitis synthesis.
+You use it to catch pack, stream, dataflow, and tail-handling errors before running Vitis synthesis. It does not prove timing, resource use, Vitis link, XRT, or real-board behavior.
+
+### Kernel core
+
+A kernel core is project-owned HLS-compatible code shared by both the HLS model and the Vitis top. For `saxpy`, the shared kernel core lives in:
+
+```text
+src/kernels/include/kernels/saxpy_core.hpp
+```
+
+It contains the packed operation and load/compute/store stage helpers. It does not contain host code, XRT code, or board configuration.
+
+### Vitis top
+
+A Vitis top is the `extern "C"` wrapper that Vitis HLS turns into a hardware kernel. It owns the kernel ABI and interface pragmas. For `saxpy`, the top lives in:
+
+```text
+src/kernels/saxpy_kernel.cpp
+```
+
+The top calls the shared kernel core but keeps hardware-facing details such as `#pragma HLS INTERFACE` and the explicit dataflow region in the top-level kernel file.
+
+### Saxpy file map
+
+The demo `saxpy` flow is intentionally split by responsibility:
+
+```text
+src/gold/include/gold/saxpy_gold.hpp
+src/kernels/include/kernels/saxpy_core.hpp
+src/kernels/saxpy_kernel.cpp
+src/hls_model/include/hls_model/saxpy_hls_model.hpp
+src/hls_model/saxpy_hls_model.cpp
+src/host/run_saxpy.cpp
+```
+
+- `saxpy_gold.hpp` declares the plain CPU mathematical truth.
+- `saxpy_core.hpp` holds the HLS-compatible kernel core shared by model and top.
+- `saxpy_kernel.cpp` is the Vitis top: ABI, HLS pragmas, and explicit dataflow calls.
+- `saxpy_hls_model.hpp/.cpp` adapt scalar CPU spans into packed HLS-shaped data, call the shared core, and unpack the result.
+- `run_saxpy.cpp` is the XRT host application that runs an xclbin on a card or board.
+
+This pass focuses first-class HLS model support on m_axi-style packed kernels. Existing stream/k2k kernels remain supported, but first-class stream HLS models are a later design.
 
 ### Dataset
 

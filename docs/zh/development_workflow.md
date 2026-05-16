@@ -6,6 +6,10 @@
 
 按这个顺序：
 
+```text
+gold -> hls_model -> csynth -> cosim -> xclbin -> host
+```
+
 1. **Gold 和 CPU unit tests** — 抓普通 C++/Python 错误。
 2. **HLS 模型 (`make test-hls-model`)** — 运行 Vitis 前 CPU 测试：gold + FPGA 形状的 HLS 模型 + HLS helper 测试。
 3. **HLS 综合 (`csynth`)** — 抓 HLS 不兼容 C++，查看硬件估算。
@@ -16,6 +20,8 @@
 8. **compare/analyze** — 检查正确性和性能趋势。
 
 不要改完 kernel 直接跑硬件。等待更久，错误还更不精确。
+
+HLS 模型是第一个 FPGA 形状检查：它会把 scalar 数据打成 pack，复用和 Vitis top 相同的项目内核核心 helper，在 Vitis 前先抓 pack/stream/dataflow/tail bug。它仍然是 CPU simulation，不能证明 timing、资源、link connectivity、XRT buffer group 或板卡部署行为。
 
 ## 2. 改普通 C++ 或 Python 代码
 
@@ -51,6 +57,19 @@ make analyze-flow TARGET=u250 KERNEL=<kernel>
 make cosim TARGET=u250 KERNEL=<kernel>
 make analyze-cosim TARGET=u250 KERNEL=<kernel>
 ```
+
+以 `saxpy` 为例，各文件职责是：
+
+```text
+src/gold/include/gold/saxpy_gold.hpp              # 普通 CPU 真值
+src/kernels/include/kernels/saxpy_core.hpp        # 共享内核核心和阶段 helper
+src/kernels/saxpy_kernel.cpp                      # Vitis top：ABI、pragmas、显式 dataflow
+src/hls_model/include/hls_model/saxpy_hls_model.hpp
+src/hls_model/saxpy_hls_model.cpp                 # 共享核心外面的 scalar adapter
+src/host/run_saxpy.cpp                            # XRT host app
+```
+
+新 m_axi 风格 packed kernel 也按这个拆分：先 gold，再 HLS 模型，再 csynth/cosim/xclbin/host。Stream/k2k kernels 仍由现有 Vitis flow 支持，但 first-class stream HLS models 还不是默认模式。
 
 怎么理解：
 

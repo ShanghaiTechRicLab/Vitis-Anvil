@@ -49,12 +49,21 @@ rename include/anvil to include/my_company
 
 1. 保持 `saxpy` 能跑。
 2. 把你的新 kernel 加在旁边。
-3. 把你的 host app 加在现有 host app 旁边。
-4. 加你的 dataset/gold/compare 流程。
-5. 加你的板卡配置。
-6. 你的流程跑通后再删除 demo。
+3. 给新 kernel 加 gold reference 和 HLS 模型。
+4. 把你的 host app 加在现有 host app 旁边。
+5. 加你的 dataset/gold/compare 流程。
+6. 加你的板卡配置。
+7. 你的流程跑通后再删除 demo。
 
 这样调试时始终有一个已知正确的参考。
+
+对 m_axi 风格 packed kernels，使用这个阶梯：
+
+```text
+gold -> hls_model -> csynth -> cosim -> xclbin -> host
+```
+
+把内核核心放在 `src/kernels/include/kernels/**`，同时给 `src/hls_model/**` 和 `src/kernels/*.cpp` 里的 Vitis top 复用。HLS 模型能提前抓 packed layout 和 tail bug，但不能替代 synthesis、cosim、xclbin link 或 host/XRT 测试。
 
 ## 4. 定义项目契约
 

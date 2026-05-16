@@ -86,7 +86,22 @@ ANVIL_DATAFLOW_FINALIZE();
 
 Why no `std::ref`? hlslib simulation already preserves reference parameters based on the called function signature. Adding `std::ref` at the call site can double-wrap the stream and break compilation.
 
-## 6. External AXI streams
+## 6. Sharing kernel core with the HLS model
+
+Project-specific HLS-compatible helpers belong under `src/kernels/include/kernels/**`, not under `include/anvil/**`. For example, `src/kernels/include/kernels/saxpy_core.hpp` owns the `SaxpyOp` and the load/compute/store helpers used by both:
+
+- `src/kernels/saxpy_kernel.cpp`, the Vitis top with interface pragmas and an explicit dataflow region
+- `src/hls_model/saxpy_hls_model.cpp`, the CPU adapter that packs scalar spans, calls the same kernel core helpers, and unpacks results
+
+That split supports the model-first ladder:
+
+```text
+gold -> hls_model -> csynth -> cosim -> xclbin -> host
+```
+
+Do not hide a Vitis dataflow region in a convenience wrapper unless synthesis reports prove the generated hardware is unchanged. Keeping `ANVIL_DATAFLOW_INIT`, `ANVIL_DATAFLOW_FUNCTION`, and `ANVIL_DATAFLOW_FINALIZE` explicit in the Vitis top makes the hardware boundary easier to review.
+
+## 7. External AXI streams
 
 For kernel ports that become AXI streams, keep using Vitis `hls::stream<...>` in the top-level function signature. Use Anvil helpers inside the function:
 
@@ -103,7 +118,9 @@ extern "C" void my_stream_kernel(hls::stream<MyPack>& in,
 
 Do not change external stream ports to hlslib streams unless you know the Vitis link implications.
 
-## 7. Pack width and ABI
+First-class HLS models currently focus on m_axi-style packed kernels. Existing stream/k2k kernels remain supported in the Vitis flow, but stream HLS model design is separate work.
+
+## 8. Pack width and ABI
 
 Pack width is part of the kernel ABI. If host and kernel disagree, buffers will be padded incorrectly and output will be wrong.
 

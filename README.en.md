@@ -35,6 +35,7 @@ The name is short because it is meant to be used on the command line. Future wra
 
 ```bash
 make test                                      # CPU-only tests (no Vitis, no XRT, no platform)
+make test-hls-model                            # explicit pre-Vitis suite: gold + HLS model + helpers
 make build TARGET=u250 HOST_APP=run_saxpy     # build one host app
 make csynth TARGET=u250 KERNEL=saxpy          # HLS synthesis for one kernel
 make cosim TARGET=u250 KERNEL=saxpy           # HLS C/RTL cosimulation
@@ -43,6 +44,8 @@ make analyze-cosim TARGET=u250 KERNEL=saxpy   # inspect cosimulation reports
 make xclbin TARGET=u250                       # link the hardware xclbin (slow)
 make run-host TARGET=u250 HOST_APP=run_saxpy  # run on an installed accelerator card
 ```
+
+Recommended correctness ladder: `gold -> hls_model -> csynth -> cosim -> xclbin -> host`.
 
 For embedded boards you need `PETALINUX_SYSROOT`:
 
