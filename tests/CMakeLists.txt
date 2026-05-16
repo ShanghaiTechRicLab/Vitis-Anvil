@@ -2,6 +2,7 @@
 
 set(TEST_SOURCES
   cpp/test_saxpy_gold.cpp
+  cpp/test_vadd_gold.cpp
   cpp/test_metrics.cpp
   cpp/test_anvil_log.cpp
   cpp/test_anvil_compare.cpp
