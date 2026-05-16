@@ -60,8 +60,9 @@ build-python:
 csynth: configure
 	rtk cmake --build $(BUILD_DIR) --target $(ANVIL_KERNEL_TARGETS)
 
-cosim: configure
+cosim:
 	@if [ -z "$(strip $(ANVIL_COSIM_TARGETS))" ]; then rtk echo "cosim is not configured for TARGET=$(TARGET)" >&2; exit 1; fi
+	rtk $(MAKE) configure TARGET=$(TARGET)
 	rtk cmake --build $(BUILD_DIR) --target $(ANVIL_COSIM_TARGETS)
 
 xclbin: configure
@@ -156,7 +157,9 @@ test:
 test-csynth: configure
 	rtk ctest --test-dir $(BUILD_DIR) -L csynth -V
 
-test-cosim: configure
+test-cosim:
+	@if [ -z "$(strip $(ANVIL_COSIM_TARGETS))" ]; then rtk echo "cosim is not configured for TARGET=$(TARGET)" >&2; exit 1; fi
+	rtk $(MAKE) configure TARGET=$(TARGET)
 	rtk ctest --test-dir $(BUILD_DIR) -L cosim -V
 
 test-xrt-emu:
