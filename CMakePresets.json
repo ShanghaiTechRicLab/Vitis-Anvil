@@ -150,6 +150,35 @@
         "ANVIL_VITIS_TARGET": "hw_emu",
         "ANVIL_NEEDS_CROSS": "OFF"
       }
+    },
+    {
+      "name": "u55c-host",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/u55c-host",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ANVIL_PLATFORM_KIND": "u55c",
+        "ANVIL_BUILD_GOLD": "ON",
+        "ANVIL_BUILD_HLS_MODEL": "ON",
+        "ANVIL_BUILD_APPS": "ON",
+        "ANVIL_BUILD_TESTS": "ON",
+        "ANVIL_BUILD_KERNELS": "ON",
+        "ANVIL_BUILD_XRT": "ON",
+        "ANVIL_PARALLELISM": "16",
+        "ANVIL_CLOCK_MHZ": "300",
+        "ANVIL_VITIS_PLATFORM": "/tools/Xilinx/Vitis/2024.2/base_platforms/xilinx_u55c_gen3x16_xdma_3_202210_1/xilinx_u55c_gen3x16_xdma_3_202210_1.xpfm",
+        "ANVIL_VITIS_TARGET": "hw",
+        "ANVIL_VITIS_PART": "xcu55c-fsvh2892-2L-e"
+      }
+    },
+    {
+      "name": "u55c-host-hwemu",
+      "inherits": "u55c-host",
+      "binaryDir": "${sourceDir}/build/u55c-host-hwemu",
+      "cacheVariables": {
+        "ANVIL_VITIS_TARGET": "hw_emu",
+        "ANVIL_BUILD_XRT": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -192,6 +221,14 @@
     {
       "name": "zcu102-host",
       "configurePreset": "zcu102-host"
+    },
+    {
+      "name": "u55c-host",
+      "configurePreset": "u55c-host"
+    },
+    {
+      "name": "u55c-host-hwemu",
+      "configurePreset": "u55c-host-hwemu"
     }
   ],
   "testPresets": [
@@ -282,6 +319,18 @@
     {
       "name": "zcu102-kernel",
       "configurePreset": "zcu102-kernel",
+      "output": {
+        "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "label": "csynth|cosim|xrt_emu|build"
+        }
+      }
+    },
+    {
+      "name": "u55c-host",
+      "configurePreset": "u55c-host",
       "output": {
         "outputOnFailure": true
       },

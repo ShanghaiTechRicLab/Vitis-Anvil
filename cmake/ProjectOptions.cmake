@@ -10,7 +10,7 @@ option(ANVIL_BUILD_KERNELS    "Build Vitis HLS kernels"  OFF)   # Phase 2
 option(ANVIL_NEEDS_CROSS     "Cross-compile host binary for embedded target" OFF)
 
 set(ANVIL_PLATFORM_KIND  "native"  CACHE STRING
-    "Target platform: native|u250|alveo_u55c|zcu102|zcu104|kv260")
+    "Target platform: native|u250|u55c|zcu102|zcu104|kv260")
 set(ANVIL_VITIS_PLATFORM ""        CACHE STRING "Path to .xpfm (Phase 2)")
 set(ANVIL_VITIS_PART     ""        CACHE STRING "Xilinx device part for HLS cosim (e.g. xcu250-figd2104-2L-e)")
 set(ANVIL_VITIS_TARGET   "hw"      CACHE STRING
