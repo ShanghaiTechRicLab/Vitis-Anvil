@@ -1,93 +1,85 @@
-# 适配到你自己的项目
+# 把 Vitis-Anvil 适配到你的项目
 
-当你不再满足于 demo 之后，Vitis-Anvil 通常有两种用法。
+这篇讲如何把模板变成真实加速器仓库。如果你还没加过 kernel，先读 [自定义指南](customization.md)。
 
-## 方案 A：直接作为项目模板
+## 1. 决定保留什么
 
-1. 复制本仓库。
-2. 保留 `cmake/`、`CMakePresets.json`、`Makefile`、`config/`、`tools/hlsflow/`、`python/anvil/`。
-3. 替换 demo kernel 和 host app。
-4. 在你自己的测试就绪之前，让现有测试保持通过，作为安全网。
-5. 流程稳定后再重命名产品的二进制文件和文档。
+多数项目会保留：
 
-建议的替换顺序：
+- 顶层 Makefile 流程
+- CMake presets 和 helper modules
+- `include/anvil/**` 框架辅助
+- `src/anvil/**` runtime/logging 库
+- `tools/hlsflow/**` 报告工具
+- docs 结构
+
+多数项目会替换：
+
+- `src/kernels/` 里的 demo kernels
+- `src/host/` 里的 demo host apps
+- `src/gold/` 里的 demo gold reference
+- demo dataset 和 compare 逻辑
+- `config/` 下的板卡配置
+
+## 2. 先换问题，不要先换框架
+
+不要一开始就重命名所有 `anvil` namespace。先保持框架稳定，在它周围加你的项目代码。
+
+好的第一步：
 
 ```text
-kernel C++ → cosim testbench → CPU 模型/gold → host app → dataset → compare → xclbin connectivity → board run
+src/kernels/include/kernels/my_algorithm.hpp
+src/kernels/my_algorithm_kernel.cpp
+src/host/run_my_algorithm.cpp
+src/gold/include/gold/my_algorithm_gold.hpp
 ```
 
-## 方案 B：把构建模块 vendor 到已有项目
-
-把以下文件复制到你已有的项目：
+不好的第一步：
 
 ```text
-cmake/AnvilKernel.cmake
-cmake/AnvilHost.cmake
-cmake/FindVitis.cmake
-cmake/FindXRT.cmake
-cmake/Toolchain-*.cmake
-config/<target>/
-tools/hlsflow/
+rename include/anvil to include/my_company
+还没跑通 kernel 就重写 runtime wrappers
 ```
 
-然后在你的顶层 `CMakeLists.txt` 中 include 这些模块，用 `add_anvil_kernel()` 和 `add_anvil_xclbin()` 注册你自己的 kernel。
+太早重命名框架会制造大量错误，但不会让硬件更快跑起来。
 
-## 最小 CMake 结构
+## 3. 分层替换 demo
 
-```cmake
-cmake_minimum_required(VERSION 3.21)
-project(my_accel LANGUAGES CXX)
+推荐顺序：
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
-include(ProjectOptions)
-include(AnvilKernel)
-include(AnvilHost)
+1. 保持 `saxpy` 能跑。
+2. 把你的新 kernel 加在旁边。
+3. 把你的 host app 加在现有 host app 旁边。
+4. 加你的 dataset/gold/compare 流程。
+5. 加你的板卡配置。
+6. 你的流程跑通后再删除 demo。
 
-add_subdirectory(src/kernels)
-add_subdirectory(src/host)
-```
+这样调试时始终有一个已知正确的参考。
 
-## 最小的 Make 用户界面
+## 4. 定义项目契约
 
-保持一组小而稳定的面向用户的命令：
+写清楚：
 
-```bash
-make test
-make build TARGET=<board> HOST_APP=<app>
-make csynth TARGET=<board> KERNEL=<kernel>
-make cosim TARGET=<board> KERNEL=<kernel>
-make xclbin TARGET=<board>
-make run-host TARGET=<board> HOST_APP=<app>
-```
+- 输入文件
+- 输出文件
+- metadata JSON 字段
+- kernel 参数顺序
+- pack 宽度
+- 目标板卡
+- 误差阈值
+- 性能检查标准
 
-这组接口设计得足够小，以后很容易封装成：
+项目变大前就把这些写进文档。很多 FPGA bug 实际上是 host、kernel、data tools 之间的契约不一致。
 
-```bash
-anvil init
-anvil build --target u250 --host-app run_saxpy
-anvil csynth --target u250 --kernel saxpy
-```
+## 5. 逐步添加 CI
 
-## 命名和打包
+有用的 CI 阶梯：
 
-内部模板和工具层用 `anvil`。最终的加速器、比特流包和面向用户的应用程序用你自己的产品名。这样可复用的构建流程和产品身份就不会混在一起。
+1. 格式/静态检查（如果有）
+2. `make test`
+3. Python tests
+4. install smoke
+5. 如果 runner 有 Vitis，可选对一个小 kernel 跑 csynth
+6. 硬件测试只放在专门机器上
 
-## 建议保留和替换
-
-保留：
-
-- `TARGET`、`KERNEL`、`HOST_APP`、`DATASET` 的职责分离
-- 显式的 Python 环境目标
-- 显式的长耗时 HLS 和 xclbin 目标
-- HLS 报告数据库
-- 通过 `ANVIL_PLATFORM=` 覆盖 platform 路径
-- 通过 `PETALINUX_SYSROOT=` 覆盖嵌入式 sysroot
-
-替换：
-
-- Demo kernel
-- Demo host app
-- 数据集格式
-- Golden reference 和对比逻辑
-- Connectivity 文件
-- 产品文档
+不要让每个 PR 都跑完整 hardware link，除非你有足够机器和时间。

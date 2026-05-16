@@ -1,242 +1,157 @@
-# 项目结构
+# 项目结构：每一类文件放在哪里
 
-本文说明仓库里每个目录和文件是干什么的。在浏览代码或者把模板适配到自己的项目时，可以用它作为参考。
+这篇从 FPGA 加速器项目的角度解释仓库结构。核心思想是分层：框架代码、kernel 代码、host 代码、数据代码、板卡配置不要混在一起。
 
-## 顶层文件
+## 顶层目录
 
-| 文件 | 说明 |
+| 路径 | 是什么 | 为什么存在 |
+|---|---|---|
+| `include/anvil/` | 框架公共头文件 | 可复用、可安装/导出的通用辅助 |
+| `src/anvil/` | 框架实现 | runtime/logging 等框架库实现 |
+| `src/kernels/` | HLS kernel 实现 | Vitis HLS 会把这里的代码转成硬件 |
+| `src/kernels/include/kernels/` | 项目 kernel ABI 头文件 | 给 kernel、host、testbench 共享声明 |
+| `src/host/` | XRT host app | CPU 程序，加载 xclbin 并启动 kernel |
+| `src/gold/` | CPU 真值/reference | 简单正确实现，用于比较 |
+| `src/hls_model/` | CPU 编译的 HLS 风格模型 | 综合前检查 pack/stream 算法行为 |
+| `src/apps/` | 工具 CLI | 数据生成、gold runner、比较 runner |
+| `tests/` | C++/Python/cosim/install 测试 | 在硬件前验证每一层 |
+| `config/` | 按板卡拆分的配置 | xpfm 路径、part、xrt.ini、link.cfg、Make 变量 |
+| `tools/` | Python 分析工具 | HLS 报告解析、比较、汇总 |
+| `scripts/` | Shell/Python 流程辅助 | 板端运行、数据辅助、旧 wrapper |
+| `docs/` | 用户文档 | 如何使用和适配模板 |
+| `build/` | 生成的构建目录 | CMake 创建，不要编辑或提交 |
+| `data/` | 生成的数据集 | 示例输入输出 |
+| `reports/` | 生成的分析报告 | hlsflow 的 HTML/TXT/JSONL 输出 |
+
+## 框架代码 vs 项目代码
+
+框架代码是 Anvil 基础设施，多数用户不应该改：
+
+```text
+include/anvil/**
+src/anvil/**
+```
+
+项目代码是你添加加速器的地方：
+
+```text
+src/kernels/**
+src/kernels/include/kernels/**
+src/hls_model/**
+src/gold/**
+src/host/**
+config/**
+tests/**
+```
+
+为什么重要：如果你把算法放进 `include/anvil/`，它就变成框架 API，可能被安装给下游用户。`ScaleAddPack` 这种 kernel 专用类型不应该是框架 API。
+
+## Kernel 文件
+
+一个典型 kernel 有三个文件：
+
+```text
+src/kernels/include/kernels/my_kernel.hpp   # ABI 和类型声明
+src/kernels/my_kernel.cpp                   # HLS 实现
+tests/kernels/my_kernel_cosim_tb.cpp        # C/RTL cosim testbench
+```
+
+头文件声明 top function：
+
+```cpp
+extern "C" void my_kernel(...);
+```
+
+`.cpp` 用 HLS pragma 实现它。testbench 用普通 C++ array/vector 调用同一个函数。
+
+## Host app 文件
+
+Host app 在：
+
+```text
+src/host/run_saxpy.cpp
+src/host/run_vadd.cpp
+src/host/run_pipeline_demo.cpp
+```
+
+Host app 不会被综合。它在 CPU 上运行并使用 XRT。它需要知道：
+
+- xclbin 路径
+- kernel compute-unit 名，例如 `saxpy:{saxpy_1}`
+- buffer 参数顺序
+- dataset 输入/输出文件名
+
+Host 可执行文件在 `src/host/CMakeLists.txt` 注册。
+
+## 板卡配置文件
+
+每个 target 有一个目录：
+
+```text
+config/u250/
+config/zcu102/
+```
+
+重要文件：
+
+| 文件 | 含义 |
 |---|---|
-| `Makefile` | 主要的用户接口。所有 `make <target>` 命令都在这里。它封装了 CMake presets，并添加了 HLS、部署、分析等便利目标。 |
-| `CMakeLists.txt` | 顶层 CMake 构建定义。定义了 `anvil_core` 接口库，根据构建选项（`ANVIL_BUILD_*`）有条件地包含子目录。 |
-| `CMakePresets.json` | CMake 的 configure、build、test presets。每个板卡有自己的 preset，设置了 toolchain 文件、Vitis platform 和 XRT 路径。 |
-| `pyproject.toml` | Python 包定义。安装 `anvil` Python 包及其测试依赖。 |
-| `.clang-format` | C++ 代码格式化规则。 |
+| `anvil.mk` | Make 变量：platform 路径、preset 名、target 类型、kernel target 列表 |
+| `link.cfg` | Vitis linker connectivity：compute unit、DDR/HBM bank、clock |
+| `pipeline_demo.cfg` | 可选 stream pipeline connectivity |
+| `xrt.ini` | XRT runtime tracing/debug 设置 |
+| `README.md` | 该板卡/platform 的说明 |
 
-## `cmake/` — CMake 模块
+`TARGET=u250` 的意思是“加载 `config/u250/anvil.mk`，使用其中描述的 preset/platform”。
 
-可复用的构建系统组件。每个文件定义一个 CMake 模块或查找器。
+## Build 目录
 
-| 文件 | 作用 |
+CMake 把生成文件写到 `build/<preset>/`。例子：
+
+```text
+build/hls-model-linux-debug/
+build/gold-linux-debug/
+build/u250-host/
+build/zcu102-kernel/
+build/zcu102-host/
+```
+
+不要编辑 `build/` 下的文件。如果生成结果不对，应该改源 CMake/config 文件，然后重新 configure。
+
+## 数据和报告
+
+Dataset 目录包含输入输出：
+
+```text
+data/tiny/meta.json
+data/tiny/x.bin
+data/tiny/y.bin
+data/tiny/gold_out.bin
+data/tiny/xrt_hw_out.bin
+```
+
+Report 目录包含分析产物：
+
+```text
+reports/*.html
+reports/*.txt
+reports/runs.jsonl
+reports/runs.csv
+```
+
+数据和报告是流程输出，不是源代码。
+
+## 常见任务该改哪里
+
+| 目标 | 先改这些文件 |
 |---|---|
-| `AnvilKernel.cmake` | 定义 `add_anvil_kernel()` 和 `add_anvil_xclbin()` — 运行 `v++ --compile` 和 `v++ --link` 把 C++ 变成 HLS IP 并链接成 xclbin 的函数。 |
-| `AnvilHost.cmake` | 定义 `add_anvil_host()` — 对 `add_executable()` 的薄封装，处理 anvil 库的链接。 |
-| `ProjectOptions.cmake` | 声明 `ANVIL_BUILD_*` 选项（GOLD、HLS_MODEL、APPS、KERNELS、XRT、TESTS）。 |
-| `BuildOptionValidation.cmake` | 尽早发现 `ANVIL_BUILD_*` 选项的不兼容组合。 |
-| `CompilerLauncher.cmake` | 集成 `ccache` 等编译器缓存工具。 |
-| `FindVitis.cmake` | 定位 Vitis 安装（`v++`、头文件、platform 包）。 |
-| `FindXRT.cmake` | 定位 XRT 安装（头文件、库）。 |
-| `Toolchain-aarch64-linux.cmake` | AArch64（嵌入式 ZynqMP 板卡）交叉编译 toolchain 文件。 |
-| `Toolchain-x86_64-linux.cmake` | x86_64 Linux host 构建的 toolchain 文件。 |
-| `parse_hls_report.py` | 封装 HLS 报告解析的 Python helper，构建系统内部使用。 |
-| `anvilConfig.cmake.in` | 安装库后 `find_package(anvil)` 支持使用的模板。 |
+| 加新 kernel | `src/kernels/include/kernels/*.hpp`, `src/kernels/*.cpp`, `src/kernels/CMakeLists.txt` |
+| 加 cosim | `tests/kernels/*_cosim_tb.cpp`, `src/kernels/CMakeLists.txt` |
+| 加 host app | `src/host/*.cpp`, `src/host/CMakeLists.txt` |
+| 加 gold reference | `src/gold/include/gold/*.hpp`, `src/gold/cpp/*.cpp`, tests |
+| 改 dataset 格式 | `src/apps/gen_dataset.cpp` 或 `scripts/gen_dataset.py`，以及 host/gold/compare 代码 |
+| 加板卡 | `config/<target>/`, `CMakePresets.json`, 可选 `platforms/` metadata |
+| 改报告 | `tools/hlsflow/**` |
+| 改框架 runtime | `include/anvil/runtime/**`, `src/anvil/runtime/**` |
 
-## `config/<target>/` — 按板卡配置
-
-每个板卡（u250、zcu102 等）有自己的目录，包含设备相关的文件。
-
-| 文件 | 说明 |
-|---|---|
-| `anvil.mk` | Makefile 片段，被顶层 `Makefile` 引入。设置板卡特定的变量，如 `ANVIL_PLATFORM`、`ANVIL_VITIS_PART`、`ANVIL_PRESET`、`ANVIL_KERNEL_TARGETS` 等。 |
-| `link.cfg` | Vitis 链接器配置。定义 connectivity（`nk=`、`sp=`）和时钟（`freqHz=`）。支持流式的加速卡还有 kernel-to-kernel 连接设置。 |
-| `pipeline_demo.cfg` | 流式 pipeline 配置（仅加速卡）。定义 saxpy_stream 和 vadd_stream 如何连接成 pipeline。 |
-| `xrt.ini` | 板卡的 XRT 运行时配置。设置 `Runtime.xrt_profile=true` 等标志。 |
-| `README.md` | 板卡说明：platform 路径、shell 版本、已知问题。 |
-
-## `src/` — C++ 源代码
-
-### `src/kernels/` — FPGA kernel 源码
-
-| 文件 | 说明 |
-|---|---|
-| `saxpy_kernel.cpp` | SAXPY HLS kernel（单个计算单元，读 A 和 X，写 Y）。 |
-| `vadd_kernel.cpp` | VADD HLS kernel（向量加法，一对输入 buffer）。 |
-| `saxpy_stream_kernel.cpp` | SAXPY 的流式版本，用于 kernel-to-kernel pipeline demo。 |
-| `vadd_stream_kernel.cpp` | VADD 的流式版本，用于 kernel-to-kernel pipeline demo。 |
-| `CMakeLists.txt` | 用 `add_anvil_kernel()` 注册 kernel，用 `add_anvil_xclbin()` 注册 xclbin。在这里添加你自己的 kernel。 |
-
-### `src/host/` — XRT host 程序
-
-| 文件 | 说明 |
-|---|---|
-| `run_saxpy.cpp` | SAXPY kernel 的 host 程序。创建 XRT context、分配 buffer、运行 kernel、写输出。 |
-| `run_vadd.cpp` | VADD kernel 的 host 程序。 |
-| `run_pipeline_demo.cpp` | 流式 pipeline demo 的 host 程序。在一条 chain 里跑两个 kernel。 |
-| `CMakeLists.txt` | 用 `add_anvil_host()` 注册 host 程序。在这里添加你自己的 host app。 |
-
-### `src/gold/` — Golden reference（CPU 正确性基准）
-
-| 文件 | 说明 |
-|---|---|
-| `include/gold/saxpy_gold.hpp` | 项目拥有的 SAXPY golden reference API。 |
-| `cpp/saxpy_gold.cpp` | SAXPY golden reference 的 C++ 实现（仅 CPU，不需要 XRT）。 |
-| `cpp/saxpy_gold_main.cpp` | 命令行封装，读取数据集并写 gold 输出。 |
-| `cpp/metrics.cpp` | 可选的指标计算，部分测试用到。 |
-| `python/` | Python 版本的 golden reference 实现。 |
-| `CMakeLists.txt` | 定义 `anvil_gold` 库和 `saxpy_gold_bin` 可执行文件。 |
-
-### `src/hls_model/` — HLS CPU 模型
-
-| 文件 | 说明 |
-|---|---|
-| `saxpy_hls_model.cpp` | 镜像 SAXPY kernel 实现的 C++ 模型。用于在综合前验证 kernel 算法是否符合预期。 |
-
-### `src/apps/` — CLI 工具程序
-
-| 文件 | 说明 |
-|---|---|
-| `gen_dataset.cpp` | 在 `data/<dataset>/` 下生成输入数据集。 |
-| `run_gold.cpp` | 运行 golden reference 并写输出供对比。 |
-| `compare_gold_hls_model.cpp` | 比较 gold 输出和 HLS 模型输出。 |
-
-### `src/anvil/` — 核心库
-
-| 文件 | 说明 |
-|---|---|
-| `runtime/xrt_context.cpp` | XRT context 封装 — 设备选择、program 加载、kernel handle 创建。 |
-| `runtime/kernel_handle.cpp` | Kernel 参数管理和执行。 |
-| `runtime/CMakeLists.txt` | 构建 `anvil_runtime` 静态库（链接 XRT）。 |
-| `CMakeLists.txt` | 定义 `anvil_core` 接口库及所有子库（log、cli、json 等）。 |
-
-## `include/anvil/` — C++ 头文件
-
-框架拥有的公共 API。不要把项目专用 kernel/model/gold 头文件放在这里；改用 `src/kernels/include/`、`src/hls_model/include/` 和 `src/gold/include/`。
-
-
-按组件组织头文件。每个子目录有一个 `*.hpp` 文件。
-
-| 目录 | 提供什么 |
-|---|---|
-| `runtime/` | `xrt_context.hpp`、`xrt_buffer.hpp`、`kernel_handle.hpp` — XRT 运行时封装。 |
-| `gold/` | 通用 gold 辅助，例如 metrics/interfaces。项目专用 gold API 放在 `src/gold/include/`。 |
-| `hls/` | 基于 hlslib 的通用辅助：`pack.hpp`、`stream.hpp`、`dataflow.hpp`、`packed_ops.hpp`、`axis.hpp`。 |
-| `cli/` | `argparse.hpp` — 命令行参数解析封装。 |
-| `compare/` | 验证输出数据的比较器（bitwise、element-wise、classification、signal）。 |
-| `json/` | JSON 序列化/反序列化。 |
-| `log/` | 日志封装（基于 spdlog）。 |
-| `table/` | 终端表格格式化。 |
-| `progress/` | 进度条显示（基于 indicators）。 |
-| `test/` | 测试工具。 |
-| `toml/` | TOML 文件解析（基于 tomlplusplus）。 |
-| `config.hpp.in` | 生成的配置头文件模板（版本信息、构建标志）。 |
-| `platform.hpp` | 平台检测和能力查询。 |
-| `types.hpp` | 通用类型别名。 |
-
-## `tests/` — 测试
-
-| 目录 | 内容 |
-|---|---|
-| `cpp/` | C++ Catch2 单元测试，覆盖 compare、log、runtime、gold、HLS model。 |
-| `kernels/` | HLS cosimulation testbench（`saxpy_cosim_tb.cpp`、`vadd_cosim_tb.cpp` 等）。 |
-| `python/` | Python pytest 测试，覆盖 compare、gold、board_run、HLS flow parsers。 |
-| `data/` | 测试数据。 |
-| `install/` | 安装验证 smoke test。 |
-| `CMakeLists.txt` | 注册 CTest 测试（C++ 和 Python）。 |
-
-## `python/anvil/` — Python 包
-
-与 C++ 库组件对应，方便在 Python 中使用。每个模块与 C++ 对应模块同名。
-
-| 文件 | 提供什么 |
-|---|---|
-| `__init__.py` | 包初始化、版本字符串。 |
-| `compare.py` | 输出对比逻辑（C++ compare 的 Python 版本）。 |
-| `gold.py` | Python golden reference runner。 |
-| `cli.py` | Python CLI 参数辅助。 |
-| `json.py` | 测试数据的 JSON 辅助。 |
-| `toml.py` | TOML 辅助。 |
-| `log.py` | Python 日志配置。 |
-| `progress.py` | 进度条显示。 |
-| `table.py` | 终端表格格式化。 |
-| `test.py` | Python 测试支持工具。 |
-
-## `tools/` — 开发者工具
-
-| 文件 | 作用 |
-|---|---|
-| `hlsflow/` | HLS 流程分析工具包：发现构建、解析 csynth/cosim/vitis 报告、运行阈值检查、对比 HLS 运行、生成 HTML/TXT/JSONL 报告。详见 `tools/hlsflow/README.md`。 |
-| `sweep.py` | 时钟频率扫描工具。接受 TOML 配置文件，在不同时钟目标下运行多次构建。 |
-
-## `scripts/` — 构建和部署脚本
-
-| 文件 | 作用 |
-|---|---|
-| `gen_dataset.py` | 生成输入数据集。被 `make gen` 调用。 |
-| `run_gold.sh` | 运行 golden reference。被 `make gold` 调用。 |
-| `compare.py` | 比较硬件输出和 golden reference。被 `make compare` 调用。 |
-| `analyze.py` | 旧版 HLS 报告解析器。被 `make analyze-legacy` 调用。 |
-| `board_run.py` | 通过 SSH 部署二进制到板卡、运行 host app、取回输出。被 `make test-xrt-hw` 调用。 |
-| `emconfig.sh` | 为硬件仿真生成 `emconfig.json`。被 `make emconfig` 调用。 |
-
-## `config/` — 按板卡的 Makefile 配置
-
-| 子目录 | 板卡 |
-|---|---|
-| `u250/` | Alveo U250 |
-| `u50/` | Alveo U50 |
-| `u55c/` | Alveo U55C |
-| `u200/` | Alveo U200 |
-| `u280/` | Alveo U280 |
-| `vck5000/` | Versal VCK5000 |
-| `zcu102/` | ZynqMP ZCU102 |
-| `zcu104/` | ZynqMP ZCU104 |
-| `zcu106/` | ZynqMP ZCU106 |
-| `kv260/` | Kria KV260 |
-| `README.md` | 说明如何添加新板卡。 |
-
-## `data/` — 数据集
-
-| 子目录 | 内容 |
-|---|---|
-| `tiny/` | 小规模 demo 数据集。`DATASET=tiny` 的默认值。 |
-| `empty/` | 空数据集，用于边界测试。 |
-| `badshape/` | 维度不匹配的数据集，用于错误路径测试。 |
-| `task15_smoke/` 到 `task16_ok/` | 特定测试场景使用的数据集。 |
-
-## `reports/` — HLS 分析输出
-
-由 `make analyze-flow` 和 `make analyze-cosim` 生成。包含：
-
-- `reports/<run_id>.html` / `reports/<run_id>.txt` — 每次 HLS 运行的报告
-- `reports/runs.jsonl` — 所有 HLS 运行的 JSONL 数据库
-
-## `third_party/` — 第三方依赖
-
-| 库 | 用途 |
-|---|---|
-| `argparse/` | 命令行参数解析（header-only）。 |
-| `catch2/` | C++ 单元测试框架（Catch2 合并头文件）。 |
-| `hlslib/` | HLS 工具库（仿真辅助、dataflow 模式）。 |
-| `indicators/` | 终端进度条。 |
-| `nlohmann/` | JSON 序列化（`nlohmann/json`）。 |
-| `spdlog/` | 日志框架。 |
-| `tabulate/` | 终端表格格式化。 |
-| `tomlplusplus/` | TOML 配置文件解析。 |
-
-## `platforms/` — 板卡平台元数据
-
-TOML 格式的板卡描述，供 Python 工具查询平台属性。
-
-| 子目录 | 板卡 |
-|---|---|
-| `zcu102/` | ZCU102 板卡元数据。 |
-| `kv260/` | KV260 板卡元数据。 |
-
-## `docs/` — 文档
-
-| 路径 | 内容 |
-|---|---|
-| `en/` | 英文文档。 |
-| `zh/` | 中文文档。 |
-| `superpowers/` | 设计文档和规格。 |
-| `assets/` | 图片和 banner。 |
-
-## 构建阶段与目录的映射关系
-
-| 阶段 | 构建什么 | 关键 CMake 选项 | 源码目录 |
-|---|---|---|---|
-| Gold reference | CPU 正确性基准 | `ANVIL_BUILD_GOLD` | `src/gold/` |
-| HLS model | Kernel 的 CPU 仿真 | `ANVIL_BUILD_HLS_MODEL` | `src/hls_model/` |
-| Utility apps | 数据集生成、gold runner、compare | `ANVIL_BUILD_APPS` | `src/apps/` |
-| FPGA kernels | HLS 综合 | `ANVIL_BUILD_KERNELS` | `src/kernels/` |
-| XRT host | XRT host 程序 | `ANVIL_BUILD_XRT` | `src/host/` |
-| Tests | 单元测试、cosim、Python 测试 | `ANVIL_BUILD_TESTS` | `tests/` |
+如果你要添加自己的加速器，从 [自定义指南](customization.md) 开始。

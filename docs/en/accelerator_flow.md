@@ -1,105 +1,206 @@
 # Accelerator-card flow
 
-Accelerator cards (U250, U50, U55C, U200, U280, VCK5000) connect over PCIe and use XRT for runtime management. The flow is the same regardless of which card you pick — you just change the `TARGET` variable.
+This page explains the flow for PCIe accelerator cards such as U250, U50, U55C, U200, U280, and VCK5000. These cards usually run the host app on the same x86_64 machine that contains the FPGA card.
 
-## 1. Install and discover platforms
+## 1. What is different about accelerator cards?
 
-A working card flow needs three things:
+For an accelerator card:
 
-1. Vitis tools (`v++`, `vitis-run`, etc.)
-2. XRT headers, libraries, and runtime
-3. A platform `.xpfm` file that matches your card and shell version
+- the CPU host app runs on your workstation/server
+- XRT is installed on that same machine
+- the FPGA card is visible through PCIe
+- the xclbin is loaded directly by the host app
+- no PetaLinux sysroot is needed for normal host builds
 
-Find which platform files are available on your system:
+The basic path is:
 
-```bash
-find /opt /tools/Xilinx -name '*.xpfm' 2>/dev/null
+```text
+CPU tests
+  ↓
+csynth/cosim kernel
+  ↓
+link xclbin for the card platform
+  ↓
+build host app
+  ↓
+run host app locally through XRT
+  ↓
+compare output
 ```
 
-If the default path in `config/<target>/anvil.mk` is wrong for your setup, override it on the command line:
+## 2. Prepare the environment
+
+You need:
+
+1. Vitis installed, for example `/tools/Xilinx/Vitis/2024.2`.
+2. XRT installed, usually `/opt/xilinx/xrt`.
+3. A platform `.xpfm` for your card.
+4. A card visible to XRT if you want to run hardware.
+
+Typical shell setup:
 
 ```bash
-make build TARGET=u50 ANVIL_PLATFORM=/path/to/xilinx_u50_....xpfm
+. /tools/Xilinx/Vitis/2024.2/settings64.sh
+. /opt/xilinx/xrt/setup.sh
+xbutil examine
 ```
 
-Once you have a stable path, you can also edit `config/u50/anvil.mk` directly to make it permanent.
+`xbutil examine` should list the card. If it does not, fix XRT/card installation before debugging Anvil.
 
-## 2. Build the host app
+## 3. Check the target config
 
-```bash
-make build TARGET=u250 HOST_APP=run_saxpy
-make build TARGET=u250 HOST_APP=run_vadd
+Open `config/u250/anvil.mk` or the target you use. Important fields:
+
+```make
+ANVIL_DEVICE_KIND    := accelerator
+ANVIL_PLATFORM       ?= /path/to/platform.xpfm
+ANVIL_PRESET         := u250-host
+ANVIL_HWEMU_PRESET   := u250-host-hwemu
+ANVIL_NEEDS_CROSS    := no
+ANVIL_KERNEL_TARGETS := saxpy_xo vadd_xo
+ANVIL_COSIM_TARGETS  := saxpy_cosim vadd_cosim
 ```
 
-Which host apps are available:
+Meaning:
 
-| `HOST_APP=` | What it does |
-|---|---|
-| `run_saxpy` | saxpy demo host |
-| `run_vadd` | vadd demo host |
-| `run_pipeline_demo` | accelerator-card stream pipeline demo |
+- `ANVIL_PLATFORM` is the Vitis platform file.
+- `ANVIL_PRESET` selects the CMake preset used for hardware builds.
+- `ANVIL_HWEMU_PRESET` selects the preset used for hardware emulation.
+- `ANVIL_KERNEL_TARGETS` is what `KERNEL=all` means for synthesis.
+- `ANVIL_COSIM_TARGETS` is what `KERNEL=all` means for cosim.
 
-`run_pipeline_demo` requires `config/<target>/pipeline_demo.cfg`. The repository provides these for `u250`, `u55c`, `u50`, `u200`, `u280`, and `vck5000`.
+If the platform path is wrong, every Vitis step will fail early.
 
-## 3. Synthesize and cosimulate kernels
+## 4. Run synthesis and cosim first
 
 ```bash
 make csynth TARGET=u250 KERNEL=saxpy
-make cosim TARGET=u250 KERNEL=saxpy
 make analyze-flow TARGET=u250 KERNEL=saxpy
+make cosim TARGET=u250 KERNEL=saxpy
 make analyze-cosim TARGET=u250 KERNEL=saxpy
 ```
 
-Use `KERNEL=vadd` for the vadd kernel or `KERNEL=all` for everything configured for this target. The stream pipeline has its own targets:
+Do this before xclbin link. It is faster to catch kernel problems here.
 
-```bash
-make csynth-stream TARGET=u250   # also u55c, u50, u200, u280, vck5000
-make cosim-stream TARGET=u250    # also u55c, u50, u200, u280, vck5000
+## 5. Understand `link.cfg`
+
+For accelerator cards, `config/<target>/link.cfg` tells Vitis how kernels connect to memory.
+
+Example shape:
+
+```ini
+[connectivity]
+nk=saxpy:1:saxpy_1
+sp=saxpy_1.x:DDR[0]
+sp=saxpy_1.y:DDR[1]
+sp=saxpy_1.out:DDR[2]
+
+[clock]
+freqHz=300000000:saxpy_1
 ```
 
-## 4. Link and run the xclbin
+Meaning:
+
+- `nk=saxpy:1:saxpy_1` creates one compute unit named `saxpy_1` from top function `saxpy`.
+- `sp=saxpy_1.x:DDR[0]` binds pointer argument `x` to DDR bank 0.
+- `freqHz=...` requests a clock for that compute unit.
+
+The host app later opens the kernel by compute-unit name:
+
+```cpp
+ctx.GetKernel("saxpy:{saxpy_1}");
+```
+
+If `link.cfg` says `saxpy_1` but the host asks for `saxpy_2`, the run fails.
+
+## 6. Link xclbin
 
 ```bash
 make xclbin TARGET=u250
+```
+
+This can take a long time. It produces a file like:
+
+```text
+build/u250-host/src/kernels/saxpy_xclbin/saxpy.xclbin
+```
+
+If link fails, inspect the Vitis link log. Common issues:
+
+- invalid `sp=` argument name
+- unsupported memory bank name for the platform
+- too many kernels for the device/resources
+- platform version mismatch with Vitis
+
+## 7. Build and run the host app
+
+```bash
+make build TARGET=u250 HOST_APP=run_saxpy
 make gen DATASET=tiny
 make gold DATASET=tiny
 make run-host TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
 make compare DATASET=tiny
 ```
 
-For hardware emulation (no physical card):
+What happens in `run-host`:
+
+1. host app opens device 0
+2. loads the xclbin
+3. finds compute unit such as `saxpy_1`
+4. allocates XRT buffers
+5. copies input to the card
+6. launches kernel
+7. copies output back
+8. writes output under `data/tiny/`
+
+If `run-host` fails, determine whether it failed before or after kernel launch:
+
+- before launch: XRT/device/xclbin/kernel-name problem
+- after launch: buffer group, data layout, kernel correctness, or compare problem
+
+## 8. Hardware emulation
+
+Hardware emulation runs an emulated device. It is slower than CPU tests but does not require a physical card.
+
+Typical flow:
 
 ```bash
 make xclbin-hwemu TARGET=u250
+make build TARGET=u250 HOST_APP=run_saxpy
 make xrt-emu TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
 ```
 
-## 5. U250 pipeline demo
+Use hw_emu when debugging host/XRT integration. Do not use it as a substitute for csynth/cosim; those answer different questions.
+
+## 9. Stream pipeline demo
+
+Some accelerator-card targets have `config/<target>/pipeline_demo.cfg`. That enables a kernel-to-kernel stream demo:
+
+```text
+saxpy_stream → vadd_stream
+```
+
+Build it explicitly:
 
 ```bash
+make csynth TARGET=u250 KERNEL=pipeline_demo
+make cosim TARGET=u250 KERNEL=pipeline_demo
 make pipeline-demo TARGET=u250
-make run-host TARGET=u250 HOST_APP=run_pipeline_demo DATASET=tiny
-
-# Same commands work for u55c/u50/u200/u280/vck5000 when the matching platform is installed.
+make build TARGET=u250 HOST_APP=run_pipeline_demo
 ```
 
-The pipeline demo builds a separate `pipeline_demo.xclbin`. The Makefile picks it automatically when you set `HOST_APP=run_pipeline_demo`.
+This is opt-in. It is not built by normal `make build` because stream pipeline synthesis/link can be slow.
 
-## 6. Card health checks
+## 10. Add another accelerator card target
 
-Before debugging your own code, make sure the card and XRT are working:
+To add a similar PCIe card:
 
-```bash
-xbutil examine
-xbutil validate -d 0
-xbutil --version
-```
+1. Copy a close config directory, for example `config/u250` to `config/my_card`.
+2. Edit `config/my_card/anvil.mk`.
+3. Set the correct `.xpfm` path.
+4. Update `link.cfg` memory bank names to match the platform.
+5. Add or copy CMake presets.
+6. Add platform metadata in `tools/hlsflow/platform_info.py` so reports show resource percentages.
+7. Run `make csynth TARGET=my_card KERNEL=saxpy` before trying xclbin.
 
-## Common problems
-
-| Symptom | Likely cause | Fix |
-|---|---|---|
-| `.xpfm missing` | Platform package not installed, or path differs | Use `find ... -name '*.xpfm'` and set `ANVIL_PLATFORM=` |
-| `Could NOT find XRT` | XRT not installed, or not under `/opt/xilinx/xrt` | Install or source XRT; update `cmake/FindXRT.cmake` hints if needed |
-| xclbin load fails | xclbin was linked for a different shell version | Rebuild with the exact platform that matches the installed shell |
-| Host app runs but compare fails | Dataset, golden reference, and host output do not agree on format | Check `scripts/gen_dataset.py`, the gold code, and the host output path |
+Do not assume DDR/HBM bank names are portable across cards. Always check the platform documentation or an existing Vitis example for that card.

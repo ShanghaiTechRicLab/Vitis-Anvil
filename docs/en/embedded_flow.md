@@ -1,114 +1,201 @@
 # Embedded flow
 
-Embedded boards (ZCU102, ZCU104, ZCU106, KV260) do not use PCIe. The build is split into two presets: one for the kernel and one for the AArch64 host.
+This page explains Zynq/ZynqMP-style embedded boards such as ZCU102, ZCU104, ZCU106, and KV260. These boards are different from PCIe accelerator cards because the host app runs on the ARM CPU inside the board, not on your x86_64 workstation.
 
-## 1. What you need
+## 1. What is different about embedded boards?
 
-- Vitis with the embedded base platform `.xpfm`
-- PetaLinux or a compatible AArch64 sysroot
-- XRT and zocl on the board image
-- Network access to the board for `scp` and `ssh`
+For embedded boards:
 
-Find platform files:
+- the FPGA fabric and ARM CPU are on the same board
+- the host app must be cross-compiled for AArch64
+- the board image must contain XRT runtime libraries
+- you usually copy the host binary and xclbin to the board over SSH
+- `PETALINUX_SYSROOT` is required for host compilation
 
-```bash
-find /tools/Xilinx -name '*zcu102*.xpfm' 2>/dev/null
-find /tools/Xilinx -name '*kv260*.xpfm' 2>/dev/null
+The flow is:
+
+```text
+CPU tests on workstation
+  ↓
+csynth/cosim kernel on workstation
+  ↓
+link embedded xclbin on workstation
+  ↓
+cross-compile host app for ARM
+  ↓
+copy host app + xclbin + data to board
+  ↓
+run on board through XRT
+  ↓
+copy/compare output
 ```
 
-Set the sysroot path. This is a typical location:
+## 2. Prepare the workstation
+
+You need Vitis and an embedded platform:
+
+```bash
+. /tools/Xilinx/Vitis/2024.2/settings64.sh
+```
+
+You also need a sysroot matching the board image:
 
 ```bash
 export PETALINUX_SYSROOT=/opt/Xilinx/images/xilinx-zynqmp-common-v2024.2/sysroots/cortexa72-cortexa53-xilinx-linux
 ```
 
-If your sysroot is elsewhere, pass it directly:
+The sysroot contains ARM headers and libraries used when cross-compiling the host app. If it does not match the compiler/toolchain, CMake may fail with errors such as missing `crtbeginS.o` or `-lgcc`.
+
+## 3. Prepare the board
+
+On the board, XRT must be installed and usable. After logging in:
 
 ```bash
-PETALINUX_SYSROOT=/path/to/sysroot make build-host TARGET=zcu102
+. /etc/profile.d/xrt_setup.sh
+xbutil examine
 ```
 
-## 2. Build the embedded host and the kernel
+If `xbutil` is missing or cannot see the device, fix the board image/XRT setup first.
 
-Cross-compile the host app:
+## 4. Check target config
+
+Open `config/zcu102/anvil.mk` or the target you use. Important fields:
+
+```make
+ANVIL_DEVICE_KIND := embedded
+ANVIL_NEEDS_CROSS := yes
+ANVIL_SYSROOT ?= $(PETALINUX_SYSROOT)
+ANVIL_PRESET := zcu102-kernel
+ANVIL_HOST_PRESET := zcu102-host
+ANVIL_PLATFORM ?= /path/to/xilinx_zcu102_base_202420_1.xpfm
+```
+
+Meaning:
+
+- `ANVIL_PRESET` builds the FPGA kernel/xclbin side.
+- `ANVIL_HOST_PRESET` builds the ARM host app side.
+- `ANVIL_SYSROOT` points to the ARM sysroot.
+- `ANVIL_PLATFORM` points to the embedded Vitis platform.
+
+## 5. Build the host app
 
 ```bash
 PETALINUX_SYSROOT=/path/to/sysroot make build-host TARGET=zcu102 HOST_APP=run_saxpy
 ```
 
-Synthesize the kernel:
+What this does:
+
+1. configures the host preset with the AArch64 toolchain
+2. uses the sysroot for target headers/libs
+3. builds an ARM executable
+
+The output is under:
+
+```text
+build/zcu102-host/src/host/run_saxpy
+```
+
+If this step fails before compiling your source, the sysroot/toolchain is likely wrong.
+
+## 6. Build the kernel and xclbin
 
 ```bash
 make csynth TARGET=zcu102 KERNEL=saxpy
 make cosim TARGET=zcu102 KERNEL=saxpy
-make analyze-flow TARGET=zcu102 KERNEL=saxpy
-make analyze-cosim TARGET=zcu102 KERNEL=saxpy
-```
-
-Link the xclbin:
-
-```bash
 make xclbin TARGET=zcu102
 ```
 
-## 3. Deploy to the board
+Embedded xclbin link uses the embedded platform and its memory interfaces. `link.cfg` may use different memory names from accelerator cards.
 
-Generate data and golden output locally:
+## 7. Generate data
+
+On the workstation:
 
 ```bash
 make gen DATASET=tiny
 make gold DATASET=tiny
 ```
 
-Deploy everything (binary, xclbin, data):
+This creates input and expected output. The input files must be copied to the board before running hardware.
+
+## 8. Deploy to the board
+
+Set board connection variables:
 
 ```bash
-make deploy TARGET=zcu102 BOARD_IP=192.168.1.100 DATASET=tiny
+export BOARD_IP=192.168.1.10
+export BOARD_SSH_USER=root
+export BOARD_DEPLOY_DIR=~/anvil-deploy
 ```
 
-Full end-to-end test:
+Then copy files:
 
 ```bash
-make test-xrt-hw TARGET=zcu102 BOARD_IP=192.168.1.100 DATASET=tiny
+make deploy-bin TARGET=zcu102 HOST_APP=run_saxpy BOARD_IP=$BOARD_IP
+make deploy-xclbin TARGET=zcu102 BOARD_IP=$BOARD_IP
+make deploy-data TARGET=zcu102 DATASET=tiny BOARD_IP=$BOARD_IP
 ```
 
-You can customize the SSH user and deploy directory:
+What gets copied:
+
+- ARM host binary
+- xclbin
+- `xrt.ini`
+- dataset files
+
+## 9. Run on the board
+
+You can use the all-in-one target:
 
 ```bash
-make deploy TARGET=zcu102 BOARD_IP=192.168.1.100 BOARD_SSH_USER=xilinx BOARD_DEPLOY_DIR=/home/xilinx/anvil
+make test-xrt-hw TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny BOARD_IP=$BOARD_IP
 ```
 
-## 4. Manual board run
-
-On the board itself:
+Or log in and run manually:
 
 ```bash
-. /etc/profile.d/xrt_setup.sh
+ssh root@$BOARD_IP
 cd ~/anvil-deploy
-chmod +x run_saxpy
+. /etc/profile.d/xrt_setup.sh
 ./run_saxpy --xclbin saxpy.xclbin --data-dir data/tiny --output data/tiny/xrt_hw_out.bin
 ```
 
-Copy the output back and compare:
+Manual run is better when debugging because you can inspect files and environment directly.
+
+## 10. Compare output
+
+If output is copied back to the workstation, run:
 
 ```bash
-scp root@192.168.1.100:~/anvil-deploy/data/tiny/xrt_hw_out.bin data/tiny/
 make compare DATASET=tiny
 ```
 
-## 5. Embedded hardware emulation
+If comparing on the board, make sure the compare tool and Python environment exist there. Usually it is simpler to copy output back and compare on the workstation.
 
-```bash
-make xrt-emu TARGET=zcu102 DATASET=tiny
-```
+## 11. Common embedded failures
 
-For embedded targets this builds the kernel xclbin and the AArch64 host binary, generates the emconfig file, and prints the paths. Actual QEMU launch depends on your specific BSP and PetaLinux platform package, so that part remains outside this Makefile.
+### Host build says `SYSROOT environment variable not set`
 
-## 6. Troubleshooting
+Set `PETALINUX_SYSROOT` or `ANVIL_SYSROOT`.
 
-| Symptom | Likely cause | Fix |
-|---|---|---|
-| Compiler cannot find `crtbeginS.o` or `-lgcc` | Sysroot and compiler runtime do not match | Use a sysroot that matches your Vitis or PetaLinux toolchain |
-| `device not found` on the board | XRT or zocl not loaded | Source XRT setup and check `dmesg` |
-| xclbin load error | Wrong platform or mismatched board image | Rebuild with the correct `.xpfm` and boot image |
-| `cosim is not configured` | Wrong `KERNEL=` value, or the target does not support cosim for that kernel | Use `KERNEL=saxpy` or `KERNEL=vadd`; the stream pipeline is accelerator-card only |
+### Linker cannot find `crtbeginS.o` or `-lgcc`
+
+The sysroot does not match the compiler. Use a sysroot from the matching PetaLinux/Vitis release.
+
+### Board says XRT missing
+
+The board image does not include XRT or `/etc/profile.d/xrt_setup.sh` was not sourced.
+
+### Kernel loads but output is wrong
+
+Check:
+
+1. host BO group indices
+2. kernel argument order
+3. `link.cfg` memory bindings
+4. dataset files copied to the board
+5. cache/sync calls in the host app
+
+## 12. When to use embedded vs accelerator-card docs
+
+Use this page when the host app runs on the board's ARM CPU. Use [Accelerator-card flow](accelerator_flow.md) when the host app runs on the same x86_64 machine that contains a PCIe FPGA card.

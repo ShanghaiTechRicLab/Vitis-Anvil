@@ -1,77 +1,123 @@
-# Typical development workflow
+# Development workflow
 
-The main idea: keep fast CPU iteration separate from slow FPGA work. You do not want to wait for HLS synthesis just because you fixed a typo in a host file, and you do not want to debug host logic through Vitis logs.
+This page gives the day-to-day order for changing code. The main rule is: use the cheapest check that can catch the bug before using a slower FPGA step.
 
-## Day-to-day loop
+## 1. The debugging ladder
+
+Use this order:
+
+1. **CPU unit tests** — catches normal C++/Python mistakes.
+2. **Gold vs HLS model** — catches data-layout mistakes before Vitis.
+3. **HLS synthesis (`csynth`)** — catches HLS-incompatible C++ and reports estimated hardware.
+4. **HLS cosim (`cosim`)** — catches RTL behavior mismatch.
+5. **xclbin link** — catches platform/connectivity/memory-bank problems.
+6. **host build** — catches XRT/API/compile problems.
+7. **hardware run** — catches runtime, BO group, device, and deployment problems.
+8. **compare/analyze** — checks correctness and performance trends.
+
+Do not jump from editing a kernel directly to hardware run. You will wait longer and get less precise errors.
+
+## 2. When changing normal C++ or Python code
+
+Run:
 
 ```bash
 make test
-make build TARGET=u250 HOST_APP=run_saxpy
 ```
 
-Run this after normal C++ or Python changes. It does not create a Python environment unless you call `make python-env` explicitly, and it does not synthesize kernels. It just compiles the host app and runs CPU-side tests.
-
-## Kernel loop
+If Python tools are involved:
 
 ```bash
-make csynth TARGET=u250 KERNEL=saxpy
-make analyze-flow TARGET=u250 KERNEL=saxpy
-make check-hls
+make python-env
+make test
 ```
 
-Use this when you are changing HLS code or pragmas. Look at:
+This should be fast and should not need Vitis or XRT.
 
-- II (initiation interval)
-- Latency
-- Timing slack
-- Resource headroom (LUT, DSP, BRAM)
-- Interface summary
+## 3. When changing a kernel
 
-## Cosim loop
+Run:
 
 ```bash
-make cosim TARGET=u250 KERNEL=saxpy
-make analyze-cosim TARGET=u250 KERNEL=saxpy
+make csynth TARGET=u250 KERNEL=<kernel>
+make analyze-flow TARGET=u250 KERNEL=<kernel>
+make cosim TARGET=u250 KERNEL=<kernel>
+make analyze-cosim TARGET=u250 KERNEL=<kernel>
 ```
 
-Cosimulation runs the RTL that Vitis generated from your kernel against the kernel testbench. This catches ABI mismatches and interface bugs before you build an xclbin. It does not run the XRT host program.
+Interpretation:
 
-## XRT host loop
+- csynth compile error: kernel code or include path issue
+- csynth II/timing bad: HLS structure issue
+- cosim fail: algorithm/RTL mismatch or testbench issue
+- analyze output weird: parser or report location issue
+
+## 4. When changing host code
+
+Run:
 
 ```bash
-make gen DATASET=tiny
-make gold DATASET=tiny
+make build TARGET=u250 HOST_APP=<app>
+```
+
+This only builds the host app. It should not synthesize kernels.
+
+If the host app compiles but runtime fails, check:
+
+- XRT setup
+- xclbin path
+- compute-unit name
+- BO group index
+- dataset path
+
+## 5. When changing `link.cfg`
+
+Run:
+
+```bash
 make xclbin TARGET=u250
-make run-host TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
-make compare DATASET=tiny
 ```
 
-Run this after changing the kernel ABI or the host buffer logic.
+`link.cfg` changes are not tested by C++ unit tests. They are tested by the Vitis linker and then by host runtime.
 
-## Embedded board loop
+## 6. When adding a board
+
+Start with configure-only and synthesis before hardware:
 
 ```bash
-PETALINUX_SYSROOT=/path/to/sysroot make build-host TARGET=zcu102 HOST_APP=run_saxpy
-make xclbin TARGET=zcu102
-make deploy TARGET=zcu102 BOARD_IP=192.168.1.100 DATASET=tiny
-make test-xrt-hw TARGET=zcu102 BOARD_IP=192.168.1.100 DATASET=tiny
+make csynth TARGET=<target> KERNEL=saxpy
+make analyze-flow TARGET=<target> KERNEL=saxpy
 ```
 
-## Before committing
+Only after that try:
 
 ```bash
-make test
-make analyze-flow TARGET=<target> KERNEL=<kernel>
-make analyze-cosim TARGET=<target> KERNEL=<kernel>
+make xclbin TARGET=<target>
+make build TARGET=<target> HOST_APP=run_saxpy
 ```
 
-If your change touches hardware, also run `make run-host` or the board deployment path.
+For embedded boards, build host with `PETALINUX_SYSROOT` set.
 
-## Debugging order
+## 7. Commit strategy
 
-1. `make test` fails: fix the CPU-side logic, library issues, or golden reference first.
-2. `make csynth` fails: check HLS compiler logs and C++14/HLS restrictions.
-3. `make cosim` fails: check the kernel testbench and ABI assumptions.
-4. `make xclbin` fails: check `link.cfg`, platform, memory banks, clock constraints.
-5. Host run fails: check XRT device selection, xclbin path, CU name, buffer group IDs.
-6. Compare fails: check the dataset, golden reference, and host output path — they need to agree on the data format.
+Good commits are small and layer-based:
+
+1. gold/reference change + tests
+2. kernel ABI/header change
+3. kernel implementation + cosim
+4. CMake/Make registration
+5. host app change
+6. board config/link.cfg change
+7. docs update
+
+Do not mix “new kernel implementation” and “new board config” in the same commit unless they are inseparable.
+
+## 8. What to record in a final note
+
+For any significant change, record:
+
+- commands run
+- targets tested
+- whether Vitis hardware link was run
+- whether real hardware was run
+- known untested branches, such as older XRT fallback or embedded sysroot path

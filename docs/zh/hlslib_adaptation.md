@@ -1,63 +1,116 @@
 # hlslib 适配模式
 
-Vitis-Anvil 用 hlslib 提供可复用的 HLS 基础设施，但 demo 和用户代码必须放在框架树之外。
+这篇解释 Vitis-Anvil 如何使用 hlslib。你不需要提前了解 hlslib；关键是 hlslib 提供了适合 HLS 的 packed data 和 stream 类型，Anvil 只封装模板项目需要的一小部分。
 
-## 归属边界
+## 1. 为什么要用 hlslib？
+
+FPGA kernel 常常每周期处理多个值。普通 `float` 是一个值，packed vector 可以在一个 word 里放 4、8、16 个 float。hlslib 提供 `DataPack<T, N>` 来表达这个模式。
+
+FPGA kernel 也常用 stream 连接多个阶段。hlslib 提供适合仿真的 `Stream<T, Depth>` 和 dataflow macros。
+
+Anvil 加了一层薄封装，让用户代码风格统一：
+
+```cpp
+anvil::hls::Pack<float, 16>
+anvil::hls::Stream<MyPack, 32>
+anvil::hls::GetLane(pack, lane)
+anvil::hls::SetLane(pack, lane, value)
+ANVIL_DATAFLOW_FUNCTION(...)
+```
+
+## 2. 哪些是框架代码，哪些是项目代码？
 
 框架拥有，默认不要改：
 
-- `include/anvil/**` — Anvil 公共框架头文件
-- `src/anvil/**` — Anvil 框架实现
-
-项目/用户拥有，预期会改：
-
-- `src/kernels/**` — 可综合 kernel
-- `src/kernels/include/kernels/**` — kernel ABI 类型和声明
-- `src/hls_model/**` — 你的 kernel 的 CPU/HLS 模型
-- `src/host/**` — XRT host app
-- `src/apps/**` — CPU 工具程序
-- `config/**` — 板卡、platform、link 配置
-
-不要把 `saxpy`、`vadd` 这类项目专用 kernel 放到 `include/anvil/**`。这个目录会作为框架 API 安装/导出。
-
-## 通用 Anvil HLS 辅助
-
-通用辅助头文件位于 `include/anvil/hls/`：
-
-- `pack.hpp` — `anvil::hls::Pack<T, N>`、`PackTraits`、`GetLane`、`SetLane`
-- `stream.hpp` — `anvil::hls::Stream<T, Depth>` 和默认深度
-- `dataflow.hpp` — `ANVIL_DATAFLOW_*` 封装
-- `packed_ops.hpp` — packed stream/memory 的 load、store、map 辅助
-- `axis.hpp` — 面向 `hls::stream` 风格端口的 `ReadAxis` / `WriteAxis`
-- `hls_aliases.hpp` — 兼容旧示例的头文件
-
-这些辅助保持 C++14 clean，因为 Vitis HLS 会用 `ANVIL_HLS_STD` 编译 kernel。
-
-## Pack 宽度
-
-Demo kernel 的 pack 类型位于 `src/kernels/include/kernels/kernel_types.hpp`。
-
-- `kernels::kSaxpyPackWidth` 跟随 `anvil::config::kParallelism` / `ANVIL_PARALLELISM`。
-- `kernels::kVaddPackWidth` 和 `kernels::kPipelinePackWidth` 在 demo 中固定为 16。
-- Presets 设置 `ANVIL_PARALLELISM=16`；直接 raw CMake 默认是 8，因此 raw 构建会在 host/model/kernel 三侧一致使用 8-lane saxpy ABI。
-
-Host、kernel、testbench 都使用命名常量。不要为 saxpy 再手写一个字面量 `16`。
-
-## Dataflow 规则
-
-把 hlslib stream 变量直接传给 dataflow function：
-
-```cpp
-ANVIL_DATAFLOW_FUNCTION(Compute, sx, sy, so, a, n_pack);
+```text
+include/anvil/**
+src/anvil/**
 ```
 
-不要对 stream 使用 `std::ref`。hlslib v1.4.6 在 simulation 中会根据被调用函数签名处理引用参数；调用点再包一层 `std::ref` 可能造成 double-wrap，导致绑定失败。
+项目拥有，预期会改：
 
-## 适配你自己的 kernel
+```text
+src/kernels/**
+src/kernels/include/kernels/**
+src/hls_model/**
+src/host/**
+src/gold/**
+config/**
+```
 
-1. 在 `src/kernels/include/kernels/` 放 ABI 声明和 pack 类型。
-2. 在 `src/kernels/` 放可综合实现。
-3. 内部 dataflow 复用 `anvil/hls/pack.hpp`、`stream.hpp`、`dataflow.hpp`、`packed_ops.hpp`。
-4. 外部 AXI stream kernel 端口继续用 `hls::stream<...>` 以保持 Vitis link 兼容；实现内部用 `ReadAxis` / `WriteAxis`。
-5. 在 `src/kernels/CMakeLists.txt` 中用 `add_anvil_kernel()` 注册 kernel。
-6. Host 侧模型放 `src/hls_model/`，不要放 `include/anvil/`。
+不要把你的 kernel ABI 类型放到 `include/anvil/`。应该放到 `src/kernels/include/kernels/`。
+
+## 3. 辅助头文件
+
+| Header | 提供什么 | 什么时候用 |
+|---|---|---|
+| `anvil/hls/pack.hpp` | `Pack`, `PackTraits`, lane get/set | packed memory 或 vector lane |
+| `anvil/hls/stream.hpp` | `Stream<T, Depth>` | kernel 内部 dataflow stream |
+| `anvil/hls/dataflow.hpp` | dataflow macros | load/compute/store 多阶段 kernel |
+| `anvil/hls/packed_ops.hpp` | load/store/map helpers | 常见 packed loop |
+| `anvil/hls/axis.hpp` | `ReadAxis`, `WriteAxis` | 外部 `hls::stream` 端口 |
+
+## 4. Pack 例子
+
+```cpp
+typedef anvil::hls::Pack<float, 16> Float16;
+
+Float16 p;
+for (int lane = 0; lane < 16; ++lane) {
+  anvil::hls::SetLane(p, lane, static_cast<float>(lane));
+}
+float x = anvil::hls::GetLane(p, 3);
+```
+
+尽量用 lane helper，而不是直接 `p[lane]`。这样项目风格统一，后续也更容易改。
+
+## 5. Stream/dataflow 例子
+
+常见 kernel 结构：
+
+```text
+从内存 Load → Compute → Store 回内存
+```
+
+dataflow 可以让这些阶段重叠执行。
+
+规则：stream 变量直接传，不要包 `std::ref`。
+
+```cpp
+ANVIL_DATAFLOW_INIT();
+ANVIL_DATAFLOW_FUNCTION(Load, input, s_in, n);
+ANVIL_DATAFLOW_FUNCTION(Compute, s_in, s_out, n);
+ANVIL_DATAFLOW_FUNCTION(Store, s_out, output, n);
+ANVIL_DATAFLOW_FINALIZE();
+```
+
+为什么不能 `std::ref`？hlslib simulation 已经会根据被调用函数签名保留引用参数。调用点再包 `std::ref` 可能 double-wrap，导致编译失败。
+
+## 6. 外部 AXI stream
+
+会变成 AXI stream 的 kernel top-level 端口，继续用 Vitis `hls::stream<...>`。函数内部可以用 Anvil helper：
+
+```cpp
+extern "C" void my_stream_kernel(hls::stream<MyPack>& in,
+                                 hls::stream<MyPack>& out,
+                                 int n) {
+  for (int i = 0; i < n; ++i) {
+    MyPack p = anvil::hls::ReadAxis(in);
+    anvil::hls::WriteAxis(out, p);
+  }
+}
+```
+
+除非你清楚 Vitis link 的影响，否则不要把外部 stream 端口改成 hlslib stream。
+
+## 7. Pack 宽度和 ABI
+
+Pack 宽度是 kernel ABI 的一部分。如果 host 和 kernel 不一致，buffer padding 会错，输出也会错。
+
+Demo kernel 的宽度在：
+
+```text
+src/kernels/include/kernels/kernel_types.hpp
+```
+
+`saxpy` 跟随 `ANVIL_PARALLELISM`。`vadd` 和 `pipeline_demo` 使用固定 demo 宽度。你加自己的 kernel 时，在自己的 ABI header 中定义宽度，并在 host、kernel、tests 中使用同一个常量。

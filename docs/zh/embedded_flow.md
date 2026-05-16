@@ -1,114 +1,201 @@
 # Embedded 流程
 
-嵌入式板卡（ZCU102、ZCU104、ZCU106、KV260）不走 PCIe。构建拆成两个 preset：一个给 kernel，一个给 AArch64 host。
+这篇解释 ZCU102、ZCU104、ZCU106、KV260 这类 Zynq/ZynqMP embedded 板卡。它们和 PCIe 加速卡不同：host app 跑在板上的 ARM CPU 上，不跑在你的 x86_64 工作站上。
 
-## 1. 需要什么
+## 1. Embedded 板卡有什么不同？
 
-- 带 embedded base platform `.xpfm` 的 Vitis
-- PetaLinux 或兼容的 AArch64 sysroot
-- 板端镜像上的 XRT 和 zocl
-- 能通过 `scp`/`ssh` 访问板卡
+对 embedded 板卡来说：
 
-查找 platform 文件：
+- FPGA fabric 和 ARM CPU 在同一块板上
+- host app 必须交叉编译成 AArch64
+- 板卡镜像里必须有 XRT runtime
+- 通常通过 SSH 把 host binary 和 xclbin 拷到板上
+- host 编译需要 `PETALINUX_SYSROOT`
 
-```bash
-find /tools/Xilinx -name '*zcu102*.xpfm' 2>/dev/null
-find /tools/Xilinx -name '*kv260*.xpfm' 2>/dev/null
+流程：
+
+```text
+工作站上跑 CPU 测试
+  ↓
+工作站上 csynth/cosim kernel
+  ↓
+工作站上链接 embedded xclbin
+  ↓
+交叉编译 ARM host app
+  ↓
+复制 host app + xclbin + 数据到板上
+  ↓
+板上通过 XRT 运行
+  ↓
+拷回/比较输出
 ```
 
-设置 sysroot。典型路径：
+## 2. 准备工作站
+
+需要 Vitis 和 embedded platform：
+
+```bash
+. /tools/Xilinx/Vitis/2024.2/settings64.sh
+```
+
+还需要匹配板卡镜像的 sysroot：
 
 ```bash
 export PETALINUX_SYSROOT=/opt/Xilinx/images/xilinx-zynqmp-common-v2024.2/sysroots/cortexa72-cortexa53-xilinx-linux
 ```
 
-如果你的 sysroot 在其他位置，直接传参：
+sysroot 里有交叉编译 host app 需要的 ARM 头文件和库。如果 sysroot 和 compiler/toolchain 不匹配，CMake 可能报缺 `crtbeginS.o` 或 `-lgcc`。
+
+## 3. 准备板卡
+
+板上必须装好 XRT。登录板卡后：
 
 ```bash
-PETALINUX_SYSROOT=/path/to/sysroot make build-host TARGET=zcu102
+. /etc/profile.d/xrt_setup.sh
+xbutil examine
 ```
 
-## 2. 构建 embedded host 和 kernel
+如果没有 `xbutil` 或看不到设备，先修板卡镜像/XRT 设置。
 
-交叉编译 host 程序：
+## 4. 检查 target 配置
+
+打开 `config/zcu102/anvil.mk` 或你的 target。重要字段：
+
+```make
+ANVIL_DEVICE_KIND := embedded
+ANVIL_NEEDS_CROSS := yes
+ANVIL_SYSROOT ?= $(PETALINUX_SYSROOT)
+ANVIL_PRESET := zcu102-kernel
+ANVIL_HOST_PRESET := zcu102-host
+ANVIL_PLATFORM ?= /path/to/xilinx_zcu102_base_202420_1.xpfm
+```
+
+含义：
+
+- `ANVIL_PRESET` 构建 FPGA kernel/xclbin 侧。
+- `ANVIL_HOST_PRESET` 构建 ARM host app 侧。
+- `ANVIL_SYSROOT` 指向 ARM sysroot。
+- `ANVIL_PLATFORM` 指向 embedded Vitis platform。
+
+## 5. 构建 host app
 
 ```bash
 PETALINUX_SYSROOT=/path/to/sysroot make build-host TARGET=zcu102 HOST_APP=run_saxpy
 ```
 
-综合 kernel：
+这个命令做什么：
+
+1. 用 AArch64 toolchain 配置 host preset
+2. 使用 sysroot 中的目标头文件/库
+3. 构建 ARM 可执行文件
+
+输出在：
+
+```text
+build/zcu102-host/src/host/run_saxpy
+```
+
+如果这一步在编译你的源码前就失败，通常是 sysroot/toolchain 错了。
+
+## 6. 构建 kernel 和 xclbin
 
 ```bash
 make csynth TARGET=zcu102 KERNEL=saxpy
 make cosim TARGET=zcu102 KERNEL=saxpy
-make analyze-flow TARGET=zcu102 KERNEL=saxpy
-make analyze-cosim TARGET=zcu102 KERNEL=saxpy
-```
-
-链接 xclbin：
-
-```bash
 make xclbin TARGET=zcu102
 ```
 
-## 3. 部署到板卡
+Embedded xclbin link 使用 embedded platform 和它的 memory interface。`link.cfg` 里的 memory 名可能和加速卡不同。
 
-在本地生成数据和 golden output：
+## 7. 生成数据
+
+在工作站上：
 
 ```bash
 make gen DATASET=tiny
 make gold DATASET=tiny
 ```
 
-部署全部内容（二进制、xclbin、数据）：
+这会创建输入和期望输出。输入文件必须复制到板上后才能运行硬件。
+
+## 8. 部署到板卡
+
+设置板卡连接变量：
 
 ```bash
-make deploy TARGET=zcu102 BOARD_IP=192.168.1.100 DATASET=tiny
+export BOARD_IP=192.168.1.10
+export BOARD_SSH_USER=root
+export BOARD_DEPLOY_DIR=~/anvil-deploy
 ```
 
-完整的端到端测试：
+复制文件：
 
 ```bash
-make test-xrt-hw TARGET=zcu102 BOARD_IP=192.168.1.100 DATASET=tiny
+make deploy-bin TARGET=zcu102 HOST_APP=run_saxpy BOARD_IP=$BOARD_IP
+make deploy-xclbin TARGET=zcu102 BOARD_IP=$BOARD_IP
+make deploy-data TARGET=zcu102 DATASET=tiny BOARD_IP=$BOARD_IP
 ```
 
-可以自定义 SSH 用户和部署目录：
+会复制：
+
+- ARM host binary
+- xclbin
+- `xrt.ini`
+- dataset 文件
+
+## 9. 在板上运行
+
+可以用 all-in-one 目标：
 
 ```bash
-make deploy TARGET=zcu102 BOARD_IP=192.168.1.100 BOARD_SSH_USER=xilinx BOARD_DEPLOY_DIR=/home/xilinx/anvil
+make test-xrt-hw TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny BOARD_IP=$BOARD_IP
 ```
 
-## 4. 手动在板卡上运行
-
-在板卡上：
+也可以手动登录运行：
 
 ```bash
-. /etc/profile.d/xrt_setup.sh
+ssh root@$BOARD_IP
 cd ~/anvil-deploy
-chmod +x run_saxpy
+. /etc/profile.d/xrt_setup.sh
 ./run_saxpy --xclbin saxpy.xclbin --data-dir data/tiny --output data/tiny/xrt_hw_out.bin
 ```
 
-把输出拷回来并比较：
+调试时手动运行更好，因为可以直接检查文件和环境。
+
+## 10. 比较输出
+
+如果输出已拷回工作站：
 
 ```bash
-scp root@192.168.1.100:~/anvil-deploy/data/tiny/xrt_hw_out.bin data/tiny/
 make compare DATASET=tiny
 ```
 
-## 5. Embedded 硬件仿真
+如果在板上比较，要保证 compare 工具和 Python 环境也在板上。通常更简单的做法是把输出拷回工作站比较。
 
-```bash
-make xrt-emu TARGET=zcu102 DATASET=tiny
-```
+## 11. 常见 embedded 失败
 
-对嵌入式目标来说，这个命令会构建 kernel xclbin 和 AArch64 host 二进制，生成 emconfig 文件，然后打印路径。实际的 QEMU 启动取决于具体的 BSP 和 PetaLinux platform 包，那部分不在这个 Makefile 的管理范围内。
+### Host build 提示 `SYSROOT environment variable not set`
 
-## 6. Troubleshooting
+设置 `PETALINUX_SYSROOT` 或 `ANVIL_SYSROOT`。
 
-| 现象 | 可能原因 | 修复 |
-|---|---|---|
-| 编译器找不到 `crtbeginS.o` 或 `-lgcc` | Sysroot 和编译器运行时不匹配 | 使用和 Vitis/PetaLinux toolchain 匹配的 sysroot |
-| 板端报 `device not found` | XRT 或 zocl 未加载 | Source XRT 环境并查看 `dmesg` |
-| xclbin 加载错误 | Platform 或 board image 不匹配 | 用正确的 `.xpfm` 和 boot image 重建 |
-| `cosim is not configured` | `KERNEL=` 不对，或该 target 不支持该 kernel 的 cosim | 用 `KERNEL=saxpy` 或 `KERNEL=vadd`；stream pipeline 仅限加速卡 |
+### Linker 找不到 `crtbeginS.o` 或 `-lgcc`
+
+sysroot 和 compiler 不匹配。使用匹配 PetaLinux/Vitis release 的 sysroot。
+
+### 板上提示 XRT 缺失
+
+板卡镜像没有 XRT，或者没有 source `/etc/profile.d/xrt_setup.sh`。
+
+### Kernel 能加载但输出错误
+
+按顺序检查：
+
+1. host BO group index
+2. kernel 参数顺序
+3. `link.cfg` memory binding
+4. dataset 文件是否真的复制到板上
+5. host app 中的 cache/sync 调用
+
+## 12. 什么时候读 embedded 文档，什么时候读加速卡文档
+
+如果 host app 跑在板上的 ARM CPU 上，读这篇。 如果 host app 跑在插有 PCIe FPGA 卡的 x86_64 主机上，读 [加速卡流程](accelerator_flow.md)。

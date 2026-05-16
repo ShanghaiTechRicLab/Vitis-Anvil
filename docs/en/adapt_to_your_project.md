@@ -1,93 +1,85 @@
 # Adapt Vitis-Anvil to your own project
 
-There are two common ways to use Vitis-Anvil once you outgrow the demo.
+This page is about turning the template into a real repository for your accelerator. Read [Customization guide](customization.md) first if you have not added a kernel before.
 
-## Option A: Use it as a project template
+## 1. Decide what you keep
 
-1. Copy the repository.
-2. Keep `cmake/`, `CMakePresets.json`, `Makefile`, `config/`, `tools/hlsflow/`, and `python/anvil/`.
-3. Replace the demo kernels and host apps.
-4. Keep the existing tests passing until your replacement tests are ready.
-5. Rename the product-facing binaries and documentation once the flow is stable.
+Most projects keep:
 
-A good replacement order:
+- top-level Makefile flow
+- CMake presets and helper modules
+- `include/anvil/**` framework helpers
+- `src/anvil/**` runtime/logging libraries
+- `tools/hlsflow/**` report tools
+- docs structure
+
+Most projects replace:
+
+- demo kernels in `src/kernels/`
+- demo host apps in `src/host/`
+- demo gold reference in `src/gold/`
+- demo datasets and compare logic
+- board configs under `config/`
+
+## 2. Rename the problem, not the framework
+
+Do not rename every `anvil` namespace immediately. Keep the framework stable and add your project code around it.
+
+Good first step:
 
 ```text
-kernel C++ → cosim testbench → CPU model / gold → host app → dataset → compare → xclbin connectivity → board run
+src/kernels/include/kernels/my_algorithm.hpp
+src/kernels/my_algorithm_kernel.cpp
+src/host/run_my_algorithm.cpp
+src/gold/include/gold/my_algorithm_gold.hpp
 ```
 
-## Option B: Vendor the build modules into an existing repository
-
-Copy these pieces into your existing project:
+Bad first step:
 
 ```text
-cmake/AnvilKernel.cmake
-cmake/AnvilHost.cmake
-cmake/FindVitis.cmake
-cmake/FindXRT.cmake
-cmake/Toolchain-*.cmake
-config/<target>/
-tools/hlsflow/
+rename include/anvil to include/my_company
+rewrite runtime wrappers before running a kernel
 ```
 
-Then include the modules from your top-level `CMakeLists.txt` and use `add_anvil_kernel()` and `add_anvil_xclbin()` to register your own kernels.
+Renaming the framework early creates many errors without improving your hardware.
 
-## Minimal CMake structure
+## 3. Replace demos in layers
 
-```cmake
-cmake_minimum_required(VERSION 3.21)
-project(my_accel LANGUAGES CXX)
+Recommended order:
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
-include(ProjectOptions)
-include(AnvilKernel)
-include(AnvilHost)
+1. Keep `saxpy` working.
+2. Add your new kernel next to it.
+3. Add your host app next to existing host apps.
+4. Add your dataset/gold/compare flow.
+5. Add your board config.
+6. Only remove demos after your flow works.
 
-add_subdirectory(src/kernels)
-add_subdirectory(src/host)
-```
+This keeps a known-good reference while you are debugging your own code.
 
-## Minimal Make interface
+## 4. Define your project contract
 
-Keep a small, stable set of user-facing commands:
+Write down:
 
-```bash
-make test
-make build TARGET=<board> HOST_APP=<app>
-make csynth TARGET=<board> KERNEL=<kernel>
-make cosim TARGET=<board> KERNEL=<kernel>
-make xclbin TARGET=<board>
-make run-host TARGET=<board> HOST_APP=<app>
-```
+- input files
+- output files
+- metadata JSON fields
+- kernel argument order
+- pack width
+- target boards
+- acceptable error thresholds
+- expected performance checks
 
-This surface is designed so you can wrap it later:
+Put this in your docs before the project grows. Many FPGA bugs are really contract mismatches between host, kernel, and data tools.
 
-```bash
-anvil init
-anvil build --target u250 --host-app run_saxpy
-anvil csynth --target u250 --kernel saxpy
-```
+## 5. Add CI gradually
 
-## Naming and packaging
+A useful CI ladder:
 
-Use `anvil` for the internal template and tooling layer. Use your own product name for the final accelerator, bitstream package, and end-user application. This keeps the reusable build flow separate from product identity.
+1. formatting/static checks if you have them
+2. `make test`
+3. Python tests
+4. install smoke
+5. optional csynth on one small kernel if runners have Vitis
+6. hardware tests only on dedicated machines
 
-## What to keep and what to replace
-
-Keep:
-
-- The target split: `TARGET`, `KERNEL`, `HOST_APP`, `DATASET` as separate concerns
-- The explicit Python environment target
-- Explicit long-running targets for HLS and xclbin
-- The HLS report database
-- Platform path override via `ANVIL_PLATFORM=`
-- Embedded sysroot override via `PETALINUX_SYSROOT=`
-
-Replace:
-
-- Demo kernels
-- Demo host apps
-- Dataset format
-- Golden reference and comparison logic
-- Connectivity files
-- Product-facing documentation
+Do not make every pull request run full hardware link unless you have enough machines and time.

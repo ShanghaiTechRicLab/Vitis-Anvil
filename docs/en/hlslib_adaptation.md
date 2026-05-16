@@ -1,63 +1,116 @@
 # hlslib adaptation pattern
 
-Vitis-Anvil uses hlslib for the reusable HLS building blocks, but keeps demo and user code outside the framework tree.
+This page explains how Vitis-Anvil uses hlslib. You do not need to know hlslib before reading this; the important idea is that hlslib provides convenient C++ types for packed data and streams, and Anvil wraps the small subset used by the template.
 
-## Ownership boundary
+## 1. Why use hlslib at all?
+
+FPGA kernels often process multiple values per cycle. A normal `float` is one value. A packed vector can hold 4, 8, or 16 floats in one word. hlslib provides `DataPack<T, N>` for this pattern.
+
+FPGA kernels also often connect stages with streams. hlslib provides a simulation-friendly `Stream<T, Depth>` and dataflow macros.
+
+Anvil adds thin wrappers so user code has one consistent style:
+
+```cpp
+anvil::hls::Pack<float, 16>
+anvil::hls::Stream<MyPack, 32>
+anvil::hls::GetLane(pack, lane)
+anvil::hls::SetLane(pack, lane, value)
+ANVIL_DATAFLOW_FUNCTION(...)
+```
+
+## 2. What is framework code and what is project code?
 
 Framework-owned, default not editable:
 
-- `include/anvil/**` — reusable public Anvil headers
-- `src/anvil/**` — reusable Anvil implementation
-
-Project/user-owned, expected to change:
-
-- `src/kernels/**` — synthesizable kernels
-- `src/kernels/include/kernels/**` — kernel ABI types and declarations
-- `src/hls_model/**` — CPU/HLS models for your kernels
-- `src/host/**` — XRT host apps
-- `src/apps/**` — CPU utility apps
-- `config/**` — board/platform/link configuration
-
-Do not put project-specific kernels such as `saxpy` or `vadd` under `include/anvil/**`. That tree is installed/exported as the framework API.
-
-## Generic Anvil HLS helpers
-
-The generic helper headers live under `include/anvil/hls/`:
-
-- `pack.hpp` — `anvil::hls::Pack<T, N>`, `PackTraits`, `GetLane`, `SetLane`
-- `stream.hpp` — `anvil::hls::Stream<T, Depth>` and default depths
-- `dataflow.hpp` — `ANVIL_DATAFLOW_*` wrappers
-- `packed_ops.hpp` — load/store/map helpers for packed streams and memory
-- `axis.hpp` — small `ReadAxis`/`WriteAxis` wrappers for `hls::stream` style ports
-- `hls_aliases.hpp` — compatibility header for older examples
-
-The helpers are C++14-clean because Vitis HLS compiles kernels with `ANVIL_HLS_STD`.
-
-## Pack widths
-
-Demo kernel pack types live in `src/kernels/include/kernels/kernel_types.hpp`.
-
-- `kernels::kSaxpyPackWidth` follows `anvil::config::kParallelism` / `ANVIL_PARALLELISM`.
-- `kernels::kVaddPackWidth` and `kernels::kPipelinePackWidth` remain fixed at 16 for the demos.
-- Presets set `ANVIL_PARALLELISM=16`; raw CMake defaults to 8, so raw builds use an 8-lane saxpy ABI consistently across host/model/kernel.
-
-Use the named constants in host code, kernels, and testbenches. Do not duplicate a literal `16` for saxpy.
-
-## Dataflow rule
-
-Pass hlslib streams directly to dataflow functions:
-
-```cpp
-ANVIL_DATAFLOW_FUNCTION(Compute, sx, sy, so, a, n_pack);
+```text
+include/anvil/**
+src/anvil/**
 ```
 
-Do not wrap streams in `std::ref`. hlslib v1.4.6 applies reference preservation from the callee function signature during simulation; wrapping at the call site can double-wrap and fail to bind.
+Project-owned, expected to change:
 
-## Adapting your own kernel
+```text
+src/kernels/**
+src/kernels/include/kernels/**
+src/hls_model/**
+src/host/**
+src/gold/**
+config/**
+```
 
-1. Add ABI declarations and pack types under `src/kernels/include/kernels/`.
-2. Add synthesizable code under `src/kernels/`.
-3. Reuse `anvil/hls/pack.hpp`, `stream.hpp`, `dataflow.hpp`, and `packed_ops.hpp` for internal dataflow.
-4. Keep external AXI stream kernel ports as `hls::stream<...>` for Vitis link compatibility; use `ReadAxis`/`WriteAxis` inside the implementation.
-5. Register kernels in `src/kernels/CMakeLists.txt` with `add_anvil_kernel()`.
-6. Put host-side models under `src/hls_model/`, not under `include/anvil/`.
+Do not put your kernel ABI types under `include/anvil/`. Put them under `src/kernels/include/kernels/`.
+
+## 3. The helper headers
+
+| Header | What it gives you | When to use it |
+|---|---|---|
+| `anvil/hls/pack.hpp` | `Pack`, `PackTraits`, lane get/set | packed memory or vector lanes |
+| `anvil/hls/stream.hpp` | `Stream<T, Depth>` | internal dataflow streams |
+| `anvil/hls/dataflow.hpp` | dataflow macros | multi-stage load/compute/store kernels |
+| `anvil/hls/packed_ops.hpp` | load/store/map helpers | common packed loops |
+| `anvil/hls/axis.hpp` | `ReadAxis`, `WriteAxis` | external `hls::stream` ports |
+
+## 4. Pack example
+
+```cpp
+typedef anvil::hls::Pack<float, 16> Float16;
+
+Float16 p;
+for (int lane = 0; lane < 16; ++lane) {
+  anvil::hls::SetLane(p, lane, static_cast<float>(lane));
+}
+float x = anvil::hls::GetLane(p, 3);
+```
+
+Use lane helpers instead of direct `p[lane]` when possible. It keeps the project style consistent and makes future changes easier.
+
+## 5. Stream/dataflow example
+
+A common kernel structure is:
+
+```text
+Load from memory → Compute → Store to memory
+```
+
+With dataflow, those stages can overlap.
+
+Rule: pass stream variables directly. Do not wrap them in `std::ref`.
+
+```cpp
+ANVIL_DATAFLOW_INIT();
+ANVIL_DATAFLOW_FUNCTION(Load, input, s_in, n);
+ANVIL_DATAFLOW_FUNCTION(Compute, s_in, s_out, n);
+ANVIL_DATAFLOW_FUNCTION(Store, s_out, output, n);
+ANVIL_DATAFLOW_FINALIZE();
+```
+
+Why no `std::ref`? hlslib simulation already preserves reference parameters based on the called function signature. Adding `std::ref` at the call site can double-wrap the stream and break compilation.
+
+## 6. External AXI streams
+
+For kernel ports that become AXI streams, keep using Vitis `hls::stream<...>` in the top-level function signature. Use Anvil helpers inside the function:
+
+```cpp
+extern "C" void my_stream_kernel(hls::stream<MyPack>& in,
+                                 hls::stream<MyPack>& out,
+                                 int n) {
+  for (int i = 0; i < n; ++i) {
+    MyPack p = anvil::hls::ReadAxis(in);
+    anvil::hls::WriteAxis(out, p);
+  }
+}
+```
+
+Do not change external stream ports to hlslib streams unless you know the Vitis link implications.
+
+## 7. Pack width and ABI
+
+Pack width is part of the kernel ABI. If host and kernel disagree, buffers will be padded incorrectly and output will be wrong.
+
+For demo kernels, widths live in:
+
+```text
+src/kernels/include/kernels/kernel_types.hpp
+```
+
+`saxpy` follows `ANVIL_PARALLELISM`. `vadd` and `pipeline_demo` use fixed demo widths. If you add your own kernel, define its width in its own ABI header and use that same constant in host, kernel, and tests.

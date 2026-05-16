@@ -1,77 +1,123 @@
-# 典型开发流程
+# 开发流程
 
-核心思路：把快速的 CPU 迭代和慢速的 FPGA 工作拆开。你不会想因为修了 host 文件里的一个 typo 就等一次 HLS 综合，也不会想通过 Vitis 日志来调试 host 逻辑。
+这篇给日常改代码的顺序。核心规则：先用最便宜的检查抓 bug，再用更慢的 FPGA 步骤。
 
-## 日常循环
+## 1. 调试阶梯
+
+按这个顺序：
+
+1. **CPU unit tests** — 抓普通 C++/Python 错误。
+2. **Gold vs HLS model** — 在 Vitis 前抓数据布局错误。
+3. **HLS 综合 (`csynth`)** — 抓 HLS 不兼容 C++，查看硬件估算。
+4. **HLS cosim (`cosim`)** — 抓 RTL 行为不一致。
+5. **xclbin link** — 抓 platform/connectivity/memory-bank 问题。
+6. **host build** — 抓 XRT/API/编译问题。
+7. **硬件运行** — 抓 runtime、BO group、设备、部署问题。
+8. **compare/analyze** — 检查正确性和性能趋势。
+
+不要改完 kernel 直接跑硬件。等待更久，错误还更不精确。
+
+## 2. 改普通 C++ 或 Python 代码
+
+运行：
 
 ```bash
 make test
-make build TARGET=u250 HOST_APP=run_saxpy
 ```
 
-普通 C++ 或 Python 改动后跑这个。它不会自动创建 Python 环境（除非你显式调用 `make python-env`），也不会触发 kernel 综合。只是编译 host 程序并跑 CPU 侧的测试。
-
-## Kernel 循环
+如果涉及 Python 工具：
 
 ```bash
-make csynth TARGET=u250 KERNEL=saxpy
-make analyze-flow TARGET=u250 KERNEL=saxpy
-make check-hls
+make python-env
+make test
 ```
 
-改 HLS 代码或 pragmas 的时候用。重点看：
+这应该很快，不需要 Vitis 或 XRT。
 
-- II（initiation interval）
-- 延迟（latency）
-- Timing slack
-- 资源余量（LUT、DSP、BRAM）
-- Interface 摘要
+## 3. 改 kernel
 
-## Cosim 循环
+运行：
 
 ```bash
-make cosim TARGET=u250 KERNEL=saxpy
-make analyze-cosim TARGET=u250 KERNEL=saxpy
+make csynth TARGET=u250 KERNEL=<kernel>
+make analyze-flow TARGET=u250 KERNEL=<kernel>
+make cosim TARGET=u250 KERNEL=<kernel>
+make analyze-cosim TARGET=u250 KERNEL=<kernel>
 ```
 
-Cosimulation 用 kernel testbench 验证 Vitis 从你的 C++ 代码生成的 RTL。这一步能在你构建 xclbin 之前抓住 ABI 不匹配和接口问题。它不运行 XRT host 程序。
+怎么理解：
 
-## XRT host 循环
+- csynth 编译失败：kernel 代码或 include path 问题
+- csynth II/timing 差：HLS 结构问题
+- cosim 失败：算法/RTL 不一致或 testbench 问题
+- analyze 输出异常：parser 或 report 路径问题
+
+## 4. 改 host 代码
+
+运行：
 
 ```bash
-make gen DATASET=tiny
-make gold DATASET=tiny
+make build TARGET=u250 HOST_APP=<app>
+```
+
+这只构建 host app，不应该综合 kernel。
+
+如果 host app 编译通过但运行失败，检查：
+
+- XRT setup
+- xclbin 路径
+- compute-unit 名
+- BO group index
+- dataset 路径
+
+## 5. 改 `link.cfg`
+
+运行：
+
+```bash
 make xclbin TARGET=u250
-make run-host TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
-make compare DATASET=tiny
 ```
 
-改了 kernel ABI 或 host 端的 buffer 逻辑后跑这个。
+`link.cfg` 改动不是 C++ unit test 能测的，要靠 Vitis linker 和 host runtime。
 
-## Embedded board 循环
+## 6. 加板卡
+
+先 configure/synthesis，再硬件：
 
 ```bash
-PETALINUX_SYSROOT=/path/to/sysroot make build-host TARGET=zcu102 HOST_APP=run_saxpy
-make xclbin TARGET=zcu102
-make deploy TARGET=zcu102 BOARD_IP=192.168.1.100 DATASET=tiny
-make test-xrt-hw TARGET=zcu102 BOARD_IP=192.168.1.100 DATASET=tiny
+make csynth TARGET=<target> KERNEL=saxpy
+make analyze-flow TARGET=<target> KERNEL=saxpy
 ```
 
-## 提交前检查
+之后再试：
 
 ```bash
-make test
-make analyze-flow TARGET=<target> KERNEL=<kernel>
-make analyze-cosim TARGET=<target> KERNEL=<kernel>
+make xclbin TARGET=<target>
+make build TARGET=<target> HOST_APP=run_saxpy
 ```
 
-如果改动涉及硬件，还应跑 `make run-host` 或 board deployment 路径。
+Embedded 板卡构建 host 时要设置 `PETALINUX_SYSROOT`。
 
-## Debug 顺序
+## 7. 提交策略
 
-1. `make test` 失败：先修 CPU 端逻辑、库问题或 golden reference。
-2. `make csynth` 失败：检查 HLS 编译日志和 C++14/HLS 限制。
-3. `make cosim` 失败：检查 kernel testbench 和 ABI 假设。
-4. `make xclbin` 失败：检查 `link.cfg`、platform、memory banks、clock 约束。
-5. Host run 失败：检查 XRT device 选择、xclbin 路径、CU 名称、buffer group ID。
-6. Compare 失败：检查 dataset、golden reference 和 host 输出路径 — 它们的数据格式必须一致。
+好的提交应该小而按层分：
+
+1. gold/reference + tests
+2. kernel ABI/header
+3. kernel 实现 + cosim
+4. CMake/Make 注册
+5. host app
+6. board config/link.cfg
+7. docs
+
+不要把“新 kernel 实现”和“新板卡配置”混在一个提交里，除非它们不可分。
+
+## 8. 最终说明记录什么
+
+较大改动最后记录：
+
+- 跑过哪些命令
+- 测过哪些 target
+- 是否跑过 Vitis hardware link
+- 是否跑过真实硬件
+- 哪些分支没测，例如 older XRT fallback 或 embedded sysroot 路径

@@ -1,242 +1,157 @@
-# Project structure
+# Project structure: where each piece lives
 
-This page explains what each directory and file in the repository is for. Use it as a reference when you are navigating the codebase or adapting the template to your own project.
+This page explains the repository layout from the point of view of someone building an FPGA accelerator. The main idea is separation: framework code, kernel code, host code, data code, and board configuration should not be mixed.
 
-## Top-level files
+## The top-level directories
 
-| File | What it is |
+| Path | What it is | Why it exists |
+|---|---|---|
+| `include/anvil/` | Public framework headers | Generic helpers that are installed/exported for reuse |
+| `src/anvil/` | Framework implementation | Runtime/logging/etc. implementation used by apps |
+| `src/kernels/` | HLS kernel implementations | Code that Vitis HLS turns into hardware |
+| `src/kernels/include/kernels/` | Project kernel ABI headers | Shared declarations for kernels, host apps, and testbenches |
+| `src/host/` | XRT host apps | CPU programs that load xclbin and launch kernels |
+| `src/gold/` | CPU truth/reference code | Simple correct implementation used for comparison |
+| `src/hls_model/` | CPU-compiled HLS-style model | Checks packed/stream algorithm behavior before synthesis |
+| `src/apps/` | Utility CLIs | Dataset generation, gold runner, comparison runner |
+| `tests/` | C++/Python/cosim/install tests | Verifies each layer before hardware |
+| `config/` | Per-board configuration | xpfm path, part, xrt.ini, link.cfg, Make variables |
+| `tools/` | Python analysis tools | HLS report parsing, comparison, summaries |
+| `scripts/` | Shell/Python flow helpers | Board run, dataset helpers, legacy wrappers |
+| `docs/` | User documentation | How to use and adapt the template |
+| `build/` | Generated build trees | Created by CMake; do not edit or commit |
+| `data/` | Generated datasets | Inputs and outputs for examples |
+| `reports/` | Generated analysis reports | HTML/TXT/JSONL summaries from hlsflow |
+
+## Framework code vs project code
+
+Framework code is the Anvil infrastructure. Most users should not edit it:
+
+```text
+include/anvil/**
+src/anvil/**
+```
+
+Project code is where you add your accelerator:
+
+```text
+src/kernels/**
+src/kernels/include/kernels/**
+src/hls_model/**
+src/gold/**
+src/host/**
+config/**
+tests/**
+```
+
+Why this matters: if you put your algorithm under `include/anvil/`, it becomes part of the framework API and may be installed for downstream consumers. Kernel-specific types such as `ScaleAddPack` should not be framework API.
+
+## Kernel files
+
+A typical kernel has three files:
+
+```text
+src/kernels/include/kernels/my_kernel.hpp   # ABI and type declarations
+src/kernels/my_kernel.cpp                   # HLS implementation
+tests/kernels/my_kernel_cosim_tb.cpp        # C/RTL cosim testbench
+```
+
+The header declares the top function:
+
+```cpp
+extern "C" void my_kernel(...);
+```
+
+The `.cpp` implements it with HLS pragmas. The testbench calls the same function with normal C++ arrays/vectors.
+
+## Host app files
+
+Host apps live in:
+
+```text
+src/host/run_saxpy.cpp
+src/host/run_vadd.cpp
+src/host/run_pipeline_demo.cpp
+```
+
+A host app is not synthesized. It runs on CPU and uses XRT. It needs to know:
+
+- xclbin path
+- kernel compute-unit name, such as `saxpy:{saxpy_1}`
+- buffer argument order
+- dataset input/output file names
+
+Host executables are registered in `src/host/CMakeLists.txt`.
+
+## Board config files
+
+Each target has a directory:
+
+```text
+config/u250/
+config/zcu102/
+```
+
+Important files:
+
+| File | Meaning |
 |---|---|
-| `Makefile` | The main user interface. All `make <target>` commands go here. It wraps CMake presets and adds convenience targets for HLS, deployment, analysis, etc. |
-| `CMakeLists.txt` | Top-level CMake build definition. Defines the `anvil_core` interface library and conditionally includes subdirectories based on build options (`ANVIL_BUILD_*`). |
-| `CMakePresets.json` | CMake presets for configure, build, and test. Each board has its own preset that sets the toolchain file, Vitis platform, and XRT paths. |
-| `pyproject.toml` | Python package definition. Installs the `anvil` Python package and its test dependencies. |
-| `.clang-format` | C++ code formatting rules. |
+| `anvil.mk` | Make variables: platform path, preset names, target type, kernel target list |
+| `link.cfg` | Vitis linker connectivity: compute units, DDR/HBM banks, clocks |
+| `pipeline_demo.cfg` | Optional stream pipeline connectivity |
+| `xrt.ini` | XRT runtime tracing/debug settings |
+| `README.md` | Notes specific to that board or platform |
 
-## `cmake/` — CMake modules
+`TARGET=u250` means “load `config/u250/anvil.mk` and use the presets/platform described there.”
 
-These are the reusable build-system pieces. Each file defines a CMake module or finder.
+## Build directories
 
-| File | What it does |
+CMake writes generated files under `build/<preset>/`. Examples:
+
+```text
+build/hls-model-linux-debug/
+build/gold-linux-debug/
+build/u250-host/
+build/zcu102-kernel/
+build/zcu102-host/
+```
+
+Do not edit files under `build/`. If generated files look wrong, fix the source CMake/config files and reconfigure.
+
+## Data and reports
+
+Dataset directories contain inputs and outputs:
+
+```text
+data/tiny/meta.json
+data/tiny/x.bin
+data/tiny/y.bin
+data/tiny/gold_out.bin
+data/tiny/xrt_hw_out.bin
+```
+
+Report directories contain analysis artifacts:
+
+```text
+reports/*.html
+reports/*.txt
+reports/runs.jsonl
+reports/runs.csv
+```
+
+Data and reports are outputs of the flow, not source code.
+
+## Where to edit for common tasks
+
+| Goal | Edit these files first |
 |---|---|
-| `AnvilKernel.cmake` | Defines `add_anvil_kernel()` and `add_anvil_xclbin()` — the functions that run `v++ --compile` and `v++ --link` to turn C++ into HLS IP and link it into an xclbin. |
-| `AnvilHost.cmake` | Defines `add_anvil_host()` — a thin wrapper around `add_executable()` that handles linking against the anvil libraries. |
-| `ProjectOptions.cmake` | Declares the `ANVIL_BUILD_*` options (GOLD, HLS_MODEL, APPS, KERNELS, XRT, TESTS). |
-| `BuildOptionValidation.cmake` | Validates that incompatible combinations of `ANVIL_BUILD_*` options are caught early. |
-| `CompilerLauncher.cmake` | Integrates `ccache` or other compiler launchers. |
-| `FindVitis.cmake` | Locates the Vitis installation (`v++`, headers, platform packages). |
-| `FindXRT.cmake` | Locates the XRT installation (headers, libraries). |
-| `Toolchain-aarch64-linux.cmake` | Cross-compilation toolchain file for AArch64 (embedded ZynqMP boards). |
-| `Toolchain-x86_64-linux.cmake` | Toolchain file for x86_64 Linux host builds. |
-| `parse_hls_report.py` | Python helper that wraps HLS report parsing. Used internally by the build system. |
-| `anvilConfig.cmake.in` | Template for `find_package(anvil)` support after you install the library. |
+| Add a new kernel | `src/kernels/include/kernels/*.hpp`, `src/kernels/*.cpp`, `src/kernels/CMakeLists.txt` |
+| Add cosim | `tests/kernels/*_cosim_tb.cpp`, `src/kernels/CMakeLists.txt` |
+| Add host app | `src/host/*.cpp`, `src/host/CMakeLists.txt` |
+| Add gold reference | `src/gold/include/gold/*.hpp`, `src/gold/cpp/*.cpp`, tests |
+| Add dataset format | `src/apps/gen_dataset.cpp` or `scripts/gen_dataset.py`, host/gold/compare code |
+| Add board | `config/<target>/`, `CMakePresets.json`, optional `platforms/` metadata |
+| Improve reports | `tools/hlsflow/**` |
+| Change framework runtime | `include/anvil/runtime/**`, `src/anvil/runtime/**` |
 
-## `config/<target>/` — Per-board configuration
-
-Each board (u250, zcu102, etc.) has its own directory with device-specific files.
-
-| File | What it is |
-|---|---|
-| `anvil.mk` | Makefile fragment included by the top-level `Makefile`. Sets board-specific variables like `ANVIL_PLATFORM`, `ANVIL_VITIS_PART`, `ANVIL_PRESET`, `ANVIL_KERNEL_TARGETS`, etc. |
-| `link.cfg` | Vitis linker configuration. Defines connectivity (`nk=`, `sp=`) and clock (`freqHz=`) for xclbin linking. On accelerator cards that support streaming, this also sets up kernel-to-kernel connections. |
-| `pipeline_demo.cfg` | Streaming pipeline configuration (accelerator cards only). Defines how saxpy_stream and vadd_stream connect as a pipeline. |
-| `xrt.ini` | XRT runtime configuration for the board. Sets flags like `Runtime.xrt_profile=true` or `Debug.enable_profile=true`. |
-| `README.md` | Board-specific notes: platform path, shell version, known issues. |
-
-## `src/` — C++ source code
-
-### `src/kernels/` — FPGA kernel sources
-
-| File | What it is |
-|---|---|
-| `saxpy_kernel.cpp` | The saxpy HLS kernel (single compute unit, reads A and X, writes Y). |
-| `vadd_kernel.cpp` | The vadd HLS kernel (vector addition, pair of input buffers). |
-| `saxpy_stream_kernel.cpp` | Streaming version of saxpy for kernel-to-kernel pipeline demo. |
-| `vadd_stream_kernel.cpp` | Streaming version of vadd for kernel-to-kernel pipeline demo. |
-| `CMakeLists.txt` | Registers kernels with `add_anvil_kernel()` and xclbins with `add_anvil_xclbin()`. This is where you add your own kernels. |
-
-### `src/host/` — XRT host programs
-
-| File | What it is |
-|---|---|
-| `run_saxpy.cpp` | Host program for the saxpy kernel. Creates XRT context, allocates buffers, runs the kernel, writes output. |
-| `run_vadd.cpp` | Host program for the vadd kernel. |
-| `run_pipeline_demo.cpp` | Host program for the streaming pipeline demo. Runs both kernels in a chain. |
-| `CMakeLists.txt` | Registers host programs with `add_anvil_host()`. This is where you add your own host apps. |
-
-### `src/gold/` — Golden reference (CPU correctness baseline)
-
-| File | What it is |
-|---|---|
-| `include/gold/saxpy_gold.hpp` | Project-owned saxpy golden reference API. |
-| `cpp/saxpy_gold.cpp` | C++ implementation of the saxpy golden reference (CPU-only, no XRT). |
-| `cpp/saxpy_gold_main.cpp` | Command-line wrapper that reads dataset and writes gold output. |
-| `cpp/metrics.cpp` | Optional metric computation used by some tests. |
-| `python/` | Python golden reference implementations. |
-| `CMakeLists.txt` | Defines the `anvil_gold` library and the `saxpy_gold_bin` executable. |
-
-### `src/hls_model/` — HLS CPU model
-
-| File | What it is |
-|---|---|
-| `saxpy_hls_model.cpp` | A C++ model of the saxpy kernel that mirrors the HLS implementation. Used to verify that the kernel algorithm matches the expected behavior before synthesis. |
-
-### `src/apps/` — CLI utility programs
-
-| File | What it is |
-|---|---|
-| `gen_dataset.cpp` | Generates input datasets under `data/<dataset>/`. |
-| `run_gold.cpp` | Runs the golden reference and writes output for comparison. |
-| `compare_gold_hls_model.cpp` | Compares gold output against the HLS model output. |
-
-### `src/anvil/` — Core library
-
-| File | What it is |
-|---|---|
-| `runtime/xrt_context.cpp` | XRT context wrapper — device selection, program loading, kernel handle creation. |
-| `runtime/kernel_handle.cpp` | Kernel argument management and execution. |
-| `runtime/CMakeLists.txt` | Builds `anvil_runtime` static library (links XRT). |
-| `CMakeLists.txt` | Defines the `anvil_core` interface library and all sub-libraries (log, cli, json, etc.). |
-
-## `include/anvil/` — C++ headers
-
-Framework-owned public API. Do not place project-specific kernel/model/gold headers here; use `src/kernels/include/`, `src/hls_model/include/`, and `src/gold/include/`.
-
-
-Headers are organized by component. Each subdirectory has a `*.hpp` file for that component.
-
-| Directory | What it provides |
-|---|---|
-| `runtime/` | `xrt_context.hpp`, `xrt_buffer.hpp`, `kernel_handle.hpp` — XRT runtime wrappers. |
-| `gold/` | Generic gold helpers such as metrics/interfaces. Project-specific gold APIs live under `src/gold/include/`. |
-| `hls/` | Generic hlslib-based helpers: `pack.hpp`, `stream.hpp`, `dataflow.hpp`, `packed_ops.hpp`, `axis.hpp`. |
-| `cli/` | `argparse.hpp` — command-line argument parsing wrapper. |
-| `compare/` | Comparators for verifying output data (bitwise, element-wise, classification, signal). |
-| `json/` | JSON serialization/deserialization. |
-| `log/` | Logging wrapper (spdlog-based). |
-| `table/` | Terminal table formatting. |
-| `progress/` | Progress bar display (indicators-based). |
-| `test/` | Test utilities. |
-| `toml/` | TOML file parsing (tomlplusplus-based). |
-| `config.hpp.in` | Template for generated config header (version info, build flags). |
-| `platform.hpp` | Platform detection and capabilities. |
-| `types.hpp` | Common type aliases. |
-
-## `tests/` — Tests
-
-| Directory | What it contains |
-|---|---|
-| `cpp/` | C++ Catch2 unit tests for compare, log, runtime, gold, and HLS model. |
-| `kernels/` | HLS cosimulation testbenches (`saxpy_cosim_tb.cpp`, `vadd_cosim_tb.cpp`, etc.). |
-| `python/` | Python pytest tests for comparison, gold, board_run, HLS flow parsers. |
-| `data/` | Test data fixtures. |
-| `install/` | Install verification smoke test. |
-| `CMakeLists.txt` | Registers CTest tests (both C++ and Python). |
-
-## `python/anvil/` — Python package
-
-Mirrors the C++ library components for use from Python. Each module has the same name as its C++ counterpart.
-
-| File | What it provides |
-|---|---|
-| `__init__.py` | Package init, version string. |
-| `compare.py` | Output comparison logic (Python equivalent of C++ compare). |
-| `gold.py` | Python golden reference runner. |
-| `cli.py` | Python CLI argument helpers. |
-| `json.py` | JSON helpers for test data. |
-| `toml.py` | TOML helpers. |
-| `log.py` | Python logging setup. |
-| `progress.py` | Progress bar display. |
-| `table.py` | Terminal table formatting. |
-| `test.py` | Python test support utilities. |
-
-## `tools/` — Developer tools
-
-| File | What it does |
-|---|---|
-| `hlsflow/` | HLS flow analysis toolkit: discovers builds, parses csynth/cosim/vitis reports, runs threshold checks, compares HLS runs, generates HTML/TXT/JSONL reports. Documented in `tools/hlsflow/README.md`. |
-| `sweep.py` | Clock frequency sweeping tool. Takes a TOML config file and runs multiple builds at different clock targets. |
-
-## `scripts/` — Build and deployment scripts
-
-| File | What it does |
-|---|---|
-| `gen_dataset.py` | Generates input datasets. Called by `make gen`. |
-| `run_gold.sh` | Runs the golden reference. Called by `make gold`. |
-| `compare.py` | Compares hardware output against golden reference. Called by `make compare`. |
-| `analyze.py` | Legacy HLS report parser. Called by `make analyze-legacy`. |
-| `board_run.py` | Deploys binaries to a board via SSH, runs the host app, and retrieves output. Called by `make test-xrt-hw`. |
-| `emconfig.sh` | Generates `emconfig.json` for hardware emulation. Called by `make emconfig`. |
-
-## `config/` — Per-board Makefile configuration
-
-| Subdirectory | Board |
-|---|---|
-| `u250/` | Alveo U250 |
-| `u50/` | Alveo U50 |
-| `u55c/` | Alveo U55C |
-| `u200/` | Alveo U200 |
-| `u280/` | Alveo U280 |
-| `vck5000/` | Versal VCK5000 |
-| `zcu102/` | ZynqMP ZCU102 |
-| `zcu104/` | ZynqMP ZCU104 |
-| `zcu106/` | ZynqMP ZCU106 |
-| `kv260/` | Kria KV260 |
-| `README.md` | Explains how to add a new board. |
-
-## `data/` — Datasets
-
-| Subdirectory | Contents |
-|---|---|
-| `tiny/` | Small demo dataset. Default for `DATASET=tiny`. |
-| `empty/` | Empty dataset for edge-case testing. |
-| `badshape/` | Dataset with mismatched dimensions for error-path testing. |
-| `task15_smoke/` through `task16_ok/` | Test datasets used by specific test scenarios. |
-
-## `reports/` — HLS analysis output
-
-Generated by `make analyze-flow` and `make analyze-cosim`. Contains:
-
-- `reports/<run_id>.html` / `reports/<run_id>.txt` — per-run HLS reports
-- `reports/runs.jsonl` — JSONL database of all HLS runs
-
-## `third_party/` — Vendored dependencies
-
-| Library | What it is used for |
-|---|---|
-| `argparse/` | Command-line argument parsing (header-only). |
-| `catch2/` | C++ unit test framework (Catch2 amalgamated header). |
-| `hlslib/` | HLS utility library (simulation helpers, dataflow patterns). |
-| `indicators/` | Terminal progress bars. |
-| `nlohmann/` | JSON serialization (`nlohmann/json`). |
-| `spdlog/` | Logging framework. |
-| `tabulate/` | Terminal table formatting. |
-| `tomlplusplus/` | TOML configuration file parsing. |
-
-## `platforms/` — Board platform metadata
-
-Board descriptions in TOML format. Used by Python tools to look up platform properties.
-
-| Subdirectory | Board |
-|---|---|
-| `zcu102/` | ZCU102 board metadata. |
-| `kv260/` | KV260 board metadata. |
-
-## `docs/` — Documentation
-
-| Path | Contents |
-|---|---|
-| `en/` | English documentation. |
-| `zh/` | Chinese documentation. |
-| `superpowers/` | Design documents and specifications. |
-| `assets/` | Images and banners. |
-
-## How the build phases map to directories
-
-| Phase | What is built | Key CMake option | Source directory |
-|---|---|---|---|
-| Gold reference | CPU correctness baseline | `ANVIL_BUILD_GOLD` | `src/gold/` |
-| HLS model | CPU simulation of kernel | `ANVIL_BUILD_HLS_MODEL` | `src/hls_model/` |
-| Utility apps | Dataset gen, gold runner, compare | `ANVIL_BUILD_APPS` | `src/apps/` |
-| FPGA kernels | HLS synthesis | `ANVIL_BUILD_KERNELS` | `src/kernels/` |
-| XRT host | Host programs with XRT | `ANVIL_BUILD_XRT` | `src/host/` |
-| Tests | Unit tests, cosim, Python tests | `ANVIL_BUILD_TESTS` | `tests/` |
+If you are adding your own accelerator, start with [Customization guide](customization.md).

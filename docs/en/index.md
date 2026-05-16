@@ -1,19 +1,20 @@
 # Vitis-Anvil documentation
 
-Vitis-Anvil is a CMake project template for building Vitis/XRT FPGA accelerators. If you are new here, the pages below are written to be read in order — each one builds on the previous.
+Vitis-Anvil is a CMake project template for building Vitis/XRT FPGA accelerators. The documentation assumes only basic FPGA/HLS awareness. It explains each step before asking you to run commands.
 
-1. [Get started](get_started.md) — clone, CPU tests, then all the way to hardware
-2. [Project structure](project_structure.md) — what each directory and file is for
-3. [Accelerator-card flow](accelerator_flow.md) — U250, U50, U55C, U200, U280, VCK5000
-4. [Embedded flow](embedded_flow.md) — ZCU102, ZCU104, ZCU106, KV260
-5. [Customization](customization.md) — your own kernels, host apps, devices, datasets, reports
-6. [Adapt to your project](adapt_to_your_project.md) — take the template into real products
-7. [Development workflow](development_workflow.md) — how to iterate day to day
-8. [hlslib adaptation](hlslib_adaptation.md) — framework/user code boundary and reusable HLS helpers
+Recommended reading order:
 
-Other references:
+1. [Concepts](concepts.md) — what kernel, host app, xclbin, XRT, csynth, cosim, and TARGET/KERNEL/HOST_APP mean.
+2. [Get started](get_started.md) — run the project from CPU-only tests to hardware-ready artifacts.
+3. [Project structure](project_structure.md) — where each layer lives and why files are separated.
+4. [Build guide](build.md) — what every common Make target does, what it produces, and when to use it.
+5. [Accelerator-card flow](accelerator_flow.md) — the path for U250/U50/U55C/U200/U280/VCK5000-style PCIe cards.
+6. [Embedded flow](embedded_flow.md) — the path for ZCU102/ZCU104/ZCU106/KV260-style boards.
+7. [Deployment guide](deploy.md) — how files move to a real board/card and how to debug that step.
+8. [Customization guide](customization.md) — add your own kernel, host app, dataset, board, and reports.
+9. [Adapt to your project](adapt_to_your_project.md) — turn the template into a product repository.
+10. [Development workflow](development_workflow.md) — day-to-day loop and debugging order.
+11. [hlslib adaptation](hlslib_adaptation.md) — reusable pack/stream/dataflow helpers and framework/user boundary.
+12. [User guide](user-guide.md) — command reference and quick lookup.
 
-- [Build guide](../build.md)
-- [Deployment guide](../deploy.md)
-- [User guide](../user-guide.md)
-- [hlsflow README](../../tools/hlsflow/README.md)
+If you are lost, go back to [Concepts](concepts.md). Most confusion comes from mixing up kernel-level steps (`csynth`, `cosim`, `xclbin`) with host-level steps (`build-host`, `run-host`, deploy).

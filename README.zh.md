@@ -11,6 +11,7 @@ Anvil 是铁砧 — 把金属放上去锻造成型。Vitis-Anvil 对 FPGA 开发
 ## 从这里开始
 
 - [文档索引](docs/zh/index.md) — 第一次用建议按顺序读
+- [基本概念](docs/zh/concepts.md) — 解释 kernel、host app、xclbin、XRT、csynth、cosim
 - [快速开始：跑完整流程](docs/zh/get_started.md) — 从 clone 跑到硬件
 - [加速卡流程](docs/zh/accelerator_flow.md) — U250/U50/U55C/U200/U280/VCK5000
 - [Embedded 流程](docs/zh/embedded_flow.md) — ZCU102/ZCU104/ZCU106/KV260

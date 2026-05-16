@@ -11,6 +11,7 @@ The name is short because it is meant to be used on the command line. Future wra
 ## Start here
 
 - [Documentation index](docs/en/index.md) — read in order if you are new
+- [Concepts](docs/en/concepts.md) — explains kernel, host app, xclbin, XRT, csynth, cosim
 - [Get started: run the full flow](docs/en/get_started.md) — from clone to hardware
 - [Accelerator-card flow](docs/en/accelerator_flow.md) — U250/U50/U55C/U200/U280/VCK5000
 - [Embedded flow](docs/en/embedded_flow.md) — ZCU102/ZCU104/ZCU106/KV260
