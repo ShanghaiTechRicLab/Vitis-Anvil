@@ -9,3 +9,5 @@ target_link_libraries(anvil_gold PUBLIC anvil_core)
 add_library(anvil::gold ALIAS anvil_gold)
 
 add_subdirectory(cpp)
+
+target_include_directories(anvil_gold PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src/gold/include>)

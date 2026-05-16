@@ -1,6 +1,6 @@
 #include <anvil/cli/anvil_cli.hpp>
 #include <anvil/compare/element_wise.hpp>
-#include <anvil/gold/saxpy_gold.hpp>
+#include "gold/saxpy_gold.hpp"
 #include <anvil/log/anvil_log.hpp>
 #include <anvil/runtime/xrt_buffer.hpp>
 #include <anvil/runtime/xrt_context.hpp>
@@ -167,10 +167,10 @@ int main(int argc, char* argv[]) {
     out_buf.Sync(SyncDirection::DeviceToHost);
 
     std::vector<float> gold_out(n);
-    anvil::gold::saxpy_gold(std::span<const float>(x_buf.host(), n),
+    gold::saxpy_gold(std::span<const float>(x_buf.host(), n),
                             std::span<const float>(y_buf.host(), n),
                             std::span<float>(gold_out),
-                            anvil::gold::SaxpyConfig{a});
+                            gold::SaxpyConfig{a});
 
     const std::span<const float> device_out(out_buf.host(), n);
     if (auto output_arg = cli.present<std::string>("--output")) {

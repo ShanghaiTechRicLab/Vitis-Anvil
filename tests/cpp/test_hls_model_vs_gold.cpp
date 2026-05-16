@@ -1,5 +1,5 @@
 #include <catch_amalgamated.hpp>
-#include "anvil/gold/saxpy_gold.hpp"
+#include "gold/saxpy_gold.hpp"
 #include "hls_model/saxpy_hls_model.hpp"
 #include "anvil/config.hpp"
 
@@ -7,8 +7,8 @@
 #include <random>
 #include <vector>
 
-using anvil::gold::SaxpyConfig;
-using anvil::gold::saxpy_gold;
+using gold::SaxpyConfig;
+using gold::saxpy_gold;
 using hls_model::saxpy_hls_model;
 
 namespace {

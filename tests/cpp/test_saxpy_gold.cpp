@@ -1,5 +1,5 @@
 #include <catch_amalgamated.hpp>
-#include "anvil/gold/saxpy_gold.hpp"
+#include "gold/saxpy_gold.hpp"
 #include "anvil/config.hpp"
 
 #include <array>
@@ -7,8 +7,8 @@
 #include <stdexcept>
 #include <vector>
 
-using anvil::gold::saxpy_gold;
-using anvil::gold::SaxpyConfig;
+using gold::saxpy_gold;
+using gold::SaxpyConfig;
 
 TEST_CASE("saxpy_gold: empty input is a no-op", "[gold][saxpy]") {
   std::vector<float> x, y, out;

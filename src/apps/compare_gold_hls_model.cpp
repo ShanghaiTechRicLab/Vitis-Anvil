@@ -6,7 +6,7 @@
 
 #include "anvil/config.hpp"
 #include "anvil/gold/metrics.hpp"
-#include "anvil/gold/saxpy_gold.hpp"
+#include "gold/saxpy_gold.hpp"
 #include "hls_model/saxpy_hls_model.hpp"
 
 #include <argparse.hpp>
@@ -152,8 +152,8 @@ int main(int argc, char** argv) {
     const auto y = read_floats(data_dir / m.y_file, n);
 
     std::vector<float> out_gold(n), out_hls(n);
-    anvil::gold::SaxpyConfig cfg{m.a};
-    anvil::gold::saxpy_gold     (x, y, out_gold, cfg);
+    gold::SaxpyConfig cfg{m.a};
+    gold::saxpy_gold     (x, y, out_gold, cfg);
     hls_model::saxpy_hls_model(x, y, out_hls,  cfg);
 
     const float max_abs = anvil::gold::max_abs_error(out_gold, out_hls);

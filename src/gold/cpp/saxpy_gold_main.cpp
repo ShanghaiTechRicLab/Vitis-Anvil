@@ -1,7 +1,7 @@
 // CLI entry point for the C++ gold reference binary.
 #include <anvil/cli/anvil_cli.hpp>
 #include <anvil/gold/interface.hpp>
-#include <anvil/gold/saxpy_gold.hpp>
+#include "gold/saxpy_gold.hpp"
 #include <anvil/json/anvil_json.hpp>
 #include <anvil/log/anvil_log.hpp>
 
@@ -42,10 +42,10 @@ int main(int argc, char* argv[]) {
     }
 
     std::vector<float> out(static_cast<std::size_t>(n));
-    anvil::gold::saxpy_gold(std::span<const float>(x),
+    gold::saxpy_gold(std::span<const float>(x),
                             std::span<const float>(y),
                             std::span<float>(out),
-                            anvil::gold::SaxpyConfig{a});
+                            gold::SaxpyConfig{a});
 
     const fs::path out_path = output_dir / "gold_out.bin";
     anvil::gold::DumpVector<float>(out_path, std::span<const float>(out));

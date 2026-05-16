@@ -4,7 +4,7 @@
 // JSON report, and prints a tabulate summary.
 
 #include "anvil/config.hpp"
-#include "anvil/gold/saxpy_gold.hpp"
+#include "gold/saxpy_gold.hpp"
 
 #include <argparse.hpp>
 #include <nlohmann/json.hpp>
@@ -146,7 +146,7 @@ int main(int argc, char** argv) {
     const auto y = read_floats(data_dir / m.y_file, n);
 
     std::vector<float> out(n);
-    anvil::gold::saxpy_gold(x, y, out, anvil::gold::SaxpyConfig{m.a});
+    gold::saxpy_gold(x, y, out, gold::SaxpyConfig{m.a});
 
     const std::string out_name = m.case_id + "_gold_out.bin";
     write_floats(output_dir / out_name, out);

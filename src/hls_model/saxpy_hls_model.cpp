@@ -35,7 +35,7 @@ void Store(SaxpyStream& in, kernels::SaxpyPack* out, int n_pack) {
 void saxpy_hls_model(std::span<const float> x,
                      std::span<const float> y,
                      std::span<float>       out,
-                     const anvil::gold::SaxpyConfig& cfg) {
+                     const gold::SaxpyConfig& cfg) {
   if (x.size() != y.size() || x.size() != out.size()) {
     throw std::invalid_argument("saxpy_hls_model: span sizes must match");
   }

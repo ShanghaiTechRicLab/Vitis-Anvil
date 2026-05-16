@@ -6,3 +6,5 @@ target_link_libraries(saxpy_gold_bin PRIVATE
     anvil_log
     anvil_cli
     anvil_json)
+
+target_include_directories(saxpy_gold_bin PRIVATE ${PROJECT_SOURCE_DIR}/src/gold/include)

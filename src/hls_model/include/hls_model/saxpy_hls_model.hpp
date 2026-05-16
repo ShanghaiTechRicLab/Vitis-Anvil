@@ -1,6 +1,6 @@
 #pragma once
 #include <span>
-#include "anvil/gold/saxpy_gold.hpp"
+#include "gold/saxpy_gold.hpp"
 
 namespace hls_model {
 
@@ -9,6 +9,6 @@ namespace hls_model {
 void saxpy_hls_model(std::span<const float> x,
                      std::span<const float> y,
                      std::span<float>       out,
-                     const anvil::gold::SaxpyConfig& cfg);
+                     const gold::SaxpyConfig& cfg);
 
 }  // namespace hls_model

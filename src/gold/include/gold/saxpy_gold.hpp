@@ -1,8 +1,8 @@
 #pragma once
-#include <span>
 #include <cstddef>
+#include <span>
 
-namespace anvil::gold {
+namespace gold {
 
 struct SaxpyConfig {
   float a = 1.0f;
@@ -16,4 +16,4 @@ void saxpy_gold(std::span<const float> x,
                 std::span<float>       out,
                 const SaxpyConfig&     cfg);
 
-}  // namespace anvil::gold
+}  // namespace gold
