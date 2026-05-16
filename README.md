@@ -28,6 +28,7 @@ make test                   # fast, CPU-only — no Vitis or FPGA needed
 | `u250` | Alveo U250 | First-class |
 | `zcu104` | ZCU104 (AArch64) | First-class |
 | `zcu102` | ZCU102 (AArch64) | First-class |
+| `u55c` | Alveo U55C (HBM2) | Experimental — HBM config |
 
 ## Key commands
 
@@ -39,6 +40,16 @@ make xrt-emu DATASET=tiny    # run on hw_emu
 make compare DATASET=tiny    # compare outputs already produced for the dataset
 make gold ANVIL_LANG=python  # run Python gold reference
 ```
+
+## HLS report analysis (hlsflow)
+
+```bash
+make csynth TARGET=u250
+make analyze-flow             # rich console + reports/<run_id>.html / .txt / runs.jsonl
+make check-hls                # threshold gate (--max-ii 1 by default)
+```
+
+See `tools/hlsflow/README.md` for the full CLI.
 
 ## Replacing the saxpy demo
 
