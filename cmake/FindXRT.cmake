@@ -6,10 +6,13 @@ find_path(XRT_INCLUDE_DIR
   NAMES xrt/xrt_device.h
   HINTS
     $ENV{XILINX_XRT}/include
+    $ENV{XILINX_XRT}/include/xrt
     ${XILINX_XRT}/include
+    ${XILINX_XRT}/include/xrt
     /opt/xilinx/xrt/include
   PATHS
-    /usr/include)
+    /usr/include
+    /usr/include/xrt)
 
 find_library(XRT_COREUTIL_LIBRARY
   NAMES xrt_coreutil

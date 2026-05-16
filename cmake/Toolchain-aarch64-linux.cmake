@@ -30,6 +30,19 @@ if(_ANVIL_AARCH64_GXX)
       break()
     endif()
   endforeach()
+
+  file(GLOB _ANVIL_AARCH64_CXX_INCLUDE_DIRS
+       LIST_DIRECTORIES true
+       "${_ANVIL_AARCH64_ROOT}/aarch64-xilinx-linux/usr/include/c++/*")
+  foreach(_ANVIL_AARCH64_CXX_INCLUDE_DIR IN LISTS _ANVIL_AARCH64_CXX_INCLUDE_DIRS)
+    if(EXISTS "${_ANVIL_AARCH64_CXX_INCLUDE_DIR}/span")
+      string(APPEND CMAKE_CXX_FLAGS_INIT " -isystem ${_ANVIL_AARCH64_CXX_INCLUDE_DIR}")
+      if(EXISTS "${_ANVIL_AARCH64_CXX_INCLUDE_DIR}/aarch64-xilinx-linux")
+        string(APPEND CMAKE_CXX_FLAGS_INIT " -isystem ${_ANVIL_AARCH64_CXX_INCLUDE_DIR}/aarch64-xilinx-linux")
+      endif()
+      break()
+    endif()
+  endforeach()
 endif()
 
 if(DEFINED ENV{SYSROOT})
