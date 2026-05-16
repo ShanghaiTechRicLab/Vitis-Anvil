@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <random>
+#include <stdexcept>
 #include <vector>
 
 using gold::SaxpyConfig;
@@ -51,6 +52,23 @@ void run_vadd_one(std::size_t n, std::uint32_t seed) {
 }
 
 }  // namespace
+
+TEST_CASE("hls_model adapters reject size mismatches", "[hls][errors]") {
+  std::vector<float> a{1.0f, 2.0f};
+  std::vector<float> b{3.0f};
+  std::vector<float> out{0.0f, 0.0f};
+  SaxpyConfig cfg{2.0f};
+
+  REQUIRE_THROWS_AS(saxpy_hls_model(a, b, out, cfg), std::invalid_argument);
+  REQUIRE_THROWS_AS(hls_model::vadd_hls_model(a, b, out), std::invalid_argument);
+}
+
+TEST_CASE("saxpy hls_model handles zero-size input", "[hls][parity]") {
+  std::vector<float> x, y, out;
+  SaxpyConfig cfg{1.5f};
+  REQUIRE_NOTHROW(saxpy_hls_model(x, y, out, cfg));
+  REQUIRE(out.empty());
+}
 
 TEST_CASE("hls_model vs gold: bit-exact across sizes", "[hls][parity]") {
   for (std::size_t n : {std::size_t{1}, std::size_t{7}, std::size_t{8},
