@@ -9,6 +9,7 @@ Vitis-Anvil 是一个用来搭建 Vitis/XRT FPGA 加速器的 CMake 项目模板
 5. [自定义](customization.md) — 自己的 kernel、host app、设备、数据集、报告
 6. [适配到自己的项目](adapt_to_your_project.md) — 把模板用到真实产品中
 7. [典型开发流程](development_workflow.md) — 日常工作怎么迭代
+8. [hlslib 适配](hlslib_adaptation.md) — 框架/用户代码边界和通用 HLS 辅助
 
 其他参考文档：
 

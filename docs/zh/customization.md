@@ -2,6 +2,10 @@
 
 Vitis-Anvil 本质是一个模板。保留构建流程和工具链，把 demo 部分换成你自己的 kernel 和 host app。
 
+## 框架代码边界
+
+把 `include/anvil/**` 和 `src/anvil/**` 当作框架基础设施，默认不要改。用户 kernel、ABI 头文件、HLS model、host app 和设备配置放到 `src/kernels/**`、`src/hls_model/**`、`src/host/**` 和 `config/**`。辅助模式见 [hlslib 适配](hlslib_adaptation.md)。
+
 ## 1. 添加或替换 kernel
 
 **涉及的文件：** `src/kernels/` 和 `src/kernels/CMakeLists.txt`
@@ -35,7 +39,7 @@ make cosim TARGET=u250 KERNEL=my_kernel
 ```
 
 **相关文件：**
-- `include/anvil/kernels/` — 在这里放你的 kernel ABI 类型头文件
+- `src/kernels/include/kernels/` — 在这里放你的 kernel ABI 类型头文件
 - `tests/kernels/` — 在这里放你的 cosim testbench
 - `config/<target>/link.cfg` — 如果 kernel 需要 connectivity 设置
 

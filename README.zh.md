@@ -17,6 +17,7 @@ Anvil 是铁砧 — 把金属放上去锻造成型。Vitis-Anvil 对 FPGA 开发
 - [自定义 kernel、host app、设备、数据集和报告](docs/zh/customization.md)
 - [把 Vitis-Anvil 适配到你自己的项目](docs/zh/adapt_to_your_project.md)
 - [典型开发流程](docs/zh/development_workflow.md)
+- [hlslib 适配模式](docs/zh/hlslib_adaptation.md)
 
 ## 包含什么
 

@@ -9,6 +9,7 @@ Vitis-Anvil is a CMake project template for building Vitis/XRT FPGA accelerators
 5. [Customization](customization.md) — your own kernels, host apps, devices, datasets, reports
 6. [Adapt to your project](adapt_to_your_project.md) — take the template into real products
 7. [Development workflow](development_workflow.md) — how to iterate day to day
+8. [hlslib adaptation](hlslib_adaptation.md) — framework/user code boundary and reusable HLS helpers
 
 Other references:
 

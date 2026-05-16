@@ -17,6 +17,7 @@ The name is short because it is meant to be used on the command line. Future wra
 - [Customize kernels, host apps, devices, datasets, and reports](docs/en/customization.md)
 - [Adapt Vitis-Anvil to your own project](docs/en/adapt_to_your_project.md)
 - [Typical development workflow](docs/en/development_workflow.md)
+- [hlslib adaptation pattern](docs/en/hlslib_adaptation.md)
 
 ## What is included
 

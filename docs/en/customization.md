@@ -2,6 +2,10 @@
 
 Vitis-Anvil is meant to be used as a template. Keep the build flow and the tooling; replace the demo pieces with your own kernels and host apps.
 
+## Framework-owned code boundary
+
+Treat `include/anvil/**` and `src/anvil/**` as framework-owned infrastructure and default not editable. Put user kernels, ABI headers, HLS models, host apps, and device configs under `src/kernels/**`, `src/hls_model/**`, `src/host/**`, and `config/**`. See [hlslib adaptation](hlslib_adaptation.md) for the helper pattern.
+
 ## 1. Add or replace a kernel
 
 **What you touch:** `src/kernels/` and `src/kernels/CMakeLists.txt`
@@ -35,7 +39,7 @@ make cosim TARGET=u250 KERNEL=my_kernel
 ```
 
 **Related:**
-- `include/anvil/kernels/` — add a header with your kernel's ABI types
+- `src/kernels/include/kernels/` — add a header with your kernel's ABI types
 - `tests/kernels/` — add your cosim testbench here
 - `config/<target>/link.cfg` — if your kernel needs connectivity settings
 
