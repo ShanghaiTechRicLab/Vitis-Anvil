@@ -12,7 +12,7 @@ find_package(anvil REQUIRED
     NO_DEFAULT_PATH)
 
 add_executable(install_smoke smoke.cpp)
-target_link_libraries(install_smoke PRIVATE anvil::compare)
+target_link_libraries(install_smoke PRIVATE anvil::compare anvil::hls)
 
 enable_testing()
 add_test(NAME install_smoke COMMAND install_smoke)
