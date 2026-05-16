@@ -47,6 +47,7 @@ BOARD_DEPLOY_DIR  ?= ~/anvil-deploy
 
 # --- Phony targets declaration / 伪目标声明 ---
 .PHONY: all configure build build-cpp build-python clean clean-all help \
+        configure-kernel configure-host build-host build-kernel build-all \
         csynth cosim xclbin xclbin-hwemu \
         require-u250-stream csynth-stream cosim-stream pipeline-demo \
         gen gold run-host xrt-emu xrt-hw compare analyze analyze-flow check-hls compare-hls emconfig \
@@ -57,36 +58,44 @@ BOARD_DEPLOY_DIR  ?= ~/anvil-deploy
 # Top-level targets / 顶层目标
 # ============================================================================
 
-# Default target: build everything / 默认目标：构建所有
+# Default target: fast host/Python build / 默认目标：快速 host/Python 构建
 all: build
 
 # --------------------------------------------------------------------------
-# configure — CMake configure step / CMake 配置步骤
+# configure — configure both kernel and host presets / 同时配置 kernel 与 host preset
+# Kept as an explicit aggregate for users that want both sides. Fast targets below
+# call configure-kernel/configure-host directly to avoid accidental HLS synthesis.
 # --------------------------------------------------------------------------
-configure:
+configure: configure-kernel configure-host
+
+configure-kernel:
 	cmake --preset $(ANVIL_PRESET)
-	@# If there is a separate host (cross-compile) preset, configure it too
-	@# 如果有独立的主机端（交叉编译）preset，也一并配置
-	@if [ "$(ANVIL_HOST_PRESET)" != "$(ANVIL_PRESET)" ]; then \
-		if [ -n "$(ANVIL_SYSROOT)" ]; then \
-			env SYSROOT="$(ANVIL_SYSROOT)" cmake --preset $(ANVIL_HOST_PRESET); \
-		else \
-			cmake --preset $(ANVIL_HOST_PRESET); \
-		fi; \
+
+configure-host:
+	@if [ -n "$(ANVIL_SYSROOT)" ]; then \
+		env SYSROOT="$(ANVIL_SYSROOT)" cmake --preset $(ANVIL_HOST_PRESET); \
+	else \
+		cmake --preset $(ANVIL_HOST_PRESET); \
 	fi
 
 # --------------------------------------------------------------------------
-# build — configure + build C++ host/kernel + install Python package
-#         配置 + 构建 C++ 主机/内核 + 安装 Python 包
+# build — fast day-to-day build: host binary + Python only, no HLS synthesis
+#         日常快速构建：只构建 host 程序 + Python，不触发 HLS 综合
 # --------------------------------------------------------------------------
-build: configure build-cpp build-python
+build: build-host build-python
 
-# Build C++ code (kernels and host) / 构建 C++ 代码（内核和主机）
-build-cpp:
-	cmake --build --preset $(ANVIL_PRESET)
-	@if [ "$(ANVIL_HOST_PRESET)" != "$(ANVIL_PRESET)" ]; then \
-		cmake --build --preset $(ANVIL_HOST_PRESET); \
-	fi
+# Explicit full build for users who really want kernel + host + Python.
+# 明确的完整构建：需要 kernel + host + Python 时手动调用。
+build-all: build-kernel build-host build-python
+
+# Backward-compatible C++ build alias: host-side C++ only, no HLS synthesis.
+build-cpp: build-host
+
+build-host: configure-host
+	cmake --build --preset $(ANVIL_HOST_PRESET) --target run_saxpy
+
+build-kernel: configure-kernel
+	cmake --build --preset $(ANVIL_PRESET) --target $(ANVIL_KERNEL_TARGETS)
 
 # Build Python venv and install the package / 构建 Python 虚拟环境并安装包
 build-python:
@@ -99,17 +108,16 @@ build-python:
 # ============================================================================
 
 # csynth — Run HLS synthesis on kernel(s) / 对内核运行 HLS 综合
-csynth: configure
-	cmake --build $(BUILD_DIR) --target $(ANVIL_KERNEL_TARGETS)
+csynth: build-kernel
 
 # cosim — Run HLS co-simulation / 运行 HLS 协同仿真
 cosim:
 	@if [ -z "$(strip $(ANVIL_COSIM_TARGETS))" ]; then echo "cosim is not configured for TARGET=$(TARGET)" >&2; exit 1; fi
-	$(MAKE) configure TARGET=$(TARGET)
+	$(MAKE) configure-kernel TARGET=$(TARGET)
 	cmake --build $(BUILD_DIR) --target $(ANVIL_COSIM_TARGETS)
 
 # xclbin — Link kernel into .xclbin bitstream / 将内核链接为 .xclbin 比特流
-xclbin: configure
+xclbin: configure-kernel
 	cmake --build $(BUILD_DIR) --target saxpy_xclbin
 
 # xclbin-hwemu — Build xclbin for hardware emulation / 构建硬件仿真用的 xclbin
@@ -128,17 +136,17 @@ require-u250-stream:
 
 csynth-stream:
 	$(MAKE) require-u250-stream TARGET=$(TARGET)
-	$(MAKE) configure TARGET=$(TARGET)
+	$(MAKE) configure-kernel TARGET=$(TARGET)
 	cmake --build $(BUILD_DIR) --target saxpy_stream_xo vadd_stream_xo
 
 cosim-stream:
 	$(MAKE) require-u250-stream TARGET=$(TARGET)
-	$(MAKE) configure TARGET=$(TARGET)
+	$(MAKE) configure-kernel TARGET=$(TARGET)
 	cmake --build $(BUILD_DIR) --target saxpy_stream_cosim vadd_stream_cosim
 
 pipeline-demo:
 	$(MAKE) require-u250-stream TARGET=$(TARGET)
-	$(MAKE) configure TARGET=$(TARGET)
+	$(MAKE) configure-kernel TARGET=$(TARGET)
 	cmake --build $(BUILD_DIR) --target pipeline_demo_xclbin
 
 # ============================================================================
@@ -152,16 +160,20 @@ gen:
 	$(PYTHON) scripts/gen_dataset.py --dataset $(DATASET)
 
 # gold — Run golden reference to produce expected output / 运行黄金参考生成期望输出
-gold: build gen
+gold: gen
 	@if [ ! -f scripts/run_gold.sh ]; then echo "scripts/run_gold.sh is added in Task 15" >&2; exit 1; fi
-	env ANVIL_LANG=$(ANVIL_LANG) DATASET=$(DATASET) ANVIL_PRESET=$(ANVIL_PRESET) bash scripts/run_gold.sh
+	@if [ "$(ANVIL_LANG)" = "cpp" ]; then \
+		$(MAKE) configure-host TARGET=$(TARGET); \
+		cmake --build --preset $(ANVIL_HOST_PRESET) --target saxpy_gold_bin; \
+	fi
+	env ANVIL_LANG=$(ANVIL_LANG) DATASET=$(DATASET) ANVIL_PRESET=$(ANVIL_HOST_PRESET) bash scripts/run_gold.sh
 
 # ============================================================================
 # Run on hardware / 在硬件上运行
 # ============================================================================
 
 # run-host — Execute host binary on real hardware / 在真实硬件上执行主机程序
-run-host: build gen
+run-host: build-host gen
 	@if [ ! -x $(HOST_BIN) ]; then echo "$(HOST_BIN) not built; use a preset with ANVIL_BUILD_XRT=ON" >&2; exit 1; fi
 	@if [ ! -f $(XCLBIN_PATH) ]; then echo "$(XCLBIN_PATH) not found; run make xclbin first" >&2; exit 1; fi
 	$(HOST_BIN) --xclbin $(XCLBIN_PATH) --data-dir data/$(DATASET) --output data/$(DATASET)/xrt_hw_out.bin
@@ -202,7 +214,7 @@ xrt-emu: gen
 endif
 
 # xrt-hw — Run on real hardware (alias for run-host) / 在真实硬件上运行（run-host 的别名）
-xrt-hw: build
+xrt-hw: build-host
 	$(MAKE) run-host
 
 # ============================================================================
@@ -252,12 +264,12 @@ test:
 	$(PYTHON) -m pytest -m fast tests/python -v
 
 # Label-specific CTest targets / 按标签筛选的 CTest 目标
-test-csynth: configure
+test-csynth: configure-kernel
 	ctest --test-dir $(BUILD_DIR) -L csynth -V
 
 test-cosim:
 	@if [ -z "$(strip $(ANVIL_COSIM_TARGETS))" ]; then echo "cosim is not configured for TARGET=$(TARGET)" >&2; exit 1; fi
-	$(MAKE) configure TARGET=$(TARGET)
+	$(MAKE) configure-kernel TARGET=$(TARGET)
 	ctest --test-dir $(BUILD_DIR) -L cosim -V
 
 test-xrt-emu:
@@ -268,7 +280,7 @@ test-xrt-emu:
 # Requires / 需要: BOARD_IP and (for zcu102) PETALINUX_SYSROOT + Vitis env
 test-xrt-hw:
 	@if [ -z "$(BOARD_IP)" ]; then echo "ERROR: BOARD_IP not set. Usage: make test-xrt-hw BOARD_IP=<ip> [TARGET=zcu102] [DATASET=tiny]" >&2; exit 1; fi
-	$(MAKE) build TARGET=$(TARGET)
+	$(MAKE) build-host TARGET=$(TARGET)
 	$(MAKE) xclbin TARGET=$(TARGET)
 	$(MAKE) gen DATASET=$(DATASET)
 	$(MAKE) build-python
@@ -339,7 +351,9 @@ deploy: deploy-bin deploy-xclbin deploy-data
 
 help:
 	@echo "Targets:"
-	@echo "  make build [TARGET=u250|u55c|zcu104|zcu102]  — configure + build C++ + pip install"
+	@echo "  make build [TARGET=...]             — build host binary + Python only (no HLS synth)"
+	@echo "  make build-kernel [TARGET=...]      — HLS synth kernel target(s)"
+	@echo "  make build-all [TARGET=...]         — build kernel + host + Python"
 	@echo "  make test                         — CPU-only fast tests (no Vitis/XRT)"
 	@echo "  make csynth                       — v++ HLS synthesis"
 	@echo "  make cosim                        — HLS co-simulation"
