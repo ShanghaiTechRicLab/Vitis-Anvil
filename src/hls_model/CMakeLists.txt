@@ -1,5 +1,7 @@
 # src/hls_model/CMakeLists.txt
-add_library(anvil_hls_model saxpy_hls_model.cpp)
+add_library(anvil_hls_model
+  saxpy_hls_model.cpp
+  vadd_hls_model.cpp)
 target_link_libraries(anvil_hls_model PUBLIC
   anvil_core
   anvil_gold        # for SaxpyConfig

@@ -1,12 +1,7 @@
 #include "kernels/vadd.hpp"
 
 #include "anvil/hls/packed_ops.hpp"
-
-namespace {
-struct VaddOp {
-  float operator()(float x, float y) const { return x + y; }
-};
-}  // namespace
+#include "kernels/vadd_op.hpp"
 
 extern "C" void vadd(const kernels::VaddPack* a,
                      const kernels::VaddPack* b,
@@ -21,5 +16,5 @@ extern "C" void vadd(const kernels::VaddPack* a,
 #pragma HLS INTERFACE s_axilite port=n_packs bundle=control
 #pragma HLS INTERFACE s_axilite port=return  bundle=control
 
-  anvil::hls::MapMem2Packs(a, b, out, n_packs, VaddOp());
+  anvil::hls::MapMem2Packs(a, b, out, n_packs, kernels::VaddOp());
 }

@@ -1,7 +1,10 @@
 #include <catch_amalgamated.hpp>
 #include "gold/saxpy_gold.hpp"
+#include "gold/vadd_gold.hpp"
 #include "hls_model/saxpy_hls_model.hpp"
+#include "hls_model/vadd_hls_model.hpp"
 #include "anvil/config.hpp"
+#include "kernels/kernel_types.hpp"
 
 #include <cstdint>
 #include <random>
@@ -31,6 +34,22 @@ void run_one(std::size_t n, float a, std::uint32_t seed) {
   }
 }
 
+void run_vadd_one(std::size_t n, std::uint32_t seed) {
+  std::vector<float> a(n), b(n), out_g(n), out_h(n);
+  std::mt19937 rng{seed};
+  std::uniform_real_distribution<float> dist{-100.0f, 100.0f};
+  for (auto& v : a) v = dist(rng);
+  for (auto& v : b) v = dist(rng);
+
+  gold::vadd_gold(a, b, out_g);
+  hls_model::vadd_hls_model(a, b, out_h);
+
+  for (std::size_t i = 0; i < n; ++i) {
+    INFO("vadd n=" << n << " i=" << i << " gold=" << out_g[i] << " hls=" << out_h[i]);
+    REQUIRE(out_g[i] == out_h[i]);
+  }
+}
+
 }  // namespace
 
 TEST_CASE("hls_model vs gold: bit-exact across sizes", "[hls][parity]") {
@@ -52,4 +71,20 @@ TEST_CASE("hls_model vs gold: bit-exact across a", "[hls][parity]") {
 
 TEST_CASE("hls_model vs gold: bit-exact at kMaxElements", "[hls][parity][slow]") {
   run_one(anvil::config::kMaxElements, 0.5f, 1234u);
+}
+
+TEST_CASE("vadd hls_model vs gold: bit-exact across pack boundaries", "[hls][parity][vadd]") {
+  for (std::size_t n : {std::size_t{0},
+                        std::size_t{1},
+                        static_cast<std::size_t>(kernels::kVaddPackWidth - 1),
+                        static_cast<std::size_t>(kernels::kVaddPackWidth),
+                        static_cast<std::size_t>(kernels::kVaddPackWidth + 1)}) {
+    DYNAMIC_SECTION("n=" << n) {
+      run_vadd_one(n, 99u);
+    }
+  }
+}
+
+TEST_CASE("vadd hls_model vs gold: randomized larger vector", "[hls][parity][vadd]") {
+  run_vadd_one(static_cast<std::size_t>(kernels::kVaddPackWidth * 17 + 5), 123u);
 }

@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "anvil/hls/dataflow.hpp"
-#include "hls_model/saxpy_pack_utils.hpp"
+#include "hls_model/pack_utils.hpp"
 #include "kernels/saxpy_core.hpp"
 
 namespace hls_model {
@@ -24,8 +24,8 @@ void saxpy_hls_model(std::span<const float> x,
   const int n_pack = (n + width - 1) / width;
 
   std::vector<kernels::SaxpyPack> x_packed(n_pack), y_packed(n_pack), out_packed(n_pack);
-  PackScalars(x, x_packed.data());
-  PackScalars(y, y_packed.data());
+  PackScalars<kernels::SaxpyPack>(x, x_packed.data());
+  PackScalars<kernels::SaxpyPack>(y, y_packed.data());
 
   kernels::saxpy_core::SaxpyStream sx("sx"), sy("sy"), so("so");
 
@@ -36,7 +36,7 @@ void saxpy_hls_model(std::span<const float> x,
   ANVIL_DATAFLOW_FUNCTION(kernels::saxpy_core::Store, so, out_packed.data(), n_pack);
   ANVIL_DATAFLOW_FINALIZE();
 
-  UnpackScalars(out_packed.data(), out);
+  UnpackScalars<kernels::SaxpyPack>(out_packed.data(), out);
 }
 
 }  // namespace hls_model
