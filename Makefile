@@ -14,16 +14,21 @@ ANVIL_LANG ?= cpp
 DATASET ?= tiny
 # Kernel filter for analysis / 分析时筛选的 kernel 名称
 KERNEL ?= all
+# XRT host application to build / 要构建的 XRT 主机程序
 HOST_APP ?= run_saxpy
 
 # Include board-specific configuration / 引入板卡专用配置
 include config/$(TARGET)/anvil.mk
 
+# Infer xclbin name from the selected host app / 根据选中的 host app 推导 xclbin 名称
 ifeq ($(HOST_APP),run_pipeline_demo)
 XCLBIN_NAME := pipeline_demo
 else
 XCLBIN_NAME := saxpy
 endif
+# Whether to run `make compare` after test-xrt-hw / test-xrt-hw 后是否执行 `make compare`
+# vadd and pipeline_demo produce nondeterministic output; skip compare by default
+# vadd 和 pipeline_demo 输出不确定，默认跳过对比
 ifeq ($(HOST_APP),run_vadd)
 COMPARE_AFTER_HW ?= no
 else ifeq ($(HOST_APP),run_pipeline_demo)
@@ -35,11 +40,21 @@ endif
 # --- Derived variables / 派生变量 ---
 # CMake command-line overrides derived from config/<TARGET>/anvil.mk.
 # This lets users override ANVIL_PLATFORM=/path/to/platform.xpfm from make.
+# 从 config/<TARGET>/anvil.mk 提取的 CMake 命令行覆写；
+# 允许用户在 make 命令行直接覆盖 ANVIL_PLATFORM。
 CMAKE_PLATFORM_ARGS := -DANVIL_VITIS_PLATFORM=$(ANVIL_PLATFORM) -DANVIL_VITIS_PART=$(ANVIL_VITIS_PART)
 # Build directory for the selected preset / 当前 preset 的构建目录
 BUILD_DIR   := build/$(ANVIL_PRESET)
+# Optional K2K stream pipeline config / 可选 K2K stream pipeline 配置
+PIPELINE_DEMO_CFG := config/$(TARGET)/pipeline_demo.cfg
+# Empty string if config file does not exist / 配置文件不存在时为空字符串
+PIPELINE_DEMO_SUPPORTED := $(wildcard $(PIPELINE_DEMO_CFG))
 # CMake targets for HLS synthesis / HLS 综合的 CMake target
 ANVIL_KERNEL_TARGETS ?= saxpy_xo
+# Resolve actual kernel targets based on KERNEL variable / 根据 KERNEL 变量确定实际构建目标
+#   KERNEL=all           → all configured kernels / 所有已配置的内核
+#   KERNEL=pipeline_demo → streaming kernels / 流式内核对
+#   KERNEL=<name>        → single kernel / 单个内核
 ifeq ($(KERNEL),all)
 SELECTED_KERNEL_TARGETS := $(ANVIL_KERNEL_TARGETS)
 else ifeq ($(KERNEL),pipeline_demo)
@@ -49,6 +64,7 @@ SELECTED_KERNEL_TARGETS := $(KERNEL)_xo
 endif
 # CMake targets for co-simulation / 协同仿真的 CMake target
 ANVIL_COSIM_TARGETS ?= saxpy_cosim vadd_cosim
+# Same selection logic as kernel targets for cosim / 同 kernel 目标一致的筛选逻辑
 ifeq ($(KERNEL),all)
 SELECTED_COSIM_TARGETS := $(ANVIL_COSIM_TARGETS)
 else ifeq ($(KERNEL),pipeline_demo)
@@ -69,7 +85,9 @@ HWEMU_XCLBIN_PATH  := $(HWEMU_BUILD_DIR)/src/kernels/$(XCLBIN_NAME)_xclbin/$(XCL
 # Python venv / Python 虚拟环境
 PYTHON      := .venv/bin/python
 PIP         := $(PYTHON) -m pip
+# Stamp file to skip reinstall when pyproject.toml is unchanged / 缓存标记，避免重复安装
 VENV_STAMP  := .venv/.anvil-install.stamp
+# PyPI mirror; set empty to use default index / PyPI 镜像源；设为空则使用默认索引
 PYPI_INDEX  ?= https://mirrors.ustc.edu.cn/pypi/simple
 PIP_INDEX_ARGS := $(if $(PYPI_INDEX),-i $(PYPI_INDEX),)
 # HLS flow Python entry / HLS 流程 Python 入口
@@ -83,7 +101,7 @@ BOARD_DEPLOY_DIR  ?= ~/anvil-deploy
 .PHONY: all configure build build-cpp build-python python-env python-install rebuild-python require-python-env clean clean-all help help-en help-zh \
         configure-kernel configure-host build-host build-kernel build-all \
         csynth cosim xclbin xclbin-hwemu \
-        require-u250-stream csynth-stream cosim-stream pipeline-demo \
+        require-pipeline-demo csynth-stream cosim-stream pipeline-demo \
         gen gold run-host xrt-emu xrt-hw compare analyze analyze-legacy analyze-flow analyze-cosim check-hls compare-hls emconfig \
         deploy deploy-bin deploy-xclbin deploy-data deploy-check \
         test test-csynth test-cosim test-xrt-emu test-xrt-hw test-slow test-all
@@ -128,16 +146,24 @@ build-cpp: build-host
 build-host: configure-host
 	cmake --build --preset $(ANVIL_HOST_PRESET) --target $(HOST_APP)
 
+# build-kernel — Build HLS kernel(s) without triggering host build / 构建 HLS 内核，不触发 host 构建
 build-kernel: configure-kernel
 	cmake --build --preset $(ANVIL_PRESET) --target $(SELECTED_KERNEL_TARGETS)
 
 # Python environment is explicit: normal `make build` does not create/update it.
 # Defaults to USTC PyPI mirror; disable with `make python-env PYPI_INDEX=`.
+# Python 环境需显式创建：`make build` 不会自动创建/更新虚拟环境。
+# 默认使用 USTC PyPI 镜像；通过 `make python-env PYPI_INDEX=` 禁用。
 build-python: python-env
 
+# python-env — Create or update .venv (stamp-based, skips if up-to-date)
+#              创建或更新 .venv（基于 stamp 文件，已最新则跳过）
 python-env: $(VENV_STAMP)
 
+# Stamp depends on pyproject.toml — change triggers reinstall
+# Stamp 依赖于 pyproject.toml — 修改后自动触发重新安装
 $(VENV_STAMP): pyproject.toml
+	@# Prefer uv (much faster), fall back to venv+pip / 优先使用 uv（速度更快），回退到 venv+pip
 	@if command -v uv >/dev/null 2>&1; then \
 		uv venv .venv; \
 		uv pip install $(PIP_INDEX_ARGS) -e ".[test]" --python $(PYTHON); \
@@ -147,8 +173,10 @@ $(VENV_STAMP): pyproject.toml
 	fi
 	@touch $(VENV_STAMP)
 
+# python-install — Alias for python-env / python-env 的别名
 python-install: python-env
 
+# rebuild-python — Force-recreate .venv from scratch / 强制从头重建 .venv
 rebuild-python:
 	rm -rf .venv
 	@if command -v uv >/dev/null 2>&1; then \
@@ -160,6 +188,8 @@ rebuild-python:
 	fi
 	@touch $(VENV_STAMP)
 
+# require-python-env — Guard target: fail early if .venv is missing
+#                      守卫目标：虚拟环境缺失时提前报错
 require-python-env:
 	@if [ ! -x "$(PYTHON)" ]; then \
 		echo "ERROR: Python environment missing. Run: make python-env" >&2; \
@@ -175,7 +205,8 @@ csynth: build-kernel
 
 # cosim — Run HLS co-simulation / 运行 HLS 协同仿真
 cosim:
-	@if [ "$(KERNEL)" = "pipeline_demo" ] && [ "$(TARGET)" != "u250" ]; then echo "KERNEL=pipeline_demo cosim currently requires TARGET=u250" >&2; exit 1; fi
+	@# Guard: pipeline_demo kernel requires the pipeline config file / pipeline_demo 内核需要对应的配置文件
+	@if [ "$(KERNEL)" = "pipeline_demo" ] && [ -z "$(PIPELINE_DEMO_SUPPORTED)" ]; then echo "KERNEL=pipeline_demo requires $(PIPELINE_DEMO_CFG)" >&2; exit 1; fi
 	@if [ -z "$(strip $(SELECTED_COSIM_TARGETS))" ]; then echo "cosim is not configured for TARGET=$(TARGET)" >&2; exit 1; fi
 	$(MAKE) configure-kernel TARGET=$(TARGET)
 	cmake --build $(BUILD_DIR) --target $(SELECTED_COSIM_TARGETS)
@@ -190,26 +221,26 @@ xclbin-hwemu:
 	cmake --build --preset $(ANVIL_HWEMU_PRESET) --target $(XCLBIN_NAME)_xclbin
 
 # --------------------------------------------------------------------------
-# U250 streaming kernel targets (require TARGET=u250)
-# U250 流式内核目标（需要 TARGET=u250）
+# Streaming pipeline targets (require config/<TARGET>/pipeline_demo.cfg)
+# 流式 pipeline 目标（需要 config/<TARGET>/pipeline_demo.cfg）
 # --------------------------------------------------------------------------
-require-u250-stream:
-	@if [ "$(TARGET)" != "u250" ]; then \
-		echo "error: csynth-stream / cosim-stream / pipeline-demo require TARGET=u250 (got TARGET=$(TARGET))" >&2; exit 1; \
+require-pipeline-demo:
+	@if [ -z "$(PIPELINE_DEMO_SUPPORTED)" ]; then \
+		echo "error: stream pipeline requires $(PIPELINE_DEMO_CFG) (TARGET=$(TARGET))" >&2; exit 1; \
 	fi
 
 csynth-stream:
-	$(MAKE) require-u250-stream TARGET=$(TARGET)
+	$(MAKE) require-pipeline-demo TARGET=$(TARGET)
 	$(MAKE) configure-kernel TARGET=$(TARGET)
 	cmake --build $(BUILD_DIR) --target saxpy_stream_xo vadd_stream_xo
 
 cosim-stream:
-	$(MAKE) require-u250-stream TARGET=$(TARGET)
+	$(MAKE) require-pipeline-demo TARGET=$(TARGET)
 	$(MAKE) configure-kernel TARGET=$(TARGET)
 	cmake --build $(BUILD_DIR) --target saxpy_stream_cosim vadd_stream_cosim
 
 pipeline-demo:
-	$(MAKE) require-u250-stream TARGET=$(TARGET)
+	$(MAKE) require-pipeline-demo TARGET=$(TARGET)
 	$(MAKE) configure-kernel TARGET=$(TARGET)
 	cmake --build $(BUILD_DIR) --target pipeline_demo_xclbin
 
@@ -226,6 +257,7 @@ gen:
 # gold — Run golden reference to produce expected output / 运行黄金参考生成期望输出
 gold: gen
 	@if [ ! -f scripts/run_gold.sh ]; then echo "scripts/run_gold.sh is added in Task 15" >&2; exit 1; fi
+	@# Build C++ gold binary first if gold ref is in C++ / 如果黄金参考使用 C++，先构建 gold 二进制
 	@if [ "$(ANVIL_LANG)" = "cpp" ]; then \
 		$(MAKE) configure-host TARGET=$(TARGET); \
 		cmake --build --preset $(ANVIL_HOST_PRESET) --target saxpy_gold_bin; \
@@ -238,7 +270,8 @@ gold: gen
 
 # run-host — Execute host binary on real hardware / 在真实硬件上执行主机程序
 run-host:
-	@if [ "$(HOST_APP)" = "run_pipeline_demo" ] && [ "$(TARGET)" != "u250" ]; then echo "HOST_APP=run_pipeline_demo currently requires TARGET=u250" >&2; exit 1; fi
+	@# Guard: pipeline demo needs the streaming kernel pipeline config / pipeline demo 需要流式内核配置
+	@if [ "$(HOST_APP)" = "run_pipeline_demo" ] && [ -z "$(PIPELINE_DEMO_SUPPORTED)" ]; then echo "HOST_APP=run_pipeline_demo requires $(PIPELINE_DEMO_CFG)" >&2; exit 1; fi
 	$(MAKE) build-host TARGET=$(TARGET) HOST_APP=$(HOST_APP)
 	$(MAKE) gen DATASET=$(DATASET)
 	@if [ ! -x $(HOST_BIN) ]; then echo "$(HOST_BIN) not built; use a preset with ANVIL_BUILD_XRT=ON" >&2; exit 1; fi
@@ -280,7 +313,8 @@ xrt-emu: gen
 	env XCL_EMULATION_MODE=hw_emu EMCONFIG_PATH=$(HWEMU_BUILD_DIR) $(HWEMU_HOST_BIN) --xclbin $(HWEMU_XCLBIN_PATH) --data-dir data/$(DATASET) --output data/$(DATASET)/xrt_emu_out.bin
 endif
 
-# xrt-hw — Run on real hardware (alias for run-host) / 在真实硬件上运行（run-host 的别名）
+# xrt-hw — Run on real hardware. Delegates to run-host with all args forwarded.
+#          在真实硬件上运行。委托给 run-host 并透传所有参数。
 xrt-hw:
 	$(MAKE) run-host TARGET=$(TARGET) HOST_APP=$(HOST_APP) DATASET=$(DATASET)
 
@@ -302,12 +336,13 @@ analyze: require-python-env
 # analyze-flow — Backward-compatible alias / 兼容旧入口
 analyze-flow: analyze
 
-# analyze-cosim — Collect cosim report into hlsflow database
+# analyze-cosim — Collect cosim report into hlsflow database / 收集 cosim 报告到 hlsflow 数据库
 analyze-cosim: require-python-env
 	@if [ ! -d tools/hlsflow ]; then echo "tools/hlsflow not present" >&2; exit 1; fi
 	env $(HLSFLOW_PYTHON) -m hlsflow collect --build-dir $(BUILD_DIR) --kernel $(KERNEL) --target cosim --platform $(TARGET)
 
-# analyze-legacy — Old simple parser / 旧版简易解析器
+# analyze-legacy — Old simple parser (kept for backward compatibility)
+#                  旧版简易解析器（向后兼容保留）
 analyze-legacy: require-python-env
 	@if [ ! -f scripts/analyze.py ]; then echo "scripts/analyze.py is added in Task 16" >&2; exit 1; fi
 	$(PYTHON) scripts/analyze.py --build-dir $(BUILD_DIR)
@@ -318,6 +353,7 @@ check-hls: require-python-env
 
 # compare-hls — Diff two HLS runs / 对比两次 HLS 运行结果
 compare-hls:
+	@# Both BASELINE and CANDIDATE are required / 两个参数都必须提供
 	@if [ -z "$(BASELINE)" ] || [ -z "$(CANDIDATE)" ]; then echo "Usage: make compare-hls BASELINE=<id> CANDIDATE=<id>" >&2; exit 1; fi
 	$(MAKE) build-python
 	env $(HLSFLOW_PYTHON) -m hlsflow compare --baseline "$(BASELINE)" --candidate "$(CANDIDATE)"
@@ -336,12 +372,15 @@ test:
 	$(PYTHON) -m pytest -m fast tests/python -v
 
 # Label-specific CTest targets / 按标签筛选的 CTest 目标
+# Run CTest with csynth label / 使用 csynth 标签运行 CTest
 test-csynth: configure-kernel
 	ctest --test-dir $(BUILD_DIR) -L csynth -V
 
+# test-cosim — Run cosim test (delegates to cosim target) / 运行 cosim 测试（委托给 cosim 目标）
 test-cosim:
 	$(MAKE) cosim TARGET=$(TARGET) KERNEL=$(KERNEL)
 
+# test-xrt-emu — Run hardware emulation test (delegates to xrt-emu) / 运行硬件仿真测试（委托给 xrt-emu）
 test-xrt-emu:
 	$(MAKE) xrt-emu
 
@@ -363,6 +402,7 @@ test-xrt-hw:
 		--host-app "$(HOST_APP)" \
 		--xclbin-name "$(XCLBIN_NAME)" \
 		--dataset "$(DATASET)"
+	@# Only compare if the host app produces deterministic output / 仅当 host app 产生确定性输出时才进行对比
 	@if [ "$(COMPARE_AFTER_HW)" = "yes" ]; then $(MAKE) compare DATASET=$(DATASET); else echo "Skipping make compare for HOST_APP=$(HOST_APP)"; fi
 
 # test-slow — Run all slow hardware tests + slow Python tests / 运行所有慢速硬件测试和 Python 测试
@@ -378,6 +418,8 @@ test-all: test test-slow
 # ============================================================================
 
 # clean — Remove build directory for the current preset / 移除当前 preset 的构建目录
+# Also removes the host build dir if it differs from kernel build dir
+# 同时移除与 kernel 构建目录不同的 host 构建目录
 clean:
 	rm -rf $(BUILD_DIR)
 	@if [ "$(ANVIL_HOST_PRESET)" != "$(ANVIL_PRESET)" ]; then \
@@ -392,16 +434,19 @@ clean-all:
 # Deployment to physical board via SSH / 通过 SSH 部署到物理板卡
 # ============================================================================
 
+# deploy-check — Guard: verify BOARD_IP is set before deploying / 守卫：部署前检查 BOARD_IP 是否设置
 deploy-check:
 	@if [ -z "$(BOARD_IP)" ]; then echo "ERROR: BOARD_IP not set. Usage: make deploy BOARD_IP=<ip> [BOARD_SSH_USER=root] [DATASET=tiny]" >&2; exit 1; fi
 
-# deploy-bin — Deploy the host binary / 部署主机端二进制文件
+# deploy-bin — Deploy the host binary. Renamed to $(HOST_APP) on board.
+#              部署主机端二进制文件，在板卡上重命名为 $(HOST_APP)
 deploy-bin: deploy-check
 	@if [ ! -f "$(HOST_BIN)" ]; then echo "ERROR: $(HOST_BIN) not found. Run: make build TARGET=$(TARGET) HOST_APP=$(HOST_APP) first." >&2; exit 1; fi
 	ssh $(BOARD_SSH_USER)@$(BOARD_IP) "mkdir -p $(BOARD_DEPLOY_DIR)"
 	scp "$(HOST_BIN)" "$(BOARD_SSH_USER)@$(BOARD_IP):$(BOARD_DEPLOY_DIR)/$(HOST_APP)"
 
-# deploy-xclbin — Deploy the .xclbin bitstream / 部署 .xclbin 比特流
+# deploy-xclbin — Deploy the .xclbin bitstream. Renamed to $(XCLBIN_NAME).xclbin on board.
+#                部署 .xclbin 比特流，在板卡上重命名为 $(XCLBIN_NAME).xclbin
 deploy-xclbin: deploy-check
 	@if [ ! -f "$(XCLBIN_PATH)" ]; then echo "ERROR: $(XCLBIN_PATH) not found. Run: make xclbin TARGET=$(TARGET) HOST_APP=$(HOST_APP) first." >&2; exit 1; fi
 	ssh $(BOARD_SSH_USER)@$(BOARD_IP) "mkdir -p $(BOARD_DEPLOY_DIR)"
@@ -468,11 +513,11 @@ help-en:
 	@echo "  make test-xrt-hw TARGET=zcu102 BOARD_IP=<ip> DATASET=tiny"
 	@echo "  make deploy-bin|deploy-xclbin|deploy-data TARGET=zcu102 BOARD_IP=<ip>"
 	@echo ""
-	@echo "U250 stream demo:"
-	@echo "  make csynth-stream TARGET=u250"
-	@echo "  make cosim-stream TARGET=u250"
-	@echo "  make pipeline-demo TARGET=u250"
-	@echo "  make run-host TARGET=u250 HOST_APP=run_pipeline_demo"
+	@echo "Stream pipeline demo:"
+	@echo "  make csynth-stream TARGET=u250|u55c|u50|u200|u280|vck5000"
+	@echo "  make cosim-stream TARGET=u250|u55c|u50|u200|u280|vck5000"
+	@echo "  make pipeline-demo TARGET=u250|u55c|u50|u200|u280|vck5000"
+	@echo "  make run-host TARGET=u250|u55c|u50|u200|u280|vck5000 HOST_APP=run_pipeline_demo"
 	@echo ""
 	@echo "Maintenance / compatibility aliases:"
 	@echo "  make configure|configure-kernel|configure-host  Configure CMake presets"
@@ -529,11 +574,11 @@ help-zh:
 	@echo "  make test-xrt-hw TARGET=zcu102 BOARD_IP=<ip> DATASET=tiny"
 	@echo "  make deploy-bin|deploy-xclbin|deploy-data TARGET=zcu102 BOARD_IP=<ip>"
 	@echo ""
-	@echo "U250 stream demo:"
-	@echo "  make csynth-stream TARGET=u250"
-	@echo "  make cosim-stream TARGET=u250"
-	@echo "  make pipeline-demo TARGET=u250"
-	@echo "  make run-host TARGET=u250 HOST_APP=run_pipeline_demo"
+	@echo "Stream pipeline demo:"
+	@echo "  make csynth-stream TARGET=u250|u55c|u50|u200|u280|vck5000"
+	@echo "  make cosim-stream TARGET=u250|u55c|u50|u200|u280|vck5000"
+	@echo "  make pipeline-demo TARGET=u250|u55c|u50|u200|u280|vck5000"
+	@echo "  make run-host TARGET=u250|u55c|u50|u200|u280|vck5000 HOST_APP=run_pipeline_demo"
 	@echo ""
 	@echo "维护 / 兼容别名:"
 	@echo "  make configure|configure-kernel|configure-host  配置 CMake presets"

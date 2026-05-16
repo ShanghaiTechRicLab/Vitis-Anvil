@@ -21,7 +21,7 @@ Anvil 是铁砧：硬件在上面被锻造成型。Vitis-Anvil 提供一个小�
 | 领域 | 内容 |
 |---|---|
 | 构建系统 | CMake presets、`config/<target>/anvil.mk`、顶层 Make targets |
-| Kernels | `saxpy`、`vadd`、U250 stream pipeline demos |
+| Kernels | `saxpy`、`vadd`、加速卡 stream pipeline demos |
 | Host apps | `run_saxpy`、`run_vadd`、`run_pipeline_demo` |
 | 验证 | CPU 测试、gold 生成、结果比较、HLS csynth、HLS cosim、XRT 运行路径 |
 | 分析 | `hlsflow` rich 终端报告、HTML/TXT 导出、JSONL run database |

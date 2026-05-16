@@ -111,4 +111,4 @@ make xrt-emu TARGET=zcu102 DATASET=tiny
 | compiler 找不到 `crtbeginS.o` 或 `-lgcc` | sysroot/compiler runtime 不匹配 | 使用和 Vitis/PetaLinux toolchain 匹配的 sysroot |
 | 板端 `device not found` | XRT/zocl 未加载 | source XRT setup 并查看 `dmesg` |
 | xclbin load error | platform 或 board image 不匹配 | 用匹配的 `.xpfm` 和 boot image 重建 |
-| `cosim is not configured` | `KERNEL=` 错误或不支持 stream target | 用 `KERNEL=saxpy`、`KERNEL=vadd`；stream pipeline 当前 U250-only |
+| `cosim is not configured` | `KERNEL=` 错误或不支持 stream target | 用 `KERNEL=saxpy`、`KERNEL=vadd`；stream pipeline 当前仅支持加速卡 |

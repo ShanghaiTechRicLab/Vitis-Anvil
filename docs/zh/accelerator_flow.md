@@ -37,9 +37,9 @@ Host app 选择：
 |---|---|
 | `run_saxpy` | saxpy demo host |
 | `run_vadd` | vadd demo host |
-| `run_pipeline_demo` | U250 stream pipeline demo |
+| `run_pipeline_demo` | 加速卡 stream pipeline demo |
 
-`HOST_APP=run_pipeline_demo` 当前要求 `TARGET=u250`。
+`HOST_APP=run_pipeline_demo` 需要 `config/<target>/pipeline_demo.cfg`。仓库已经提供 `u250`、`u55c`、`u50`、`u200`、`u280`、`vck5000` 的配置。
 
 ## 3. Synthesize 和 cosim kernel
 
@@ -53,8 +53,8 @@ make analyze-cosim TARGET=u250 KERNEL=saxpy
 `KERNEL=vadd` 跑 vadd，`KERNEL=all` 跑该 target 配置的默认 kernel 集合。Stream pipeline 使用：
 
 ```bash
-make csynth-stream TARGET=u250
-make cosim-stream TARGET=u250
+make csynth-stream TARGET=u250   # 也支持 u55c/u50/u200/u280/vck5000
+make cosim-stream TARGET=u250    # 也支持 u55c/u50/u200/u280/vck5000
 ```
 
 ## 4. Link 并运行 xclbin
@@ -79,6 +79,8 @@ make xrt-emu TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
 ```bash
 make pipeline-demo TARGET=u250
 make run-host TARGET=u250 HOST_APP=run_pipeline_demo DATASET=tiny
+
+# 安装对应 platform 后，u55c/u50/u200/u280/vck5000 也使用同样命令形状。
 ```
 
 Pipeline demo 构建独立的 `pipeline_demo.xclbin`；当 `HOST_APP=run_pipeline_demo` 时 Makefile 会自动选择它。

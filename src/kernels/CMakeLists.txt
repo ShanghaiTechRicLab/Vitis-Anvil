@@ -24,21 +24,25 @@ endif()
 add_anvil_kernel(${_saxpy_kernel_args})
 add_anvil_kernel(${_vadd_kernel_args})
 
-if(ANVIL_PLATFORM_KIND MATCHES "^(u250|u55c)$")
+set(_saxpy_link_cfg "${CMAKE_SOURCE_DIR}/config/${ANVIL_PLATFORM_KIND}/link.cfg")
+if(EXISTS "${_saxpy_link_cfg}")
+  if(ANVIL_PLATFORM_KIND MATCHES "^(zcu104|zcu102|zcu106|kv260)$")
+    set(_saxpy_xclbin_kernels saxpy_xo)
+  else()
+    set(_saxpy_xclbin_kernels saxpy_xo vadd_xo)
+  endif()
   add_anvil_xclbin(
     NAME saxpy
-    KERNEL_TARGETS saxpy_xo vadd_xo
-    PLATFORM_KIND ${ANVIL_PLATFORM_KIND})
-elseif(ANVIL_PLATFORM_KIND MATCHES "^(zcu104|zcu102)$")
-  add_anvil_xclbin(
-    NAME saxpy
-    KERNEL_TARGETS saxpy_xo
+    KERNEL_TARGETS ${_saxpy_xclbin_kernels}
+    LINK_CFG ${_saxpy_link_cfg}
     PLATFORM_KIND ${ANVIL_PLATFORM_KIND})
 endif()
 
-# K2K streaming pipeline demo — U250 only.
+# K2K streaming pipeline demo.
+# Enabled for any target with config/<platform>/pipeline_demo.cfg.
 # NO_ALL: these kernels are opt-in demos; they do not build by default.
-if(ANVIL_PLATFORM_KIND STREQUAL "u250")
+set(_pipeline_demo_cfg "${CMAKE_SOURCE_DIR}/config/${ANVIL_PLATFORM_KIND}/pipeline_demo.cfg")
+if(EXISTS "${_pipeline_demo_cfg}")
   set(_saxpy_stream_args
     NAME          saxpy_stream
     TOP           saxpy_stream
@@ -65,6 +69,6 @@ if(ANVIL_PLATFORM_KIND STREQUAL "u250")
   add_anvil_xclbin(
     NAME           pipeline_demo
     KERNEL_TARGETS saxpy_stream_xo vadd_stream_xo
-    LINK_CFG       ${CMAKE_SOURCE_DIR}/config/u250/pipeline_demo.cfg
+    LINK_CFG       ${_pipeline_demo_cfg}
     PLATFORM_KIND  ${ANVIL_PLATFORM_KIND})
 endif()

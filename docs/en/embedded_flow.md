@@ -111,4 +111,4 @@ For embedded targets this builds artifacts and prints paths. Actual QEMU launch 
 | compiler cannot find `crtbeginS.o` or `-lgcc` | sysroot/compiler runtime mismatch | use the sysroot that matches the Vitis/PetaLinux toolchain |
 | `device not found` on board | XRT/zocl not loaded | source XRT setup and inspect `dmesg` |
 | xclbin load error | wrong platform or board image | rebuild with matching `.xpfm` and boot image |
-| `cosim is not configured` | wrong `KERNEL=` or unsupported stream target | use `KERNEL=saxpy`, `KERNEL=vadd`; stream pipeline is U250-only |
+| `cosim is not configured` | wrong `KERNEL=` or unsupported stream target | use `KERNEL=saxpy`, `KERNEL=vadd`; stream pipeline is accelerator-card only |

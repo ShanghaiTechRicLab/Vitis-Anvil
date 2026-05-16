@@ -37,9 +37,9 @@ Host app choices:
 |---|---|
 | `run_saxpy` | saxpy demo host |
 | `run_vadd` | vadd demo host |
-| `run_pipeline_demo` | U250 stream pipeline demo |
+| `run_pipeline_demo` | accelerator-card stream pipeline demo |
 
-`HOST_APP=run_pipeline_demo` currently requires `TARGET=u250`.
+`HOST_APP=run_pipeline_demo` requires `config/<target>/pipeline_demo.cfg`. The repository provides configs for `u250`, `u55c`, `u50`, `u200`, `u280`, and `vck5000`.
 
 ## 3. Synthesize and cosim kernels
 
@@ -53,8 +53,8 @@ make analyze-cosim TARGET=u250 KERNEL=saxpy
 Use `KERNEL=vadd` for vadd, or `KERNEL=all` for the target's configured default kernel set. The stream pipeline uses:
 
 ```bash
-make csynth-stream TARGET=u250
-make cosim-stream TARGET=u250
+make csynth-stream TARGET=u250   # also u55c/u50/u200/u280/vck5000
+make cosim-stream TARGET=u250    # also u55c/u50/u200/u280/vck5000
 ```
 
 ## 4. Link and run xclbin
@@ -79,6 +79,8 @@ make xrt-emu TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
 ```bash
 make pipeline-demo TARGET=u250
 make run-host TARGET=u250 HOST_APP=run_pipeline_demo DATASET=tiny
+
+# Same target shape is available for u55c/u50/u200/u280/vck5000 when the matching platform is installed.
 ```
 
 The pipeline demo builds a separate `pipeline_demo.xclbin`; the Makefile selects it automatically when `HOST_APP=run_pipeline_demo`.

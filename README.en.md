@@ -21,7 +21,7 @@ This repository is intentionally short-named and CLI-friendly: `anvil init`, `an
 | Area | Included pieces |
 |---|---|
 | Build system | CMake presets, `config/<target>/anvil.mk`, top-level Make targets |
-| Kernels | `saxpy`, `vadd`, and U250 stream pipeline demos |
+| Kernels | `saxpy`, `vadd`, and accelerator-card stream pipeline demos |
 | Host apps | `run_saxpy`, `run_vadd`, `run_pipeline_demo` |
 | Verification | CPU tests, gold generation, comparison, HLS csynth, HLS cosim, XRT run paths |
 | Analysis | `hlsflow` rich console reports, HTML/TXT exports, JSONL run database |
