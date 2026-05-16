@@ -55,19 +55,34 @@ def parse_hls_log(log_path: Path) -> VitisLogReport:
     return rpt
 
 
-def find_and_parse_logs(build_dir: Path, kernel: str) -> list[VitisLogReport]:
-    """Discover and parse all relevant Vitis logs under build_dir for kernel."""
+def find_and_parse_logs(work_dir: Path, kernel: str) -> list[VitisLogReport]:
+    """Discover and parse logs for one kernel HLS work directory.
+
+    The collect/csynth path must not scan the whole CMake build tree: a stale
+    *_xclbin/link/v++.log from a failed link run is unrelated to HLS synthesis
+    and would otherwise be reported as a false csynth error.
+    """
     results: list[VitisLogReport] = []
 
-    # vitis_hls.log is inside the HLS project dir — prefer the one that contains
-    # the kernel name in its path.
-    matched = [p for p in sorted(build_dir.rglob("vitis_hls.log")) if kernel in str(p)]
-    fallback = sorted(build_dir.rglob("vitis_hls.log"))
-    for hit in (matched or fallback)[:1]:
-        results.append(parse_hls_log(hit))
+    # Current Vitis --mode hls logs are normally under <kernel>_hls/logs/.
+    for name in ("hls_compile.log", "vitis_hls.log"):
+        hit = work_dir / "logs" / name
+        if hit.is_file():
+            results.append(parse_hls_log(hit))
+            break
 
-    # v++ compile/link logs.
-    for vpp_log in sorted(build_dir.rglob("v++*.log"))[:5]:
+    # Older / alternate layouts can put vitis_hls.log deeper in the HLS project.
+    if not results:
+        matched = [p for p in sorted(work_dir.rglob("vitis_hls.log")) if kernel in str(p)]
+        fallback = sorted(work_dir.rglob("vitis_hls.log"))
+        for hit in (matched or fallback)[:1]:
+            results.append(parse_hls_log(hit))
+
+    # Parse v++ logs only inside the kernel HLS work dir; explicitly ignore
+    # xclbin/link logs, which belong to the separate link stage.
+    for vpp_log in sorted(work_dir.rglob("v++*.log"))[:5]:
+        if "_xclbin" in vpp_log.parts or "run_link" in vpp_log.parts:
+            continue
         results.append(parse_vpp_log(vpp_log))
 
     return results

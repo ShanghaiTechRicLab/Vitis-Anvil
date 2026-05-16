@@ -66,7 +66,7 @@ def _do_collect_csynth(build_dir: Path, kernel: str, platform: str, reports_dir:
     vitis_v = _vitis_version()
     render(rpt, kernel=kernel, platform=platform, vitis_version=vitis_v,
            html_path=html, txt_path=txt, console=console)
-    vlog = find_and_parse_logs(build_dir, kernel)
+    vlog = find_and_parse_logs(hit.work_dir, kernel)
     v_errors = [e for lr in vlog for e in lr.errors]
     v_warnings = [w for lr in vlog for w in lr.warnings]
     v_timing = [t for lr in vlog for t in lr.timing_violations]
