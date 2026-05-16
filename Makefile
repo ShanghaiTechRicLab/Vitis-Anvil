@@ -40,6 +40,13 @@ CMAKE_PLATFORM_ARGS := -DANVIL_VITIS_PLATFORM=$(ANVIL_PLATFORM) -DANVIL_VITIS_PA
 BUILD_DIR   := build/$(ANVIL_PRESET)
 # CMake targets for HLS synthesis / HLS 综合的 CMake target
 ANVIL_KERNEL_TARGETS ?= saxpy_xo
+ifeq ($(KERNEL),all)
+SELECTED_KERNEL_TARGETS := $(ANVIL_KERNEL_TARGETS)
+else ifeq ($(KERNEL),pipeline_demo)
+SELECTED_KERNEL_TARGETS := saxpy_stream_xo vadd_stream_xo
+else
+SELECTED_KERNEL_TARGETS := $(KERNEL)_xo
+endif
 # CMake targets for co-simulation / 协同仿真的 CMake target
 ANVIL_COSIM_TARGETS ?= saxpy_cosim vadd_cosim
 ifeq ($(KERNEL),all)
@@ -122,7 +129,7 @@ build-host: configure-host
 	cmake --build --preset $(ANVIL_HOST_PRESET) --target $(HOST_APP)
 
 build-kernel: configure-kernel
-	cmake --build --preset $(ANVIL_PRESET) --target $(ANVIL_KERNEL_TARGETS)
+	cmake --build --preset $(ANVIL_PRESET) --target $(SELECTED_KERNEL_TARGETS)
 
 # Python environment is explicit: normal `make build` does not create/update it.
 # Defaults to USTC PyPI mirror; disable with `make python-env PYPI_INDEX=`.
@@ -422,7 +429,7 @@ help:
 	@echo "  make rebuild-python [PYPI_INDEX=]   — recreate .venv; empty PYPI_INDEX disables mirror"
 	@echo "  make build-all [TARGET=...]         — build kernel + host + Python"
 	@echo "  make test                         — CPU-only fast tests (no Vitis/XRT)"
-	@echo "  make csynth                       — v++ HLS synthesis"
+	@echo "  make csynth [KERNEL=saxpy|vadd|all] — v++ HLS synthesis"
 	@echo "  make cosim [KERNEL=saxpy|vadd|pipeline_demo|all] — HLS kernel co-simulation"
 	@echo "  make xclbin                       — link .xclbin"
 	@echo "  make csynth-stream/cosim-stream   — opt-in U250 k2k stream kernel checks"

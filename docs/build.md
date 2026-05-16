@@ -14,7 +14,7 @@
 ## Day-0 fast test (no Vitis, no FPGA)
 
 ```bash
-rtk pip install -e .
+python3 -m pip install -e .
 make test
 ```
 
