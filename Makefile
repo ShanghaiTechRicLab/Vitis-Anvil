@@ -60,6 +60,7 @@ csynth: configure
 	rtk cmake --build $(BUILD_DIR) --target $(ANVIL_KERNEL_TARGETS)
 
 cosim: configure
+	@if [ -z "$(strip $(ANVIL_COSIM_TARGETS))" ]; then rtk echo "cosim is not configured for TARGET=$(TARGET)" >&2; exit 1; fi
 	rtk cmake --build $(BUILD_DIR) --target $(ANVIL_COSIM_TARGETS)
 
 xclbin: configure
@@ -133,10 +134,12 @@ analyze-flow:
 	rtk env $(HLSFLOW_PYTHON) -m hlsflow collect --build-dir $(BUILD_DIR) --kernel $${KERNEL:-all}
 
 check-hls:
+	rtk $(MAKE) build-python
 	rtk env $(HLSFLOW_PYTHON) -m hlsflow check --max-ii 1
 
 compare-hls:
 	@if [ -z "$(BASELINE)" ] || [ -z "$(CANDIDATE)" ]; then rtk echo "Usage: make compare-hls BASELINE=<id> CANDIDATE=<id>" >&2; exit 1; fi
+	rtk $(MAKE) build-python
 	rtk env $(HLSFLOW_PYTHON) -m hlsflow compare --baseline "$(BASELINE)" --candidate "$(CANDIDATE)"
 
 # make test uses hls-model-linux-debug preset (CPU-only, no Vitis/XRT/xpfm).
@@ -224,7 +227,7 @@ help:
 	@rtk echo "  make xrt-hw                       — run on real hardware"
 	@rtk echo "  make compare                      — compare outputs vs gold"
 	@rtk echo "  make analyze                      — parse HLS csynth report"
-	@rtk echo "  make analyze-flow [KERNEL=saxpy]  — hlsflow collect csynth (rich + HTML + JSONL)"
+	@rtk echo "  make analyze-flow [KERNEL=all]    — hlsflow collect csynth (rich + HTML + JSONL)"
 	@rtk echo "  make check-hls                    — hlsflow threshold check on latest run"
 	@rtk echo "  make compare-hls BASELINE=<id> CANDIDATE=<id> — diff two runs"
 	@rtk echo "  make emconfig                     — generate emconfig.json for hw_emu"

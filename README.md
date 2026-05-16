@@ -60,7 +60,7 @@ Edit these demo touch-points:
 3. `src/hls_model/saxpy_hls_model.cpp` — CPU parity model (optional)
 4. `src/gold/cpp/saxpy_gold.cpp` — C++ reference
 5. `src/gold/python/saxpy_gold.py` — Python reference
-6. `config/u250/link.cfg` / `config/zcu104/link.cfg` / `config/zcu102/link.cfg` — kernel port→memory/interface mapping
+6. `config/u250/link.cfg` / `config/u55c/link.cfg` / `config/zcu104/link.cfg` / `config/zcu102/link.cfg` — kernel port→memory/interface mapping
 7. `scripts/gen_dataset.py` — input data format
 8. `scripts/compare.py` — output comparison format
 

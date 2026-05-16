@@ -98,3 +98,6 @@ venv/
 data/*/
 docs/superpower/
 docs/donotcommit/
+reports/*.html
+reports/*.txt
+reports/runs.jsonl
