@@ -15,7 +15,10 @@ if(ANVIL_BUILD_XRT AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/cpp/test_anvil_runtime
 endif()
 
 add_executable(anvil_tests ${TEST_SOURCES})
-target_include_directories(anvil_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(anvil_tests PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${PROJECT_SOURCE_DIR}/src/kernels/include
+  ${PROJECT_SOURCE_DIR}/src/hls_model/include)
 target_link_libraries(anvil_tests PRIVATE
   anvil_gold
   anvil::log

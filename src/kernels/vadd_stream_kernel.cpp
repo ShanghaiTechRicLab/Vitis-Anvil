@@ -1,7 +1,7 @@
-#include "anvil/kernels/vadd_stream.hpp"
+#include "kernels/vadd_stream.hpp"
 
-using anvil::kernels::PipelinePack;
-static const int kW = anvil::kernels::kPipelinePack;
+using kernels::PipelinePack;
+static const int kW = kernels::kPipelinePack;
 
 extern "C" void vadd_stream(
     hls::stream<PipelinePack>& s_in,

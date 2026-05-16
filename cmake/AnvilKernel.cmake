@@ -117,6 +117,7 @@ function(add_anvil_kernel)
   _anvil_kernel_reject_space_path("${AK_NAME}" "Vitis platform path" "${ANVIL_VITIS_PLATFORM}")
   _anvil_kernel_reject_space_path("${AK_NAME}" "public include path" "${PROJECT_SOURCE_DIR}/include")
   _anvil_kernel_reject_space_path("${AK_NAME}" "generated include path" "${CMAKE_BINARY_DIR}/generated")
+  _anvil_kernel_reject_space_path("${AK_NAME}" "project kernel include path" "${PROJECT_SOURCE_DIR}/src/kernels/include")
   _anvil_kernel_reject_space_path("${AK_NAME}" "hlslib include path" "${PROJECT_SOURCE_DIR}/third_party/hlslib/include")
   foreach(_ak_abs_src IN LISTS _ak_abs_sources)
     _anvil_kernel_reject_space_path("${AK_NAME}" "kernel source path" "${_ak_abs_src}")
@@ -135,9 +136,9 @@ function(add_anvil_kernel)
   endforeach()
 
   set(_ak_cflags
-    "-std=${ANVIL_HLS_STD} -DHLSLIB_SYNTHESIS -I${PROJECT_SOURCE_DIR}/include -I${CMAKE_BINARY_DIR}/generated -I${PROJECT_SOURCE_DIR}/third_party/hlslib/include")
+    "-std=${ANVIL_HLS_STD} -DHLSLIB_SYNTHESIS -I${PROJECT_SOURCE_DIR}/include -I${CMAKE_BINARY_DIR}/generated -I${PROJECT_SOURCE_DIR}/src/kernels/include -I${PROJECT_SOURCE_DIR}/third_party/hlslib/include")
   set(_ak_tb_cflags
-    "-std=${ANVIL_HLS_STD} -I${PROJECT_SOURCE_DIR}/include -I${CMAKE_BINARY_DIR}/generated -I${PROJECT_SOURCE_DIR}/third_party/hlslib/include")
+    "-std=${ANVIL_HLS_STD} -I${PROJECT_SOURCE_DIR}/include -I${CMAKE_BINARY_DIR}/generated -I${PROJECT_SOURCE_DIR}/src/kernels/include -I${PROJECT_SOURCE_DIR}/third_party/hlslib/include")
 
   # Vitis 2024.2 HLS compile mode accepts platform/frequency but not --target;
   # ANVIL_VITIS_TARGET is retained as target metadata for future xclbin/link work.

@@ -1,7 +1,7 @@
-#include <anvil/kernels/vadd.hpp>
+#include "kernels/vadd.hpp"
 
-using anvil::kernels::VaddPack;
-using anvil::kernels::kVaddPack;
+using kernels::VaddPack;
+using kernels::kVaddPack;
 
 extern "C" void vadd(const VaddPack* a, const VaddPack* b, VaddPack* out, int n_packs) {
 #pragma HLS INTERFACE m_axi port=a   bundle=gmem0 offset=slave depth=1024

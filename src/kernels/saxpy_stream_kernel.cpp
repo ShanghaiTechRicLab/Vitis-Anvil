@@ -1,7 +1,7 @@
-#include "anvil/kernels/saxpy_stream.hpp"
+#include "kernels/saxpy_stream.hpp"
 
-using anvil::kernels::PipelinePack;
-static const int kW = anvil::kernels::kPipelinePack;
+using kernels::PipelinePack;
+static const int kW = kernels::kPipelinePack;
 
 extern "C" void saxpy_stream(
     const PipelinePack* x,

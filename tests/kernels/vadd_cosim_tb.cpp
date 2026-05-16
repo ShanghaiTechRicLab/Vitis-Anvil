@@ -1,10 +1,10 @@
-#include <anvil/kernels/vadd.hpp>
+#include "kernels/vadd.hpp"
 
 #include <cstdio>
 #include <vector>
 
-using anvil::kernels::VaddPack;
-using anvil::kernels::kVaddPack;
+using kernels::VaddPack;
+using kernels::kVaddPack;
 
 namespace {
 

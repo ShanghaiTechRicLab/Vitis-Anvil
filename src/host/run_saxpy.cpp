@@ -5,6 +5,8 @@
 #include <anvil/runtime/xrt_buffer.hpp>
 #include <anvil/runtime/xrt_context.hpp>
 
+#include "kernels/kernel_types.hpp"
+
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
@@ -23,7 +25,7 @@ using anvil::runtime::XrtBuffer;
 using anvil::runtime::XrtContext;
 
 namespace {
-constexpr std::size_t kSaxpyPackWidth = 16;
+constexpr std::size_t kSaxpyPackWidth = static_cast<std::size_t>(kernels::kSaxpyPackWidth);
 
 struct InputData {
     std::vector<float> x;
@@ -157,7 +159,8 @@ int main(int argc, char* argv[]) {
 
     anvil::log::Info("launching saxpy kernel n={} padded_n={} a={}", n, padded_n, a);
     // Kernel ABI: saxpy(SaxpyPack* x, SaxpyPack* y, SaxpyPack* out, float a, int n_total).
-    // SaxpyPack has 16 floats, so host BOs are padded to a full pack.
+    // SaxpyPack has kernels::kSaxpyPackWidth floats, so host BOs are
+    // padded to a full pack.
     // Args 3=a (float), 4=n_total (int) — do not swap these.
     kernel(x_buf.bo(), y_buf.bo(), out_buf.bo(), a, n_arg);
 
