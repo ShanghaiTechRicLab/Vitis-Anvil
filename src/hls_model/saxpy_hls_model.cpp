@@ -5,32 +5,10 @@
 #include <vector>
 
 #include "anvil/hls/dataflow.hpp"
-#include "anvil/hls/packed_ops.hpp"
-#include "anvil/hls/stream.hpp"
 #include "hls_model/saxpy_pack_utils.hpp"
+#include "kernels/saxpy_core.hpp"
 
 namespace hls_model {
-namespace {
-
-typedef anvil::hls::Stream<kernels::SaxpyPack, anvil::hls::kDefaultDataflowStreamDepth> SaxpyStream;
-
-struct SaxpyOp {
-  float operator()(float a, float x, float y) const { return a * x + y; }
-};
-
-void Load(const kernels::SaxpyPack* in, SaxpyStream& out, int n_pack) {
-  anvil::hls::LoadPacks(in, out, n_pack);
-}
-
-void Compute(SaxpyStream& x, SaxpyStream& y, SaxpyStream& out, float a, int n_pack) {
-  anvil::hls::MapPacksWithScalar<kernels::SaxpyPack>(x, y, out, a, n_pack, SaxpyOp());
-}
-
-void Store(SaxpyStream& in, kernels::SaxpyPack* out, int n_pack) {
-  anvil::hls::StorePacks(in, out, n_pack);
-}
-
-}  // namespace
 
 void saxpy_hls_model(std::span<const float> x,
                      std::span<const float> y,
@@ -49,13 +27,13 @@ void saxpy_hls_model(std::span<const float> x,
   PackScalars(x, x_packed.data());
   PackScalars(y, y_packed.data());
 
-  SaxpyStream sx("sx"), sy("sy"), so("so");
+  kernels::saxpy_core::SaxpyStream sx("sx"), sy("sy"), so("so");
 
   ANVIL_DATAFLOW_INIT();
-  ANVIL_DATAFLOW_FUNCTION(Load, x_packed.data(), sx, n_pack);
-  ANVIL_DATAFLOW_FUNCTION(Load, y_packed.data(), sy, n_pack);
-  ANVIL_DATAFLOW_FUNCTION(Compute, sx, sy, so, cfg.a, n_pack);
-  ANVIL_DATAFLOW_FUNCTION(Store, so, out_packed.data(), n_pack);
+  ANVIL_DATAFLOW_FUNCTION(kernels::saxpy_core::Load, x_packed.data(), sx, n_pack);
+  ANVIL_DATAFLOW_FUNCTION(kernels::saxpy_core::Load, y_packed.data(), sy, n_pack);
+  ANVIL_DATAFLOW_FUNCTION(kernels::saxpy_core::Compute, sx, sy, so, cfg.a, n_pack);
+  ANVIL_DATAFLOW_FUNCTION(kernels::saxpy_core::Store, so, out_packed.data(), n_pack);
   ANVIL_DATAFLOW_FINALIZE();
 
   UnpackScalars(out_packed.data(), out);
