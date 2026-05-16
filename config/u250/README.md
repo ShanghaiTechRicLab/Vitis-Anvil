@@ -1,7 +1,14 @@
 # Alveo U250 Vitis Link Configuration
 
-This directory contains the Vitis linker configuration for the Phase 2 `saxpy` xclbin target.
+This directory contains the Vitis linker configuration for the `saxpy.xclbin`
+target on Alveo U250.
 
-`link.cfg` creates one kernel instance named `saxpy_1`, maps the `x`, `y`, and `out` AXI ports to separate DDR banks, and requests a 300 MHz kernel clock to match the default U250 preset.
+Phase 5 links two kernel instances into that xclbin:
 
-The xclbin is registered as the `saxpy_xclbin` target only when `ANVIL_PLATFORM_KIND=u250`; other kernel presets can still configure without this U250-specific link file.
+- `saxpy_1`: `x`, `y`, and `out` mapped to DDR[0], DDR[1], DDR[2]
+- `vadd_1`: `a`, `b`, and `out` mapped to DDR[0], DDR[1], DDR[2]
+
+Both kernels request a 300 MHz kernel clock to match the default U250 preset.
+The xclbin target is registered when `ANVIL_PLATFORM_KIND=u250`; embedded
+platforms keep a saxpy-only xclbin while still exposing `vadd_xo` as a
+buildable HLS target.
