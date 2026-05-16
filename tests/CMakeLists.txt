@@ -5,6 +5,7 @@ set(TEST_SOURCES
   cpp/test_metrics.cpp
   cpp/test_anvil_log.cpp
   cpp/test_anvil_compare.cpp
+  cpp/test_anvil_hls_helpers.cpp
 )
 if(TARGET anvil_hls_model)
   list(APPEND TEST_SOURCES cpp/test_hls_model_vs_gold.cpp)

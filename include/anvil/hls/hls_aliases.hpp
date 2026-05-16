@@ -1,19 +1,16 @@
 #pragma once
-#include <hlslib/xilinx/DataPack.h>
-#include <hlslib/xilinx/Stream.h>
-#include <hlslib/xilinx/Simulation.h>
-#include <cstddef>
+// Compatibility header. New code should include pack.hpp, stream.hpp, and
+// dataflow.hpp directly; this header keeps older examples compiling.
 
-namespace anvil::hls {
+#include "anvil/hls/dataflow.hpp"
+#include "anvil/hls/pack.hpp"
+#include "anvil/hls/stream.hpp"
+
+namespace anvil {
+namespace hls {
 
 template <typename T, int N>
-using DataPack = hlslib::DataPack<T, N>;
+using DataPack = Pack<T, N>;
 
-template <typename T, std::size_t D = 2>
-using Stream = hlslib::Stream<T, D>;
-
-}  // namespace anvil::hls
-
-#define ANVIL_DATAFLOW_INIT       HLSLIB_DATAFLOW_INIT
-#define ANVIL_DATAFLOW_FUNCTION   HLSLIB_DATAFLOW_FUNCTION
-#define ANVIL_DATAFLOW_FINALIZE   HLSLIB_DATAFLOW_FINALIZE
+}  // namespace hls
+}  // namespace anvil
