@@ -1,24 +1,24 @@
 # 适配到你自己的项目
 
-Vitis-Anvil 常见有两种用法。
+当你不再满足于 demo 之后，Vitis-Anvil 通常有两种用法。
 
-## 方案 A：直接作为 project template
+## 方案 A：直接作为项目模板
 
-1. 复制本 repo。
+1. 复制本仓库。
 2. 保留 `cmake/`、`CMakePresets.json`、`Makefile`、`config/`、`tools/hlsflow/`、`python/anvil/`。
-3. 替换 demo kernels 和 host apps。
-4. 在你的替换测试通过前，保留现有测试作为护栏。
-5. 流程稳定后，再重命名产品侧 binary 和文档。
+3. 替换 demo kernel 和 host app。
+4. 在你自己的测试就绪之前，让现有测试保持通过，作为安全网。
+5. 流程稳定后再重命名产品的二进制文件和文档。
 
-建议替换顺序：
+建议的替换顺序：
 
 ```text
-kernel C++ → cosim testbench → CPU model/gold → host app → dataset → compare → xclbin connectivity → board run
+kernel C++ → cosim testbench → CPU 模型/gold → host app → dataset → compare → xclbin connectivity → board run
 ```
 
-## 方案 B：把 build modules vendor 到已有 repo
+## 方案 B：把构建模块 vendor 到已有项目
 
-复制这些部分到你的已有项目：
+把以下文件复制到你已有的项目：
 
 ```text
 cmake/AnvilKernel.cmake
@@ -30,9 +30,9 @@ config/<target>/
 tools/hlsflow/
 ```
 
-然后在你的 top-level `CMakeLists.txt` include 这些模块，用 `add_anvil_kernel()` 和 `add_anvil_xclbin()` 注册自己的 kernels。
+然后在你的顶层 `CMakeLists.txt` 中 include 这些模块，用 `add_anvil_kernel()` 和 `add_anvil_xclbin()` 注册你自己的 kernel。
 
-## 最小 CMake 形状
+## 最小 CMake 结构
 
 ```cmake
 cmake_minimum_required(VERSION 3.21)
@@ -47,9 +47,9 @@ add_subdirectory(src/kernels)
 add_subdirectory(src/host)
 ```
 
-## 最小 Make 用户界面
+## 最小的 Make 用户界面
 
-保持一个小而稳定的用户接口：
+保持一组小而稳定的面向用户的命令：
 
 ```bash
 make test
@@ -60,7 +60,7 @@ make xclbin TARGET=<board>
 make run-host TARGET=<board> HOST_APP=<app>
 ```
 
-这个接口很容易以后封装成：
+这组接口设计得足够小，以后很容易封装成：
 
 ```bash
 anvil init
@@ -68,26 +68,26 @@ anvil build --target u250 --host-app run_saxpy
 anvil csynth --target u250 --kernel saxpy
 ```
 
-## 命名和 packaging
+## 命名和打包
 
-内部模板/工具层使用 `anvil`。最终 accelerator、bitstream package、用户应用使用你的产品名。这样 reusable build flow 和 product identity 不会混在一起。
+内部模板和工具层用 `anvil`。最终的加速器、比特流包和面向用户的应用程序用你自己的产品名。这样可复用的构建流程和产品身份就不会混在一起。
 
-## 建议保留
+## 建议保留和替换
 
 保留：
 
-- `TARGET`、`KERNEL`、`HOST_APP`、`DATASET` 的职责拆分
-- 显式 Python environment target
-- 显式长耗时 HLS/xclbin targets
-- HLS report database
-- `ANVIL_PLATFORM=` 覆盖 platform path
-- `PETALINUX_SYSROOT=` 覆盖 embedded sysroot
+- `TARGET`、`KERNEL`、`HOST_APP`、`DATASET` 的职责分离
+- 显式的 Python 环境目标
+- 显式的长耗时 HLS 和 xclbin 目标
+- HLS 报告数据库
+- 通过 `ANVIL_PLATFORM=` 覆盖 platform 路径
+- 通过 `PETALINUX_SYSROOT=` 覆盖嵌入式 sysroot
 
 替换：
 
-- demo kernels
-- demo host apps
-- dataset format
-- gold 和 compare 逻辑
-- connectivity files
+- Demo kernel
+- Demo host app
+- 数据集格式
+- Golden reference 和对比逻辑
+- Connectivity 文件
 - 产品文档

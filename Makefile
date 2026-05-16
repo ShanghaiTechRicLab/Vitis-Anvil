@@ -298,7 +298,7 @@ xrt-emu: gen
 	cmake --build --preset $(ANVIL_HOST_PRESET) --target $(HOST_APP)
 	env ANVIL_PLATFORM=$(ANVIL_PLATFORM) BUILD_DIR=$(HWEMU_BUILD_DIR) bash scripts/emconfig.sh
 	echo ""
-	echo "Embedded hw_emu requires QEMU — see docs/deploy.md#qemu-emulation"
+	echo "Embedded hw_emu requires QEMU — see docs/en/deploy.md"
 	echo "  xclbin : $(XCLBIN_PATH)"
 	echo "  host   : $(HOST_BIN)  (AArch64)"
 	echo "  emcfg  : $(HWEMU_BUILD_DIR)/emconfig.json"
@@ -466,6 +466,7 @@ deploy: deploy-bin deploy-xclbin deploy-data
 # Help / 帮助
 # ============================================================================
 
+# help — Default to English help / 默认显示英文帮助
 help: help-en
 
 help-en:

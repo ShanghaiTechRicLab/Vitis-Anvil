@@ -1,10 +1,10 @@
 # 自定义指南
 
-把 Vitis-Anvil 当模板使用：保留流程，替换 demo 部分。
+Vitis-Anvil 本质是一个模板。保留构建流程和工具链，把 demo 部分换成你自己的 kernel 和 host app。
 
 ## 1. 添加或替换 kernel
 
-Kernel source 位于 `src/kernels/`。在 `src/kernels/CMakeLists.txt` 注册 kernel：
+Kernel 源码放在 `src/kernels/`。在 `src/kernels/CMakeLists.txt` 里注册：
 
 ```cmake
 add_anvil_kernel(
@@ -14,7 +14,7 @@ add_anvil_kernel(
   PLATFORM_KIND ${ANVIL_PLATFORM_KIND})
 ```
 
-如果有 cosim testbench：
+如果有 cosim testbench，加上 `TESTBENCH`：
 
 ```cmake
 add_anvil_kernel(
@@ -25,7 +25,7 @@ add_anvil_kernel(
   PLATFORM_KIND ${ANVIL_PLATFORM_KIND})
 ```
 
-运行：
+然后运行：
 
 ```bash
 make csynth TARGET=u250 KERNEL=my_kernel
@@ -34,14 +34,14 @@ make cosim TARGET=u250 KERNEL=my_kernel
 
 ## 2. 添加 host app
 
-Host apps 位于 `src/host/`。在 `src/host/CMakeLists.txt` 添加 executable target，链接需要的库，然后用 `HOST_APP=` 运行：
+Host apps 放在 `src/host/`。在 `src/host/CMakeLists.txt` 里添加 executable target，链接你需要的库，构建时用 `HOST_APP=` 选择：
 
 ```bash
 make build TARGET=u250 HOST_APP=run_my_kernel
 make run-host TARGET=u250 HOST_APP=run_my_kernel DATASET=tiny
 ```
 
-运行时 helper 示例：
+你可能需要的运行时 helper：
 
 ```cpp
 #include <anvil/runtime/xrt_context.hpp>
@@ -53,7 +53,7 @@ auto kernel = ctx.GetKernel("my_kernel:{my_kernel_1}");
 
 ## 3. 添加 xclbin connectivity
 
-添加或修改 `config/<target>/link.cfg`：
+编辑或创建 `config/<target>/link.cfg`：
 
 ```ini
 [connectivity]
@@ -65,7 +65,7 @@ sp=my_kernel_1.output:DDR[1]
 freqHz=300000000:my_kernel_1
 ```
 
-在 `src/kernels/CMakeLists.txt` 注册 xclbin：
+在 `src/kernels/CMakeLists.txt` 里注册 xclbin：
 
 ```cmake
 add_anvil_xclbin(
@@ -92,7 +92,9 @@ ANVIL_KERNEL_TARGETS   := my_kernel_xo
 ANVIL_COSIM_TARGETS    := my_kernel_cosim
 ```
 
-然后在 `CMakePresets.json` 添加对应 configure/build/test presets。Embedded 设备通常需要：
+然后在 `CMakePresets.json` 里添加对应的 configure/build/test presets。
+
+嵌入式设备：
 
 ```make
 ANVIL_DEVICE_KIND := embedded
@@ -103,25 +105,25 @@ ANVIL_HOST_PRESET := my-board-host
 
 ## 5. 添加平台元数据
 
-`hlsflow` 的设备说明位于 `tools/hlsflow/platform_info.py`。添加资源总量、memory notes、default clock 后，报告里会显示更有用的 headroom 信息。
+`hlsflow` 的设备信息放在 `tools/hlsflow/platform_info.py`。加上资源总量、内存说明和默认时钟后，报告里会显示更直观的余量信息。
 
-## 6. 自定义数据集和 gold references
+## 6. 自定义数据集和 golden reference
 
 数据生成：
 
-- `scripts/gen_dataset.py`
+- `scripts/gen_dataset.py` — 定义数据格式
 - 输出到 `data/<dataset>/`
 
-Gold references：
+Golden reference：
 
 - C++：`src/gold/cpp/`
 - Python：`src/gold/python/`
 
 比较逻辑：
 
-- `scripts/compare.py`
+- `scripts/compare.py` — 把硬件输出和 gold 比较
 
-保持 contract 简单：host app 把输出写到 `data/<dataset>/`，`make compare` 把它和 gold output 比较。
+保持约定简单：host app 把输出写到 `data/<dataset>/`，`make compare` 拿这些文件和 golden reference 对比。
 
 ## 7. 自定义阈值
 
@@ -131,17 +133,17 @@ Gold references：
 make check-hls
 ```
 
-或直接运行：
+或者直接运行，自己设定阈值：
 
 ```bash
 PYTHONPATH=tools .venv/bin/python -m hlsflow check --max-ii 1 --max-lut 200000 --max-dsp 1000
 ```
 
-## 8. 保持命令语义干净
+## 8. 保持命令语义清晰
 
-- `TARGET=` 选择 board/platform。
-- `KERNEL=` 选择 HLS kernel targets 和 HLS reports。
-- `HOST_APP=` 选择 XRT host executables。
-- `DATASET=` 选择输入/输出数据集。
+- `TARGET=` 选择板卡或 platform
+- `KERNEL=` 选择 HLS kernel 目标和 HLS 报告
+- `HOST_APP=` 选择 XRT host 可执行程序
+- `DATASET=` 选择输入和输出数据集
 
-不要用 `HOST_APP` 选择 cosim；cosim 是 kernel/testbench 级别。
+不要用 `HOST_APP` 来选择 cosim 或 kernel。Cosim 是 kernel 级别的事情，属于 `KERNEL` 的职责范围。

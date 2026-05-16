@@ -1,6 +1,6 @@
 # Typical development workflow
 
-The core rule: keep fast CPU iteration separate from slow FPGA work.
+The main idea: keep fast CPU iteration separate from slow FPGA work. You do not want to wait for HLS synthesis just because you fixed a typo in a host file, and you do not want to debug host logic through Vitis logs.
 
 ## Day-to-day loop
 
@@ -9,7 +9,7 @@ make test
 make build TARGET=u250 HOST_APP=run_saxpy
 ```
 
-Run this after normal C++/Python changes. It should not create a Python environment unless you explicitly call `make python-env`, and it should not synthesize kernels.
+Run this after normal C++ or Python changes. It does not create a Python environment unless you call `make python-env` explicitly, and it does not synthesize kernels. It just compiles the host app and runs CPU-side tests.
 
 ## Kernel loop
 
@@ -19,13 +19,13 @@ make analyze-flow TARGET=u250 KERNEL=saxpy
 make check-hls
 ```
 
-Use this when changing HLS code or pragmas. Check:
+Use this when you are changing HLS code or pragmas. Look at:
 
-- II
-- latency
-- timing slack
-- resource headroom
-- interface summary
+- II (initiation interval)
+- Latency
+- Timing slack
+- Resource headroom (LUT, DSP, BRAM)
+- Interface summary
 
 ## Cosim loop
 
@@ -34,7 +34,7 @@ make cosim TARGET=u250 KERNEL=saxpy
 make analyze-cosim TARGET=u250 KERNEL=saxpy
 ```
 
-Cosim validates the RTL generated from the kernel against the kernel testbench. It does not run the XRT host app.
+Cosimulation runs the RTL that Vitis generated from your kernel against the kernel testbench. This catches ABI mismatches and interface bugs before you build an xclbin. It does not run the XRT host program.
 
 ## XRT host loop
 
@@ -46,7 +46,7 @@ make run-host TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
 make compare DATASET=tiny
 ```
 
-Use this after kernel ABI or host buffer changes.
+Run this after changing the kernel ABI or the host buffer logic.
 
 ## Embedded board loop
 
@@ -59,21 +59,19 @@ make test-xrt-hw TARGET=zcu102 BOARD_IP=192.168.1.100 DATASET=tiny
 
 ## Before committing
 
-Suggested checks:
-
 ```bash
 make test
 make analyze-flow TARGET=<target> KERNEL=<kernel>
 make analyze-cosim TARGET=<target> KERNEL=<kernel>
 ```
 
-For hardware-facing changes, also run the relevant `run-host` or board deployment path.
+If your change touches hardware, also run `make run-host` or the board deployment path.
 
 ## Debugging order
 
-1. `make test` fails: fix CPU/library/gold logic first.
-2. `make csynth` fails: inspect HLS compile logs and C++14/HLS restrictions.
-3. `make cosim` fails: inspect the kernel testbench and ABI assumptions.
-4. `make xclbin` fails: inspect `link.cfg`, platform, memory banks, and clock constraints.
-5. host run fails: inspect XRT device selection, xclbin path, CU name, buffer group IDs.
-6. compare fails: inspect dataset/gold/host output contract.
+1. `make test` fails: fix the CPU-side logic, library issues, or golden reference first.
+2. `make csynth` fails: check HLS compiler logs and C++14/HLS restrictions.
+3. `make cosim` fails: check the kernel testbench and ABI assumptions.
+4. `make xclbin` fails: check `link.cfg`, platform, memory banks, clock constraints.
+5. Host run fails: check XRT device selection, xclbin path, CU name, buffer group IDs.
+6. Compare fails: check the dataset, golden reference, and host output path — they need to agree on the data format.
