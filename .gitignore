@@ -96,3 +96,5 @@ venv/
 
 # Generated demo datasets
 data/*/
+docs/superpower/
+docs/donotcommit/
