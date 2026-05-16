@@ -10,7 +10,7 @@ function(_anvil_kernel_reject_space_path kernel_name path_label path_value)
 endfunction()
 
 function(add_anvil_kernel)
-  set(options)
+  set(options NO_ALL)
   set(one_value_args NAME TOP CLOCK_HZ PLATFORM_KIND TESTBENCH)
   set(multi_value_args SOURCES)
   cmake_parse_arguments(AK "${options}" "${one_value_args}" "${multi_value_args}" ${ARGN})
@@ -182,8 +182,13 @@ function(add_anvil_kernel)
     VERBATIM
     USES_TERMINAL)
 
-  add_custom_target("${AK_NAME}_xo" ALL
-    DEPENDS "${_ak_xo}")
+  if(AK_NO_ALL)
+    add_custom_target("${AK_NAME}_xo"
+      DEPENDS "${_ak_xo}")
+  else()
+    add_custom_target("${AK_NAME}_xo" ALL
+      DEPENDS "${_ak_xo}")
+  endif()
 
   set_target_properties("${AK_NAME}_xo" PROPERTIES
     ANVIL_KERNEL_ARTIFACT "${_ak_xo}"
