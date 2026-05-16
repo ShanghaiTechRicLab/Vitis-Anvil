@@ -1,6 +1,7 @@
 #pragma once
-// Common type aliases shared across gold / hls_model / runtime / kernel layers.
-// Phase 0+1 keeps this empty — saxpy uses plain float.
-// Future phases (Phase 2 vectorization) will introduce ElemPack, FixedT, etc.
+// Common framework type aliases shared across Anvil components.
+// This header is intentionally minimal; project-specific element, pack, and
+// kernel ABI types belong under project-owned include roots such as
+// src/kernels/include/.
 
 namespace anvil {}
