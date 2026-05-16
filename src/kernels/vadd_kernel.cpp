@@ -4,9 +4,9 @@ using anvil::kernels::VaddPack;
 using anvil::kernels::kVaddPack;
 
 extern "C" void vadd(const VaddPack* a, const VaddPack* b, VaddPack* out, int n_packs) {
-#pragma HLS INTERFACE m_axi port=a   bundle=gmem0 offset=slave
-#pragma HLS INTERFACE m_axi port=b   bundle=gmem1 offset=slave
-#pragma HLS INTERFACE m_axi port=out bundle=gmem2 offset=slave
+#pragma HLS INTERFACE m_axi port=a   bundle=gmem0 offset=slave depth=1024
+#pragma HLS INTERFACE m_axi port=b   bundle=gmem1 offset=slave depth=1024
+#pragma HLS INTERFACE m_axi port=out bundle=gmem2 offset=slave depth=1024
 #pragma HLS INTERFACE s_axilite port=a       bundle=control
 #pragma HLS INTERFACE s_axilite port=b       bundle=control
 #pragma HLS INTERFACE s_axilite port=out     bundle=control

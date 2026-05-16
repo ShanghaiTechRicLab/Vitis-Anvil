@@ -1,5 +1,5 @@
 # Vitis-Anvil top-level Makefile
-# Usage: make [target] [TARGET=u250|zcu104|zcu102] [ANVIL_LANG=cpp|python] [DATASET=tiny]
+# Usage: make [target] [TARGET=u250|u55c|zcu104|zcu102] [ANVIL_LANG=cpp|python] [DATASET=tiny]
 
 TARGET  ?= u250
 ANVIL_LANG ?= cpp
@@ -9,6 +9,7 @@ include config/$(TARGET)/anvil.mk
 
 BUILD_DIR   := build/$(ANVIL_PRESET)
 ANVIL_KERNEL_TARGETS ?= saxpy_xo
+ANVIL_COSIM_TARGETS ?= saxpy_cosim
 ANVIL_HOST_PRESET  ?= $(ANVIL_PRESET)
 HOST_BUILD_DIR     := build/$(ANVIL_HOST_PRESET)
 HOST_BIN    := $(HOST_BUILD_DIR)/src/host/run_saxpy
@@ -59,7 +60,7 @@ csynth: configure
 	rtk cmake --build $(BUILD_DIR) --target $(ANVIL_KERNEL_TARGETS)
 
 cosim: configure
-	rtk cmake --build $(BUILD_DIR) --target saxpy_cosim
+	rtk cmake --build $(BUILD_DIR) --target $(ANVIL_COSIM_TARGETS)
 
 xclbin: configure
 	rtk cmake --build $(BUILD_DIR) --target saxpy_xclbin
@@ -212,7 +213,7 @@ deploy: deploy-bin deploy-xclbin deploy-data
 
 help:
 	@rtk echo "Targets:"
-	@rtk echo "  make build [TARGET=u250|zcu104|zcu102]  — configure + build C++ + pip install"
+	@rtk echo "  make build [TARGET=u250|u55c|zcu104|zcu102]  — configure + build C++ + pip install"
 	@rtk echo "  make test                         — CPU-only fast tests (no Vitis/XRT)"
 	@rtk echo "  make csynth                       — v++ HLS synthesis"
 	@rtk echo "  make cosim                        — HLS co-simulation"

@@ -8,7 +8,7 @@ xcu55c-fsvh2892-2L-e).
 | Variable | Value |
 |----------|-------|
 | `ANVIL_VITIS_PART` | `xcu55c-fsvh2892-2L-e` |
-| `ANVIL_PLATFORM` | `xilinx_u55c_gen3x16_xdma_3_202210_1` (confirm on your host) |
+| `ANVIL_PLATFORM` | `xilinx_u55c_gen3x16_xdma_3_202210_1` (confirm on your host; keep CMakePresets.json in sync) |
 | `ANVIL_PRESET` | `u55c-host` |
 | `ANVIL_XCLBIN_MODE` | `hw` |
 
@@ -19,9 +19,10 @@ The XRT host code is bank-agnostic: `kernel.MemGroupId(arg_index)` returns
 the right group id derived from the xclbin connectivity at runtime — no
 host changes needed when switching DDR↔HBM.
 
-**Verified:** `XrtBuffer` construction works for HBM with no host-side changes —
-`kernel.MemGroupId(arg_index)` resolves to the right HBM group id at runtime.
-`XCL_BO_FLAGS_NONE` is the correct flag for DDR and HBM Alveo cards.
+**Design conclusion:** `XrtBuffer` construction should work for HBM with no
+host-side changes — `kernel.MemGroupId(arg_index)` resolves to the right HBM
+group id at runtime. `XCL_BO_FLAGS_NONE` is the correct flag for DDR and HBM
+Alveo cards.
 
 ## Notes
 

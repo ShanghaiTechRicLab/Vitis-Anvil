@@ -339,6 +339,18 @@
           "label": "csynth|cosim|xrt_emu|build"
         }
       }
+    },
+    {
+      "name": "u55c-host-hwemu",
+      "configurePreset": "u55c-host-hwemu",
+      "output": {
+        "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "label": "csynth|cosim|xrt_emu|build"
+        }
+      }
     }
   ]
 }
