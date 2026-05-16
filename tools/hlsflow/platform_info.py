@@ -38,6 +38,15 @@ _PLATFORMS: dict[str, PlatformInfo] = {
         default_clock_mhz=200,
         notes="Embedded Zynq UltraScale+ MPSoC; smaller PL than ZCU102.",
     ),
+    "zcu106": PlatformInfo(
+        name="zcu106",
+        part="xczu7ev-ffvc1156-2-e",
+        family="zynquplus",
+        resources={"LUT": 230400, "FF": 460800, "DSP": 1728, "BRAM_18K": 624, "URAM": 0},
+        memory="PS DDR via HP/HPC ports; Vitis base platform exposes DDR banks",
+        default_clock_mhz=200,
+        notes="ZCU106 uses the ZU7EV device family; resource totals mirror ZCU104-class ZU7EV metadata.",
+    ),
     "kv260": PlatformInfo(
         name="kv260",
         part="xck26-sfvc784-2lv-c",
@@ -71,6 +80,30 @@ _PLATFORMS: dict[str, PlatformInfo] = {
         default_clock_mhz=300,
         notes="Datacenter Alveo U50; resources are platform dynamic-region availability, not raw FPGA total.",
     ),
+    "u200": PlatformInfo(
+        name="u200",
+        part="xcu200-fsgd2104-2-e",
+        family="virtexuplus",
+        # UG1120 U200 XDMA dynamic region resources, summed across SLR0/1/2:
+        # LUT 385K+200K+383K; registers 771K+399K+765K; BRAM 720+360+720;
+        # URAM 320+160+320; DSP 2280+1320+2280. Exact availability varies by shell.
+        resources={"LUT": 968000, "FF": 1935000, "DSP": 5880, "BRAM_18K": 1800, "URAM": 800},
+        memory="4 DDR banks; one bank may be static-region constrained depending on platform shell",
+        default_clock_mhz=300,
+        notes="Datacenter Alveo U200; resources are platform dynamic-region availability.",
+    ),
+    "u280": PlatformInfo(
+        name="u280",
+        part="xcu280-fsvh2892-2L-e",
+        family="virtexuplus",
+        # UG1120 U280 XDMA platform resources, summed across SLR0/1/2:
+        # LUT 369K+334K+367K; registers 746K+677K+728K; BRAM 507+468+512;
+        # URAM 320+320+320; DSP 2733+2877+2880. Exact availability varies by shell.
+        resources={"LUT": 1070000, "FF": 2151000, "DSP": 8490, "BRAM_18K": 1487, "URAM": 960},
+        memory="8 GB HBM2, 32 HBM pseudo channels plus DDR/PLRAM on older shells",
+        default_clock_mhz=300,
+        notes="Datacenter Alveo U280; resources are platform dynamic-region availability.",
+    ),
     "u55c": PlatformInfo(
         name="u55c",
         part="xcu55c-fsvh2892-2L-e",
@@ -79,6 +112,18 @@ _PLATFORMS: dict[str, PlatformInfo] = {
         memory="HBM device; link.cfg controls bank/port placement",
         default_clock_mhz=300,
         notes="Datacenter Alveo HBM card; platform availability is site-specific.",
+    ),
+    "vck5000": PlatformInfo(
+        name="vck5000",
+        part="xcvc1902-vsva2197-2MP-e-S",
+        family="versal",
+        # Public VCK5000 docs list about 899,840 LUTs, 1,968 DSPs, 4.2 MB BRAM,
+        # and 16.3 MB URAM. BRAM_18K/URAM entries below are approximate block
+        # conversions for utilization context; Vitis XML should override when present.
+        resources={"LUT": 899840, "DSP": 1968, "BRAM_18K": 1911, "URAM": 464},
+        memory="16 GB LPDDR4; Versal AI Engine + programmable logic acceleration card",
+        default_clock_mhz=300,
+        notes="Versal VCK5000; BRAM/URAM block counts are derived from published memory MB figures.",
     ),
 }
 
