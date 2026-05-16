@@ -1,5 +1,7 @@
 # Vitis-Anvil
 
+![Vitis-Anvil banner](docs/assets/vitis-anvil-banner.png)
+
 **一个用来搭建 Vitis/XRT FPGA 加速器的 CMake 项目模板。**
 
 Anvil 是铁砧 — 把金属放上去锻造成型。Vitis-Anvil 对 FPGA 开发做同样的事：提供一个项目骨架，把 CMake presets、Vitis HLS kernel、XRT host 程序、CPU golden reference、数据集、HLS/cosim 分析、板端部署脚本、按设备拆分的配置这些都包好，让你可以专心写加速器逻辑本身。

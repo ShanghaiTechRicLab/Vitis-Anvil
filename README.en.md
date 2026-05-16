@@ -1,6 +1,8 @@
 # Vitis-Anvil
 
-**A CMake project template for building Vitis/XRT FPGA accelerators.**
+![Vitis-Anvil banner](docs/assets/vitis-anvil-banner.png)
+
+**A CMake project template for forging Vitis/XRT FPGA accelerators.**
 
 Anvil is the iron block you shape metal on. Vitis-Anvil is that same idea for FPGA work: a project skeleton that covers the common pieces — CMake presets, Vitis HLS kernels, XRT host programs, CPU golden references, datasets, HLS/cosim analysis, board deployment helpers, per-device configuration — so you can focus on the actual accelerator logic.
 
