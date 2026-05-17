@@ -2,8 +2,8 @@
 
 Vitis-Anvil 在 `anvil::hls` 下提供小型 HLS 微架构原语。这不是算法库，而是 kernel
 内部常用硬件结构：定点数、tile buffer、banked buffer、ring buffer、shift register、
-burst load/store、ping-pong buffer、归约、小规模固定排序、top-k 选择，以及
-double-buffered load-compute-store 骨架。
+line/window buffer、burst load/store、ping-pong buffer、归约、小规模固定排序、
+radix sort、top-k 选择，以及 double-buffered load-compute-store 骨架。
 
 ## Include 风格
 
@@ -63,6 +63,28 @@ auto newest = taps.Get<2>();
 `shift_register` 里最大 tap index 对应最新 shift 进去的值。需要在综合中完全 partition
 bank 维度时，在 kernel scope 内调用 `banks.partition()`。
 
+## Line 和 window buffer
+
+```cpp
+ahls::mem::line_buffer<sample_t, 3, 1920> lines;
+ahls::mem::window_buffer<sample_t, 3, 3> window;
+
+lines.fill(0);
+window.fill(0);
+lines.shift_up(col, sample);
+lines.shift_up<0>(sample);
+window.shift_left(row, lines.at(row, col));
+window.shift_left<1>(sample);
+auto center = window.get<1, 1>();
+```
+
+`line_buffer` 表达按列索引的行历史。`shift_up(col, value)` 会把该列向 row 0
+方向移动，并把最新值写入最后一行。`window_buffer` 表达完全本地的滑动窗口。
+需要把这些维度变成显式并行硬件时，在 kernel 内调用 `partition_rows()` 或
+`partition_complete()`。运行时索引 API（`at(row, col)`、`shift_up(col, ...)`、
+`shift_left(row, ...)`）不做边界检查；索引是静态常量时优先用 `get<Row, Col>()`、
+`set<Row, Col>()`、`shift_up<Col>()` 和 `shift_left<Row>()`。
+
 ## Double-buffered load-compute-store
 
 ```cpp
@@ -87,6 +109,11 @@ bank，但不宣称 load、compute、store 在硬件上已经重叠。
 ```cpp
 score_t scores[16];
 ahls::compute::sort<16>(scores);
+ahls::compute::sort<ahls::op::greater<score_t>, 16>(scores);
+
+ap_uint<12> keys[64];
+payload_t payloads[64];
+ahls::compute::radix_sort_by_key<12, 4>(keys, payloads);
 
 score_t best[4];
 ahls::compute::topk<16, 4>(scores, best);
@@ -94,7 +121,9 @@ ahls::compute::topk<16, 4>(scores, best);
 
 这些 API 是固定规模硬件结构，不是动态 STL 风格排序函数。`bitonic_sort` 要求 `N`
 是 2 的幂；`sort` 和 `topk` 也继承这个限制。默认 `topk` 使用 `op::less`，所以返回
-最小的 K 个值；如果要最大值优先，传入 `op::greater<T>`。
+最小的 K 个值；如果要最大值优先，传入 `op::greater<T>`。`radix_sort` 和
+`radix_sort_by_key` 对 unsigned `ap_uint<KeyBits>` key 排序，radix 宽度是编译期参数。
+`radix_sort_by_key` 是 stable 的，所以相同 key 的 payload 顺序会保留。
 
 ## 组件 kernel
 
@@ -103,7 +132,9 @@ ahls::compute::topk<16, 4>(scores, best);
 ```bash
 make csynth-component TARGET=u250 COMPONENT=tile_burst
 make cosim-component TARGET=u250 COMPONENT=pingpong_dbuf_lcs
+make csynth-component TARGET=u250 COMPONENT=radix_sort
+make cosim-component TARGET=u250 COMPONENT=line_window
 make analyze-component TARGET=u250 COMPONENT=tile_burst
 ```
 
-第一批组件包括 `tile_burst` 和 `pingpong_dbuf_lcs`。
+当前组件包括 `tile_burst`、`pingpong_dbuf_lcs`、`radix_sort` 和 `line_window`。

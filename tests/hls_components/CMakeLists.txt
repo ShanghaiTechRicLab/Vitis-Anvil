@@ -19,3 +19,21 @@ add_anvil_kernel(
   TESTBENCH ${CMAKE_CURRENT_SOURCE_DIR}/pingpong_dbuf_lcs/cosim_tb.cpp
   NO_ALL
   NO_CTEST)
+
+add_anvil_kernel(
+  NAME component_radix_sort
+  TOP component_radix_sort
+  SOURCES radix_sort/kernel.cpp
+  PLATFORM_KIND ${ANVIL_PLATFORM_KIND}
+  TESTBENCH ${CMAKE_CURRENT_SOURCE_DIR}/radix_sort/cosim_tb.cpp
+  NO_ALL
+  NO_CTEST)
+
+add_anvil_kernel(
+  NAME component_line_window
+  TOP component_line_window
+  SOURCES line_window/kernel.cpp
+  PLATFORM_KIND ${ANVIL_PLATFORM_KIND}
+  TESTBENCH ${CMAKE_CURRENT_SOURCE_DIR}/line_window/cosim_tb.cpp
+  NO_ALL
+  NO_CTEST)

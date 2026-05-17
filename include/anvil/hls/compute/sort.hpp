@@ -45,6 +45,12 @@ void sort(T (&values)[N]) {
   bitonic_sort<N, T, anvil::hls::op::less<T> >(values);
 }
 
+template <typename Compare, int N, typename T>
+void sort(T (&values)[N]) {
+#pragma HLS inline
+  bitonic_sort<N, T, Compare>(values);
+}
+
 }  // namespace compute
 }  // namespace hls
 }  // namespace anvil

@@ -8,10 +8,12 @@
 #include <anvil/hls/fixed.hpp>
 #include <anvil/hls/mem/banked.hpp>
 #include <anvil/hls/mem/burst.hpp>
+#include <anvil/hls/mem/line_buffer.hpp>
 #include <anvil/hls/mem/pingpong.hpp>
 #include <anvil/hls/mem/ring.hpp>
 #include <anvil/hls/mem/shift_register.hpp>
 #include <anvil/hls/mem/tile.hpp>
+#include <anvil/hls/mem/window_buffer.hpp>
 #include <anvil/hls/op.hpp>
 #include <anvil/hls/util.hpp>
 
@@ -144,6 +146,54 @@ TEST_CASE("shift_register exposes newest value at largest tap", "[hls][mem]") {
   REQUIRE(sr.Get<1>() == 20);
 }
 
+TEST_CASE("line_buffer shifts columns toward row zero", "[hls][mem]") {
+  anvil::hls::mem::line_buffer<int, 3, 2> lb{};
+  lb.at(0, 1) = 11;
+  lb.at(1, 1) = 21;
+  lb.at(2, 1) = 31;
+
+  lb.shift_up(1, 41);
+
+  REQUIRE(lb.at(0, 1) == 21);
+  REQUIRE(lb.at(1, 1) == 31);
+  REQUIRE(lb.at(2, 1) == 41);
+  lb.fill(-1);
+  REQUIRE(lb.at(0, 0) == -1);
+  REQUIRE(lb.at(2, 1) == -1);
+  lb.set<1, 0>(55);
+  REQUIRE(lb.get<1, 0>() == 55);
+  lb.shift_up<0>(66);
+  REQUIRE(lb.get<2, 0>() == 66);
+  REQUIRE(lb.rows == 3);
+  REQUIRE(lb.cols == 2);
+}
+
+TEST_CASE("window_buffer shifts rows left and exposes taps", "[hls][mem]") {
+  anvil::hls::mem::window_buffer<int, 2, 3> win{};
+  win.at(0, 0) = 1;
+  win.at(0, 1) = 2;
+  win.at(0, 2) = 3;
+
+  win.shift_left(0, 4);
+
+  REQUIRE(win.at(0, 0) == 2);
+  REQUIRE(win.at(0, 1) == 3);
+  REQUIRE(win.at(0, 2) == 4);
+  REQUIRE(win.get<0, 2>() == 4);
+  win.fill(-2);
+  REQUIRE(win.at(0, 0) == -2);
+  REQUIRE(win.at(1, 2) == -2);
+  win.set<1, 0>(7);
+  REQUIRE(win.get<1, 0>() == 7);
+  win.shift_left<1>(8);
+  REQUIRE(win.get<1, 1>() == -2);
+  REQUIRE(win.get<1, 2>() == 8);
+  win.shift_up<2>(9);
+  REQUIRE(win.get<1, 2>() == 9);
+  REQUIRE(win.rows == 2);
+  REQUIRE(win.cols == 3);
+}
+
 TEST_CASE("sum and dot expose accumulator type", "[hls][compute]") {
   using x_t = anvil::hls::fx<16, 6>;
   using acc_t = anvil::hls::acc_t<x_t, 4>;
@@ -164,11 +214,50 @@ TEST_CASE("reduce accepts operator policy first", "[hls][compute]") {
   REQUIRE(reduced == 10);
 }
 
+TEST_CASE("tree_reduce combines values with logarithmic structure", "[hls][compute]") {
+  int values[5] = {1, 2, 3, 4, 5};
+  int reduced =
+      anvil::hls::compute::tree_reduce<anvil::hls::op::add<int> >(values);
+  REQUIRE(reduced == 15);
+}
+
 TEST_CASE("sort orders fixed-size arrays", "[hls][compute]") {
   int values[8] = {7, 3, 5, 1, 6, 2, 4, 0};
   anvil::hls::compute::sort<8>(values);
   for (int i = 0; i < 8; ++i) {
     REQUIRE(values[i] == i);
+  }
+}
+
+TEST_CASE("sort accepts comparator policy first", "[hls][compute]") {
+  int values[8] = {7, 3, 5, 1, 6, 2, 4, 0};
+  anvil::hls::compute::sort<anvil::hls::op::greater<int>, 8>(values);
+  for (int i = 0; i < 8; ++i) {
+    REQUIRE(values[i] == 7 - i);
+  }
+}
+
+TEST_CASE("radix_sort orders unsigned fixed-width keys", "[hls][compute]") {
+  ap_uint<8> values[7] = {42, 3, 255, 0, 17, 3, 128};
+  anvil::hls::compute::radix_sort<8, 4>(values);
+
+  const int expected[7] = {0, 3, 3, 17, 42, 128, 255};
+  for (int i = 0; i < 7; ++i) {
+    REQUIRE(static_cast<unsigned>(values[i]) == expected[i]);
+  }
+}
+
+TEST_CASE("radix_sort_by_key keeps payloads stable", "[hls][compute]") {
+  ap_uint<4> keys[6] = {2, 1, 2, 0, 1, 3};
+  int payloads[6] = {20, 10, 21, 0, 11, 30};
+
+  anvil::hls::compute::radix_sort_by_key<4, 2>(keys, payloads);
+
+  const int expected_keys[6] = {0, 1, 1, 2, 2, 3};
+  const int expected_payloads[6] = {0, 10, 11, 20, 21, 30};
+  for (int i = 0; i < 6; ++i) {
+    REQUIRE(static_cast<unsigned>(keys[i]) == expected_keys[i]);
+    REQUIRE(payloads[i] == expected_payloads[i]);
   }
 }
 
