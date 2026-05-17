@@ -57,6 +57,24 @@ std::vector<float> ReadFloats(const fs::path& path, std::size_t expected_n) {
     return v;
 }
 
+
+const char* RunStateName(ert_cmd_state state) {
+    switch (state) {
+        case ERT_CMD_STATE_NEW: return "NEW";
+        case ERT_CMD_STATE_QUEUED: return "QUEUED";
+        case ERT_CMD_STATE_RUNNING: return "RUNNING";
+        case ERT_CMD_STATE_COMPLETED: return "COMPLETED";
+        case ERT_CMD_STATE_ERROR: return "ERROR";
+        case ERT_CMD_STATE_ABORT: return "ABORT";
+        case ERT_CMD_STATE_SUBMITTED: return "SUBMITTED";
+        case ERT_CMD_STATE_TIMEOUT: return "TIMEOUT";
+        case ERT_CMD_STATE_NORESPONSE: return "NORESPONSE";
+        case ERT_CMD_STATE_SKERROR: return "SKERROR";
+        case ERT_CMD_STATE_SKCRASHED: return "SKCRASHED";
+        default: return "UNKNOWN";
+    }
+}
+
 void WriteFloats(const fs::path& path, std::span<const float> values) {
     if (path.has_parent_path()) {
         fs::create_directories(path.parent_path());
@@ -101,11 +119,17 @@ int main(int argc, char* argv[]) {
     cli.add_argument("--a").default_value(2.0F).scan<'g', float>().help("Scalar coefficient for synthetic input");
     cli.add_argument("--data-dir").help("Dataset directory containing meta.json, x.bin, y.bin");
     cli.add_argument("--output").help("Optional path for writing device output .bin");
+    cli.add_argument("--timeout-ms").default_value(120000).scan<'i', int>().help("Kernel wait timeout in milliseconds (0 = block forever)");
     anvil::cli::parse_or_exit(cli, argc, argv);
 
     const fs::path xclbin_path = cli.get<std::string>("--xclbin");
     int n_arg = cli.get<int>("--n");
     float a = cli.get<float>("--a");
+    const int timeout_ms = cli.get<int>("--timeout-ms");
+    if (timeout_ms < 0) {
+        anvil::log::Error("--timeout-ms must be >= 0, got {}", timeout_ms);
+        return 2;
+    }
     std::vector<float> input_x;
     std::vector<float> input_y;
 
@@ -162,7 +186,18 @@ int main(int argc, char* argv[]) {
     // SaxpyPack has kernels::kSaxpyPackWidth floats, so host BOs are
     // padded to a full pack.
     // Args 3=a (float), 4=n_total (int) — do not swap these.
-    kernel(x_buf.bo(), y_buf.bo(), out_buf.bo(), a, n_arg);
+    auto run = kernel.Launch(x_buf.bo(), y_buf.bo(), out_buf.bo(), a, n_arg);
+    const auto state = timeout_ms == 0 ? run.wait() : run.wait(static_cast<unsigned int>(timeout_ms));
+    anvil::log::Info("saxpy kernel completed with state {}", RunStateName(state));
+    if (state == ERT_CMD_STATE_TIMEOUT) {
+        anvil::log::Error("saxpy kernel timed out after {} ms; aborting run. This usually means a stale/incompatible xclbin, a kernel deadlock, or a board/platform shell mismatch.", timeout_ms);
+        run.abort();
+        return 3;
+    }
+    if (state != ERT_CMD_STATE_COMPLETED) {
+        anvil::log::Error("saxpy kernel failed with state {}", RunStateName(state));
+        return 3;
+    }
 
     out_buf.Sync(SyncDirection::DeviceToHost);
 
