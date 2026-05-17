@@ -206,6 +206,14 @@ def _render_cosim(cr, kernel: str, platform: str, console: Console) -> None:
         console.print(f"  [dim]{msg}[/dim]")
     rel_files = [str(p.relative_to(cr.report_dir)) for p in cr.found_files]
     console.print(f"  artifacts: {', '.join(rel_files[:6])}" + (" ..." if len(rel_files) > 6 else ""))
+    notes = Table(title="field notes", show_header=True, header_style="bold")
+    notes.add_column("Field")
+    notes.add_column("Meaning")
+    notes.add_row("latency", "RTL simulation cycles from transaction start to completion.")
+    notes.add_row("interval", "Cycles between accepted transactions; lower is better for throughput.")
+    notes.add_row("total cycles", "Total reported execution cycles for the selected RTL row.")
+    notes.add_row("transaction count", "Number of transactions parsed from result.transaction.rpt.")
+    console.print(notes)
 
 
 def _do_collect_cosim(build_dir: Path, kernel: str, platform: str, reports_dir: Path,
@@ -323,6 +331,17 @@ def _render_link(lr: LinkReport, name: str, platform: str, console: Console) -> 
                         f"CLB_REGs={regs.get('used', '?')} ({regs.get('utilpct', '?')}%)"
                     )
                     break
+    notes = Table(title="field notes", show_header=True, header_style="bold")
+    notes.add_column("Field")
+    notes.add_column("Meaning")
+    notes.add_row("compute unit", "Kernel instance emitted into the linked xclbin.")
+    notes.add_row("memory connectivity", "Explicit sp= mapping from CU ports to device memory banks.")
+    notes.add_row("clock settings", "Requested Vitis linker kernel clock for each endpoint.")
+    notes.add_row("WNS", "Worst negative slack from Vivado timing; >= 0 means the worst setup path meets timing.")
+    notes.add_row("TNS", "Total negative slack across failing setup endpoints; 0 means no setup violation.")
+    notes.add_row("routed util", "Kernel-level routed resource usage from Vivado accelerator utilization reports.")
+    notes.add_row("full util", "Whole design utilization after platform shell plus kernels; includes fixed shell resources.")
+    console.print(notes)
 
     if lr.errors:
         console.print(f"[red]vitis link errors ({len(lr.errors)})[/red]: {escape(lr.errors[0])}")

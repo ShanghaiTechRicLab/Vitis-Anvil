@@ -175,6 +175,27 @@ def _build_interface_table(rpt: CsynthReport) -> Table:
         table.add_row(proto, shown, str(entry["ports"]), str(entry["max_bits"]) if entry["max_bits"] else "?")
     return table
 
+
+def _build_notes_table(has_impl: bool) -> Table:
+    table = Table(title="field notes", show_header=True, header_style="bold")
+    table.add_column("Field")
+    table.add_column("Meaning")
+    table.add_row("target clock", "Requested HLS clock period; lower ns means a higher requested frequency.")
+    table.add_row("estimated clock", "HLS-estimated critical path after synthesis scheduling.")
+    table.add_row("slack", "target clock - estimated clock; negative values mean estimated timing is not met.")
+    table.add_row("latency", "Cycles from input transaction start to output completion for the top function.")
+    table.add_row("interval", "Initiation interval between consecutive top-level transactions.")
+    table.add_row("II", "Loop initiation interval; II=1 means the loop can accept new work every cycle.")
+    table.add_row("trip", "Loop trip count reported by HLS; '?' means the report did not contain a static bound.")
+    table.add_row("free", "Total device resource count minus the HLS-estimated resource count.")
+    table.add_row("BRAM_18K", "HLS BRAM estimate in 18 Kb blocks, not Vivado Block RAM Tile units.")
+    if has_impl:
+        table.add_row("CP required", "Clock period required by the implementation run.")
+        table.add_row("CP post-implementation", "Clock period achieved after Vivado implementation.")
+        table.add_row("post-impl slack", "CP required - CP post-implementation; negative values fail final timing.")
+    return table
+
+
 def render(rpt: CsynthReport, *, kernel: str, platform: str, vitis_version: str,
            html_path: Path, txt_path: Path, console: Console | None = None,
            impl: HlsImplementationReport | None = None) -> None:
@@ -214,6 +235,9 @@ def render(rpt: CsynthReport, *, kernel: str, platform: str, vitis_version: str,
         rec_console.print("VIOLATIONS")
         for v in rpt.violations[:8]:
             rec_console.print(f"- {v}", style="red")
+    rec_console.print()
+    rec_console.print("NOTES")
+    rec_console.print(_build_notes_table(impl is not None))
 
     html_path.parent.mkdir(parents=True, exist_ok=True)
     txt_path.parent.mkdir(parents=True, exist_ok=True)
