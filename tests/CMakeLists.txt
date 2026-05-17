@@ -7,6 +7,7 @@ set(TEST_SOURCES
   cpp/test_anvil_log.cpp
   cpp/test_anvil_compare.cpp
   cpp/test_anvil_hls_helpers.cpp
+  cpp/test_anvil_hls_primitives.cpp
 )
 if(TARGET anvil_hls_model)
   list(APPEND TEST_SOURCES cpp/test_hls_model_vs_gold.cpp)
@@ -41,6 +42,20 @@ if(TARGET anvil_runtime)
 endif()
 
 add_test(NAME anvil_tests COMMAND anvil_tests)
+
+add_executable(anvil_hls_primitives_cxx14_smoke
+  cpp/test_anvil_hls_primitives_cxx14.cpp)
+set_target_properties(anvil_hls_primitives_cxx14_smoke PROPERTIES
+  CXX_STANDARD 14
+  CXX_STANDARD_REQUIRED ON
+  CXX_EXTENSIONS OFF)
+target_include_directories(anvil_hls_primitives_cxx14_smoke PRIVATE
+  ${PROJECT_SOURCE_DIR}/include
+  ${PROJECT_BINARY_DIR}/generated
+  ${PROJECT_SOURCE_DIR}/third_party/hlslib/include
+  ${ANVIL_XILINX_INCLUDE_DIR})
+add_test(NAME anvil_hls_primitives_cxx14_smoke
+  COMMAND anvil_hls_primitives_cxx14_smoke)
 
 if(TARGET gen_dataset)
   add_test(

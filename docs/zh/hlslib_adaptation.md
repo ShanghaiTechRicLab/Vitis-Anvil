@@ -131,3 +131,9 @@ src/kernels/include/kernels/kernel_types.hpp
 ```
 
 `saxpy` 跟随 `ANVIL_PARALLELISM`。`vadd` 和 `pipeline_demo` 使用固定 demo 宽度。你加自己的 kernel 时，在自己的 ABI header 中定义宽度，并在 host、kernel、tests 中使用同一个常量。
+
+## 9. 下一层：HLS 微架构原语
+
+hlslib wrapper 之上，可以使用 [HLS 微架构原语](hls_primitives.md) 来组织 tile
+buffer、burst load/store、定点归约、小规模排序，以及 double-buffered
+load-compute-store 骨架。

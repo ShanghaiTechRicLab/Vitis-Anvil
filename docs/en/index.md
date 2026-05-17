@@ -16,6 +16,7 @@ Recommended reading order:
 10. [Adapt to your project](adapt_to_your_project.md) — turn the template into a product repository.
 11. [Development workflow](development_workflow.md) — day-to-day loop and debugging order.
 12. [hlslib adaptation](hlslib_adaptation.md) — reusable pack/stream/dataflow helpers and framework/user boundary.
-13. [User guide](user-guide.md) — command reference and quick lookup.
+13. [HLS architecture primitives](hls_primitives.md) — fixed-point, buffers, burst helpers, reductions, small sorters, and double-buffered skeletons.
+14. [User guide](user-guide.md) — command reference and quick lookup.
 
 If you are lost, go back to [Concepts](concepts.md). Most confusion comes from mixing up kernel-level steps (`csynth`, `cosim`, `xclbin`) with host-level steps (`build-host`, `hw`, deploy).

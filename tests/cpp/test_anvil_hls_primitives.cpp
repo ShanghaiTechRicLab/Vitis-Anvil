@@ -1,0 +1,227 @@
+#include <catch_amalgamated.hpp>
+
+#include <anvil/hls.hpp>
+#include <anvil/hls/compute/reduce.hpp>
+#include <anvil/hls/compute/sort.hpp>
+#include <anvil/hls/compute/topk.hpp>
+#include <anvil/hls/dataflow/dbuf_lcs.hpp>
+#include <anvil/hls/fixed.hpp>
+#include <anvil/hls/mem/banked.hpp>
+#include <anvil/hls/mem/burst.hpp>
+#include <anvil/hls/mem/pingpong.hpp>
+#include <anvil/hls/mem/ring.hpp>
+#include <anvil/hls/mem/shift_register.hpp>
+#include <anvil/hls/mem/tile.hpp>
+#include <anvil/hls/op.hpp>
+#include <anvil/hls/util.hpp>
+
+TEST_CASE("ceil_log2 computes integer bit growth", "[hls][util]") {
+  static_assert(anvil::hls::util::ceil_log2(1) == 0, "ceil_log2(1)");
+  static_assert(anvil::hls::util::ceil_log2(2) == 1, "ceil_log2(2)");
+  static_assert(anvil::hls::util::ceil_log2(3) == 2, "ceil_log2(3)");
+  static_assert(anvil::hls::util::ceil_log2(256) == 8, "ceil_log2(256)");
+  REQUIRE(anvil::hls::util::ceil_log2(9) == 4);
+}
+
+TEST_CASE("fixed traits expose width and integer bits", "[hls][fixed]") {
+  using x_t = anvil::hls::fx<16, 6>;
+  using acc_t = anvil::hls::acc_t<x_t, 256>;
+
+  static_assert(anvil::hls::fixed_traits<x_t>::width == 16, "width");
+  static_assert(anvil::hls::fixed_traits<x_t>::integer == 6, "integer");
+  static_assert(anvil::hls::fixed_traits<x_t>::fractional == 10,
+                "fractional");
+  static_assert(anvil::hls::fixed_traits<acc_t>::width == 28, "acc width");
+  static_assert(anvil::hls::fixed_traits<acc_t>::integer == 18,
+                "acc integer");
+
+  x_t x = 1.25;
+  acc_t y = anvil::hls::saturate_cast<acc_t>(x);
+  REQUIRE(static_cast<double>(y) > 1.24);
+  REQUIRE(static_cast<double>(y) < 1.26);
+}
+
+TEST_CASE("unsigned fixed accumulators remain unsigned", "[hls][fixed]") {
+  using x_t = anvil::hls::ufx<8, 4>;
+  using acc_t = anvil::hls::acc_t<x_t, 16>;
+
+  static_assert(!anvil::hls::fixed_traits<x_t>::is_signed, "input unsigned");
+  static_assert(!anvil::hls::fixed_traits<acc_t>::is_signed,
+                "accumulator unsigned");
+  static_assert(anvil::hls::fixed_traits<acc_t>::width == 16, "acc width");
+  static_assert(anvil::hls::fixed_traits<acc_t>::integer == 12,
+                "acc integer");
+}
+
+TEST_CASE("saturate_cast clamps fixed-point overflow", "[hls][fixed]") {
+  using wide_t = anvil::hls::fx<8, 5>;
+  using narrow_t = anvil::hls::fx<4, 2>;
+
+  narrow_t high = anvil::hls::saturate_cast<narrow_t>(wide_t(7.0));
+  narrow_t low = anvil::hls::saturate_cast<narrow_t>(wide_t(-7.0));
+
+  REQUIRE(static_cast<double>(high) == Catch::Approx(1.75));
+  REQUIRE(static_cast<double>(low) == Catch::Approx(-2.0));
+}
+
+TEST_CASE("operator policies work with scalar types", "[hls][op]") {
+  REQUIRE(anvil::hls::op::add<int>::identity() == 0);
+  REQUIRE(anvil::hls::op::add<int>::apply(2, 3) == 5);
+  REQUIRE(anvil::hls::op::less<int>::before(1, 2));
+  REQUIRE(anvil::hls::op::greater<int>::before(2, 1));
+}
+
+TEST_CASE("tile supports indexed access", "[hls][mem]") {
+  anvil::hls::mem::tile<int, 4> t{};
+  t[0] = 3;
+  t[1] = 4;
+  REQUIRE(t[0] == 3);
+  REQUIRE(t[1] == 4);
+  REQUIRE(t.size == 4);
+}
+
+TEST_CASE("load_burst and store_burst copy tile data", "[hls][mem]") {
+  int in[8] = {0, 1, 2, 3, 4, 5, 6, 7};
+  int out[8] = {};
+  anvil::hls::mem::tile<int, 4> t{};
+
+  anvil::hls::mem::load_burst<2>(in, 2, t);
+  REQUIRE(t[0] == 2);
+  REQUIRE(t[3] == 5);
+
+  anvil::hls::mem::store_burst<2>(out, 1, t);
+  REQUIRE(out[1] == 2);
+  REQUIRE(out[4] == 5);
+}
+
+TEST_CASE("pingpong selects buffers by tile id", "[hls][mem]") {
+  using tile_t = anvil::hls::mem::tile<int, 2>;
+  anvil::hls::mem::pingpong<tile_t> pp{};
+
+  pp.write(0)[0] = 10;
+  pp.write(1)[0] = 20;
+
+  REQUIRE(pp.read(0)[0] == 10);
+  REQUIRE(pp.read(2)[0] == 10);
+  REQUIRE(pp.read(1)[0] == 20);
+  REQUIRE(pp.read(3)[0] == 20);
+}
+
+TEST_CASE("banked exposes independent banks", "[hls][mem]") {
+  anvil::hls::mem::banked<int, 4, 2> banks{};
+  banks.partition();
+  banks.at(0, 1) = 11;
+  banks.at(1, 1) = 21;
+
+  REQUIRE(banks.at(0, 1) == 11);
+  REQUIRE(banks.at(1, 1) == 21);
+  REQUIRE(banks.bank(1)[1] == 21);
+  REQUIRE(banks.depth == 4);
+  REQUIRE(banks.banks == 2);
+}
+
+TEST_CASE("ring returns fixed compile-time delays", "[hls][mem]") {
+  anvil::hls::mem::ring<int, 3> r{};
+  r.push(10);
+  r.push(20);
+  r.push(30);
+
+  REQUIRE(r.delay<0>() == 30);
+  REQUIRE(r.delay<1>() == 20);
+  REQUIRE(r.delay<2>() == 10);
+
+  r.push(40);
+  REQUIRE(r.delay<0>() == 40);
+  REQUIRE(r.delay<2>() == 20);
+}
+
+TEST_CASE("shift_register exposes newest value at largest tap", "[hls][mem]") {
+  anvil::hls::mem::shift_register<int, 0, 1> sr{};
+  sr.Shift(10);
+  REQUIRE(sr.Get<1>() == 10);
+  sr.Shift(20);
+  REQUIRE(sr.Get<0>() == 10);
+  REQUIRE(sr.Get<1>() == 20);
+}
+
+TEST_CASE("sum and dot expose accumulator type", "[hls][compute]") {
+  using x_t = anvil::hls::fx<16, 6>;
+  using acc_t = anvil::hls::acc_t<x_t, 4>;
+
+  x_t xs[4] = {1.0, 2.0, 3.0, 4.0};
+  x_t ws[4] = {2.0, 2.0, 2.0, 2.0};
+
+  acc_t sum = anvil::hls::compute::sum<4, acc_t>(xs);
+  acc_t dot = anvil::hls::compute::dot<4, acc_t>(xs, ws);
+
+  REQUIRE(static_cast<double>(sum) == Catch::Approx(10.0));
+  REQUIRE(static_cast<double>(dot) == Catch::Approx(20.0));
+}
+
+TEST_CASE("reduce accepts operator policy first", "[hls][compute]") {
+  int values[4] = {1, 2, 3, 4};
+  int reduced = anvil::hls::compute::reduce<anvil::hls::op::add<int> >(values);
+  REQUIRE(reduced == 10);
+}
+
+TEST_CASE("sort orders fixed-size arrays", "[hls][compute]") {
+  int values[8] = {7, 3, 5, 1, 6, 2, 4, 0};
+  anvil::hls::compute::sort<8>(values);
+  for (int i = 0; i < 8; ++i) {
+    REQUIRE(values[i] == i);
+  }
+}
+
+TEST_CASE("topk returns smallest K values by default", "[hls][compute]") {
+  int values[8] = {9, 1, 7, 3, 8, 2, 6, 4};
+  int best[3] = {};
+  anvil::hls::compute::topk<8, 3>(values, best);
+  REQUIRE(best[0] == 1);
+  REQUIRE(best[1] == 2);
+  REQUIRE(best[2] == 3);
+}
+
+TEST_CASE("topk accepts custom comparator first", "[hls][compute]") {
+  int values[8] = {9, 1, 7, 3, 8, 2, 6, 4};
+  int best[2] = {};
+  anvil::hls::compute::topk<anvil::hls::op::greater<int>, 8, 2>(values, best);
+  REQUIRE(best[0] == 9);
+  REQUIRE(best[1] == 8);
+}
+
+namespace {
+
+struct AddOneDbufPolicy {
+  typedef const int* input_t;
+  typedef int* output_t;
+  typedef anvil::hls::mem::tile<int, 4> tile_t;
+  static const int TileSize = tile_t::size;
+
+  static void load(input_t in, int tile_id, tile_t& dst) {
+    anvil::hls::mem::load_burst<2>(in, tile_id * TileSize, dst);
+  }
+
+  static void compute(int tile_id, tile_t& src, tile_t& dst) {
+    (void)tile_id;
+    for (int i = 0; i < TileSize; ++i) {
+      dst[i] = src[i] + 1;
+    }
+  }
+
+  static void store(output_t out, int tile_id, const tile_t& src) {
+    anvil::hls::mem::store_burst<2>(out, tile_id * TileSize, src);
+  }
+};
+
+}  // namespace
+
+TEST_CASE("dbuf_lcs applies policy over tile count", "[hls][dataflow]") {
+  int in[8] = {0, 1, 2, 3, 4, 5, 6, 7};
+  int out[8] = {};
+
+  anvil::hls::dataflow::dbuf_lcs<AddOneDbufPolicy>(in, out, 2);
+
+  for (int i = 0; i < 8; ++i) {
+    REQUIRE(out[i] == in[i] + 1);
+  }
+}

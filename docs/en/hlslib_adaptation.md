@@ -131,3 +131,9 @@ src/kernels/include/kernels/kernel_types.hpp
 ```
 
 `saxpy` follows `ANVIL_PARALLELISM`. `vadd` and `pipeline_demo` use fixed demo widths. If you add your own kernel, define its width in its own ABI header and use that same constant in host, kernel, and tests.
+
+## 9. Next layer: HLS primitives
+
+After the hlslib wrappers, use [HLS architecture primitives](hls_primitives.md)
+for tile buffers, burst load/store, fixed-point reductions, small sorters, and
+double-buffered load-compute-store skeletons.

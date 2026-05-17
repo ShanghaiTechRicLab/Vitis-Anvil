@@ -62,9 +62,10 @@ if(ANVIL_BUILD_KERNELS)
   find_package(Python3 COMPONENTS Interpreter REQUIRED)
   include(AnvilKernel)
   add_subdirectory(src/kernels)
+  add_subdirectory(tests/hls_components)
 endif()
 
-if(ANVIL_BUILD_TESTS)
+if(ANVIL_BUILD_TESTS AND ANVIL_BUILD_GOLD)
   add_subdirectory(tests)
 endif()
 

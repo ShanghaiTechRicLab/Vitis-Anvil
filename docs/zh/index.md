@@ -16,6 +16,7 @@ Vitis-Anvil 是一个用于构建 Vitis/XRT FPGA 加速器的 CMake 项目模板
 10. [适配到自己的项目](adapt_to_your_project.md) — 把模板变成真实产品仓库。
 11. [开发流程](development_workflow.md) — 日常迭代顺序和调试顺序。
 12. [hlslib 适配](hlslib_adaptation.md) — pack/stream/dataflow 辅助，以及框架代码和用户代码的边界。
-13. [用户手册](user-guide.md) — 命令速查和参考。
+13. [HLS 微架构原语](hls_primitives.md) — 定点数、buffer、burst 辅助、归约、小排序和 double-buffered 骨架。
+14. [用户手册](user-guide.md) — 命令速查和参考。
 
 如果读着读着不知道某个词是什么意思，回到 [基本概念](concepts.md)。大多数混乱来自把 kernel 级步骤（`csynth`、`cosim`、`xclbin`）和 host 级步骤（`build-host`、`hw`、deploy）混在一起。

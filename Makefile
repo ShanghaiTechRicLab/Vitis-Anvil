@@ -14,6 +14,8 @@ ANVIL_LANG ?= cpp
 DATASET ?= tiny
 # Kernel filter for analysis / 分析时筛选的 kernel 名称
 KERNEL ?= all
+# Component filter for HLS primitive component kernels / HLS 原语组件内核筛选
+COMPONENT ?=
 # XRT host application to build / 要构建的 XRT 主机程序
 HOST_APP ?= run_saxpy
 # Execution mode for xclbin/run stages: hw, hw_emu, or sw_emu.
@@ -66,6 +68,11 @@ else ifeq ($(KERNEL),pipeline_demo)
 SELECTED_KERNEL_TARGETS := saxpy_stream_xo vadd_stream_xo
 else
 SELECTED_KERNEL_TARGETS := $(KERNEL)_xo
+endif
+ifeq ($(strip $(COMPONENT)),)
+SELECTED_COMPONENT_KERNEL :=
+else
+SELECTED_COMPONENT_KERNEL := component_$(COMPONENT)
 endif
 # CMake targets for co-simulation / 协同仿真的 CMake target
 ANVIL_COSIM_TARGETS ?= saxpy_cosim vadd_cosim
@@ -226,6 +233,11 @@ require-python-env:
 # csynth — Run HLS synthesis on kernel(s) / 对内核运行 HLS 综合
 csynth: build-kernel
 
+.PHONY: csynth-component
+csynth-component:
+	@if [ -z "$(strip $(COMPONENT))" ]; then echo "COMPONENT is required" >&2; exit 1; fi
+	$(MAKE) csynth TARGET=$(TARGET) KERNEL=$(SELECTED_COMPONENT_KERNEL)
+
 # cosim — Run HLS co-simulation / 运行 HLS 协同仿真
 cosim:
 	@# Guard: pipeline_demo kernel requires the pipeline config file / pipeline_demo 内核需要对应的配置文件
@@ -233,6 +245,11 @@ cosim:
 	@if [ -z "$(strip $(SELECTED_COSIM_TARGETS))" ]; then echo "cosim is not configured for TARGET=$(TARGET)" >&2; exit 1; fi
 	$(MAKE) configure-kernel TARGET=$(TARGET)
 	cmake --build $(BUILD_DIR) --target $(SELECTED_COSIM_TARGETS)
+
+.PHONY: cosim-component
+cosim-component:
+	@if [ -z "$(strip $(COMPONENT))" ]; then echo "COMPONENT is required" >&2; exit 1; fi
+	$(MAKE) cosim TARGET=$(TARGET) KERNEL=$(SELECTED_COMPONENT_KERNEL)
 
 # xclbin — Link kernel into .xclbin bitstream / 将内核链接为 .xclbin 比特流
 xclbin: configure-kernel
@@ -374,6 +391,11 @@ analyze: require-python-env
 	@if [ ! -d tools/hlsflow ]; then echo "tools/hlsflow not present" >&2; exit 1; fi
 	@if [ "$(BUILD)" = "1" ]; then $(MAKE) csynth TARGET=$(TARGET) KERNEL=$(KERNEL); fi
 	env $(HLSFLOW_PYTHON) -m hlsflow collect --build-dir $(BUILD_DIR) --kernel $(KERNEL) --target csynth --platform $(TARGET)
+
+.PHONY: analyze-component
+analyze-component:
+	@if [ -z "$(strip $(COMPONENT))" ]; then echo "COMPONENT is required" >&2; exit 1; fi
+	$(MAKE) analyze TARGET=$(TARGET) KERNEL=$(SELECTED_COMPONENT_KERNEL)
 
 # analyze-cosim — Collect cosim report into hlsflow database / 收集 cosim 报告到 hlsflow 数据库
 analyze-cosim: require-python-env
@@ -531,6 +553,9 @@ help-en:
 	@echo "  make analyze TARGET=u250 KERNEL=saxpy          Analyze existing csynth reports"
 	@echo "  make analyze-cosim TARGET=u250 KERNEL=saxpy    Analyze cosim reports"
 	@echo "  make analyze-link TARGET=u250 HOST_APP=run_saxpy Analyze link/xclbin reports"
+	@echo "  make csynth-component TARGET=u250 COMPONENT=tile_burst"
+	@echo "  make cosim-component TARGET=u250 COMPONENT=pingpong_dbuf_lcs"
+	@echo "  make analyze-component TARGET=u250 COMPONENT=tile_burst"
 	@echo "  make check-hls                                 Check latest HLS run thresholds"
 	@echo "  make compare-hls BASELINE=<id> CANDIDATE=<id>  Compare two HLS runs"
 	@echo ""
@@ -593,6 +618,9 @@ help-zh:
 	@echo "  make analyze TARGET=u250 KERNEL=saxpy          分析已有 csynth 报告"
 	@echo "  make analyze-cosim TARGET=u250 KERNEL=saxpy    分析 cosim 报告"
 	@echo "  make analyze-link TARGET=u250 HOST_APP=run_saxpy 分析 link/xclbin 报告"
+	@echo "  make csynth-component TARGET=u250 COMPONENT=tile_burst"
+	@echo "  make cosim-component TARGET=u250 COMPONENT=pingpong_dbuf_lcs"
+	@echo "  make analyze-component TARGET=u250 COMPONENT=tile_burst"
 	@echo "  make check-hls                                 检查最新 HLS run 阈值"
 	@echo "  make compare-hls BASELINE=<id> CANDIDATE=<id>  对比两次 HLS run"
 	@echo ""

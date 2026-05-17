@@ -74,7 +74,7 @@ function(_anvil_vitis_hls_include_dirs out_var)
 endfunction()
 
 function(add_anvil_kernel)
-  set(options NO_ALL)
+  set(options NO_ALL NO_CTEST)
   set(one_value_args NAME TOP CLOCK_HZ PLATFORM_KIND TESTBENCH)
   set(multi_value_args SOURCES)
   cmake_parse_arguments(AK "${options}" "${one_value_args}" "${multi_value_args}" ${ARGN})
@@ -468,7 +468,7 @@ function(add_anvil_kernel)
       ANVIL_KERNEL_CLOCK_HZ "${AK_CLOCK_HZ}")
   endif()
 
-  if(ANVIL_BUILD_TESTS)
+  if(ANVIL_BUILD_TESTS AND NOT AK_NO_CTEST)
     if(NOT Python3_EXECUTABLE)
       message(FATAL_ERROR
         "add_anvil_kernel(${AK_NAME}): Python3 interpreter is required for csynth checks")
