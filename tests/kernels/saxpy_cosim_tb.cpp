@@ -8,7 +8,7 @@
 namespace {
 
 constexpr int kN = 65;
-constexpr int kWidth = 16;
+constexpr int kWidth = kernels::kSaxpyPackWidth;
 constexpr int kPacks = (kN + kWidth - 1) / kWidth;
 // Match the m_axi depth pragmas in saxpy_kernel.cpp. Vitis cosim's C wrapper
 // dumps the declared interface depth, not just the n_total-active packs.
