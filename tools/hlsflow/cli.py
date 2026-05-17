@@ -22,6 +22,7 @@ from hlsflow.database import RunRecord, append as db_append, find_by_id, latest,
 from hlsflow.discover import find_cosim_dir, find_csynth_for_kernel, find_csynth_reports
 from hlsflow.parse_cosim import parse_cosim_dir
 from hlsflow.parse_csynth import parse_csynth_report
+from hlsflow.parse_impl import find_impl_report, parse_impl_report
 from hlsflow.parse_link import LinkReport, parse_link_artifacts
 from hlsflow.parse_vitis import find_and_parse_logs
 from hlsflow.report_md import render
@@ -62,12 +63,14 @@ def _do_collect_csynth(build_dir: Path, kernel: str, platform: str, reports_dir:
         console.print(f"[red]error[/red]: csynth report for kernel '{kernel}' not found under {build_dir}")
         return None
     rpt = parse_csynth_report(hit.report_path)
+    impl_path = find_impl_report(hit.work_dir)
+    impl = parse_impl_report(impl_path) if impl_path else None
     run_id = now_run_id(kernel, platform)
     html = reports_dir / f"{run_id}.html"
     txt = reports_dir / f"{run_id}.txt"
     vitis_v = _vitis_version()
     render(rpt, kernel=kernel, platform=platform, vitis_version=vitis_v,
-           html_path=html, txt_path=txt, console=console)
+           html_path=html, txt_path=txt, console=console, impl=impl)
     vlog = find_and_parse_logs(hit.work_dir, kernel)
     v_errors = [e for lr in vlog for e in lr.errors]
     v_warnings = [w for lr in vlog for w in lr.warnings]
@@ -100,6 +103,15 @@ def _do_collect_csynth(build_dir: Path, kernel: str, platform: str, reports_dir:
             "vitis_errors": v_errors[:5],
             "vitis_warnings": v_warnings[:5],
             "vitis_timing_violations": v_timing[:5],
+            "impl_report": str(impl.report_path) if impl else None,
+            "impl_tool": impl.implementation_tool if impl else None,
+            "impl_device": impl.device if impl else None,
+            "impl_cp_required_ns": impl.cp_required_ns if impl else None,
+            "impl_cp_post_synthesis_ns": impl.cp_achieved_post_synthesis_ns if impl else None,
+            "impl_cp_post_implementation_ns": impl.cp_achieved_post_implementation_ns if impl else None,
+            "impl_timing_slack_ns": impl.post_impl_slack_ns if impl else None,
+            "impl_timing_met": impl.timing_met if impl else None,
+            **({f"impl_{k.lower()}": v for k, v in impl.resources.items()} if impl else {}),
         },
     )
     db_append(rec, reports_dir / "runs.jsonl")

@@ -1,0 +1,22 @@
+Implementation tool: Xilinx Vivado v.2022.2.2
+Project:             saxpy_hls
+Solution:            hls
+Device target:       xcu50-fsvh2104-2-e
+Report date:         Sun May 17 12:56:19 CST 2026
+
+#=== Post-Implementation Resource usage ===
+SLICE:            0
+LUT:           8218
+FF:           13599
+DSP:             80
+BRAM:            46
+URAM:             0
+LATCH:            0
+SRL:            649
+CLB:           1911
+
+#=== Final timing ===
+CP required:                     3.333
+CP achieved post-synthesis:      2.305
+CP achieved post-implementation: 3.038
+Timing met

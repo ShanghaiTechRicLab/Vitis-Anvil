@@ -11,6 +11,7 @@ from rich.text import Text
 from rich.tree import Tree
 
 from hlsflow.parse_csynth import CsynthReport
+from hlsflow.parse_impl import HlsImplementationReport
 from hlsflow.platform_info import get_platform_info
 
 
@@ -129,6 +130,32 @@ def _build_loops(rpt: CsynthReport) -> Tree:
 
 
 
+
+
+def _build_impl_table(impl: HlsImplementationReport) -> Table:
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Metric")
+    table.add_column("Value", justify="right")
+    if impl.implementation_tool:
+        table.add_row("implementation tool", impl.implementation_tool)
+    if impl.device:
+        table.add_row("device", impl.device)
+    if impl.cp_required_ns is not None:
+        table.add_row("CP required", f"{impl.cp_required_ns:.3f} ns")
+    if impl.cp_achieved_post_synthesis_ns is not None:
+        table.add_row("CP post-synthesis", f"{impl.cp_achieved_post_synthesis_ns:.3f} ns")
+    if impl.cp_achieved_post_implementation_ns is not None:
+        table.add_row("CP post-implementation", f"{impl.cp_achieved_post_implementation_ns:.3f} ns")
+    if impl.post_impl_slack_ns is not None:
+        style = "green" if impl.post_impl_slack_ns >= 0 else "red"
+        table.add_row("post-impl slack", Text(f"{impl.post_impl_slack_ns:+.3f} ns", style=style))
+    if impl.timing_met is not None:
+        table.add_row("timing", Text("met" if impl.timing_met else "not met", style="green" if impl.timing_met else "red"))
+    for key in ("LUT", "FF", "DSP", "BRAM", "URAM", "SLICE", "CLB", "SRL", "LATCH"):
+        if key in impl.resources:
+            table.add_row(key, f"{impl.resources[key]:,}")
+    return table
+
 def _build_interface_table(rpt: CsynthReport) -> Table:
     table = Table(show_header=True, header_style="bold")
     table.add_column("Protocol")
@@ -149,7 +176,8 @@ def _build_interface_table(rpt: CsynthReport) -> Table:
     return table
 
 def render(rpt: CsynthReport, *, kernel: str, platform: str, vitis_version: str,
-           html_path: Path, txt_path: Path, console: Console | None = None) -> None:
+           html_path: Path, txt_path: Path, console: Console | None = None,
+           impl: HlsImplementationReport | None = None) -> None:
     rec_console = Console(record=True, width=100, file=io.StringIO())
     header = f"HLS Synthesis: {kernel} / {platform}"
     clk = ""
@@ -177,6 +205,10 @@ def render(rpt: CsynthReport, *, kernel: str, platform: str, vitis_version: str,
         rec_console.print()
         rec_console.print("INTERFACES")
         rec_console.print(_build_interface_table(rpt))
+    if impl is not None:
+        rec_console.print()
+        rec_console.print("POST-IMPLEMENTATION")
+        rec_console.print(_build_impl_table(impl))
     if rpt.violations:
         rec_console.print()
         rec_console.print("VIOLATIONS")
