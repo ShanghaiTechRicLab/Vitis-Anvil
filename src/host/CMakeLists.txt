@@ -9,7 +9,8 @@ add_anvil_host(
         anvil_log
         anvil_cli
         anvil_json
-        anvil_compare)
+        anvil_compare
+        hlslib::hlslib)
 
 add_anvil_host(
     NAME run_vadd
@@ -19,7 +20,8 @@ add_anvil_host(
         anvil_log
         anvil_cli
         anvil_json
-        anvil_compare)
+        anvil_compare
+        hlslib::hlslib)
 
 add_anvil_host(
     NAME run_pipeline_demo
@@ -29,7 +31,8 @@ add_anvil_host(
         anvil_log
         anvil_cli
         anvil_json
-        anvil_compare)
+        anvil_compare
+        hlslib::hlslib)
 
 
 target_include_directories(run_saxpy PRIVATE ${PROJECT_SOURCE_DIR}/src/kernels/include)
