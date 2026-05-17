@@ -20,20 +20,57 @@ function(_anvil_write_file_if_changed output_path content)
   endif()
 endfunction()
 
-function(_anvil_vitis_include_dir out_var)
-  if(DEFINED ENV{XILINX_VITIS} AND EXISTS "$ENV{XILINX_VITIS}/include")
-    set(${out_var} "$ENV{XILINX_VITIS}/include" PARENT_SCOPE)
-    return()
-  endif()
-  if(VPP_EXECUTABLE)
+function(_anvil_vitis_hls_include_dirs out_var)
+  set(_anvil_vitis_roots)
+  if(DEFINED ENV{XILINX_VITIS})
+    # Prefer the sourced Vitis tree.  Do not mix headers from a stale cached
+    # VPP_EXECUTABLE in another Vitis version; HLS headers are not ABI-stable
+    # across releases.
+    list(APPEND _anvil_vitis_roots "$ENV{XILINX_VITIS}")
+  elseif(VPP_EXECUTABLE)
     get_filename_component(_anvil_vpp_bin "${VPP_EXECUTABLE}" DIRECTORY)
     get_filename_component(_anvil_vitis_root "${_anvil_vpp_bin}" DIRECTORY)
-    if(EXISTS "${_anvil_vitis_root}/include")
-      set(${out_var} "${_anvil_vitis_root}/include" PARENT_SCOPE)
-      return()
-    endif()
+    list(APPEND _anvil_vitis_roots "${_anvil_vitis_root}")
   endif()
-  set(${out_var} "" PARENT_SCOPE)
+
+  set(_anvil_vitis_hls_expanded_roots)
+  foreach(_anvil_vitis_root IN LISTS _anvil_vitis_roots)
+    list(APPEND _anvil_vitis_hls_expanded_roots "${_anvil_vitis_root}")
+    if(_anvil_vitis_root MATCHES "[/\\]Vitis[/\\]([^/\\]+)$")
+      set(_anvil_vitis_hls_sibling "${_anvil_vitis_root}")
+      string(REGEX REPLACE "[/\\]Vitis[/\\][^/\\]+$" "/Vitis_HLS/${CMAKE_MATCH_1}" _anvil_vitis_hls_sibling "${_anvil_vitis_hls_sibling}")
+      if(EXISTS "${_anvil_vitis_hls_sibling}")
+        list(APPEND _anvil_vitis_hls_expanded_roots "${_anvil_vitis_hls_sibling}")
+      endif()
+    endif()
+  endforeach()
+  if(_anvil_vitis_hls_expanded_roots)
+    list(REMOVE_DUPLICATES _anvil_vitis_hls_expanded_roots)
+  endif()
+
+  set(_anvil_vitis_hls_includes)
+  foreach(_anvil_vitis_root IN LISTS _anvil_vitis_hls_expanded_roots)
+    if(NOT _anvil_vitis_root)
+      continue()
+    endif()
+    foreach(_anvil_candidate IN ITEMS
+        "include"
+        "system_compiler/include"
+        "target/x86/include"
+        "vcxx/data/include"
+        "vcxx/data/autopilot"
+        "common/technology/autopilot"
+        "data/system_compiler/include"
+        "data/emulation/sysc_gen/include")
+      if(EXISTS "${_anvil_vitis_root}/${_anvil_candidate}")
+        list(APPEND _anvil_vitis_hls_includes "${_anvil_vitis_root}/${_anvil_candidate}")
+      endif()
+    endforeach()
+  endforeach()
+  if(_anvil_vitis_hls_includes)
+    list(REMOVE_DUPLICATES _anvil_vitis_hls_includes)
+  endif()
+  set(${out_var} "${_anvil_vitis_hls_includes}" PARENT_SCOPE)
 endfunction()
 
 function(add_anvil_kernel)
@@ -169,19 +206,23 @@ function(add_anvil_kernel)
     string(APPEND _ak_syn_files "syn.file=${_ak_abs_src}\n")
   endforeach()
 
+  _anvil_vitis_hls_include_dirs(_ak_vitis_include_dirs)
   set(_ak_cflags
     "-std=${ANVIL_HLS_STD} -DHLSLIB_SYNTHESIS -I${PROJECT_SOURCE_DIR}/include -I${CMAKE_BINARY_DIR}/generated -I${PROJECT_SOURCE_DIR}/src/kernels/include -I${PROJECT_SOURCE_DIR}/third_party/hlslib/include")
   set(_ak_tb_cflags
     "-std=${ANVIL_HLS_STD} -I${PROJECT_SOURCE_DIR}/include -I${CMAKE_BINARY_DIR}/generated -I${PROJECT_SOURCE_DIR}/src/kernels/include -I${PROJECT_SOURCE_DIR}/third_party/hlslib/include")
-  _anvil_vitis_include_dir(_ak_vitis_include_dir)
+  foreach(_ak_vitis_include_dir IN LISTS _ak_vitis_include_dirs)
+    string(APPEND _ak_cflags " -I${_ak_vitis_include_dir}")
+    string(APPEND _ak_tb_cflags " -I${_ak_vitis_include_dir}")
+  endforeach()
   set(_ak_dep_include_args
     --dep-include "${PROJECT_SOURCE_DIR}/include"
     --dep-include "${CMAKE_BINARY_DIR}/generated"
     --dep-include "${PROJECT_SOURCE_DIR}/src/kernels/include"
     --dep-include "${PROJECT_SOURCE_DIR}/third_party/hlslib/include")
-  if(_ak_vitis_include_dir)
+  foreach(_ak_vitis_include_dir IN LISTS _ak_vitis_include_dirs)
     list(APPEND _ak_dep_include_args --dep-include "${_ak_vitis_include_dir}")
-  endif()
+  endforeach()
   set(_ak_dep_source_args)
   set(_ak_input_args)
   foreach(_ak_abs_src IN LISTS _ak_abs_sources)
