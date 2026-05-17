@@ -106,6 +106,8 @@ RUN_EMU_OUTPUT    ?= $(HWEMU_RUN_DIR)/out.bin
 QEMU_OUTPUT       ?= $(QEMU_RUN_DIR)/out.bin
 QEMU_LAUNCHER     ?=
 QEMU_ARGS         ?=
+DATASET_DIR       := data/$(DATASET)
+DATASET_STAMP     := $(DATASET_DIR)/.gen.stamp
 # Python venv / Python 虚拟环境
 PYTHON      := .venv/bin/python
 PIP         := $(PYTHON) -m pip
@@ -262,10 +264,19 @@ pipeline-demo:
 # ============================================================================
 
 # gen — Generate dataset / 生成数据集
-gen:
+gen: $(DATASET_STAMP)
+
+$(DATASET_STAMP): scripts/gen_dataset.py | build-python
 	@if [ ! -f scripts/gen_dataset.py ]; then echo "scripts/gen_dataset.py is added in Task 15" >&2; exit 1; fi
-	$(MAKE) build-python
-	$(PYTHON) scripts/gen_dataset.py --dataset $(DATASET)
+	@if [ -f "$(DATASET_DIR)/meta.json" ] && [ -f "$(DATASET_DIR)/x.bin" ] && [ -f "$(DATASET_DIR)/y.bin" ] && \
+	      [ "$(DATASET_DIR)/meta.json" -nt scripts/gen_dataset.py ] && \
+	      [ "$(DATASET_DIR)/x.bin" -nt scripts/gen_dataset.py ] && \
+	      [ "$(DATASET_DIR)/y.bin" -nt scripts/gen_dataset.py ]; then \
+		echo "data/$(DATASET) is up to date"; \
+	else \
+		$(PYTHON) scripts/gen_dataset.py --dataset $(DATASET); \
+	fi
+	@touch "$(DATASET_STAMP)"
 
 # gold — Run golden reference to produce expected output / 运行黄金参考生成期望输出
 gold: gen
@@ -282,11 +293,10 @@ gold: gen
 # ============================================================================
 
 # hw — Execute host binary on real hardware / 在真实硬件上执行主机程序
-hw:
+hw: $(DATASET_STAMP)
 	@# Guard: pipeline demo needs the streaming kernel pipeline config / pipeline demo 需要流式内核配置
 	@if [ "$(HOST_APP)" = "run_pipeline_demo" ] && [ -z "$(PIPELINE_DEMO_SUPPORTED)" ]; then echo "HOST_APP=run_pipeline_demo requires $(PIPELINE_DEMO_CFG)" >&2; exit 1; fi
 	$(MAKE) build-host TARGET=$(TARGET) HOST_APP=$(HOST_APP)
-	$(MAKE) gen DATASET=$(DATASET)
 	@if [ ! -x $(HOST_BIN) ]; then echo "$(HOST_BIN) not built; use a preset with ANVIL_BUILD_XRT=ON" >&2; exit 1; fi
 	@if [ ! -f $(XCLBIN_PATH) ]; then echo "$(XCLBIN_PATH) not found; run make xclbin first" >&2; exit 1; fi
 	mkdir -p "$(HW_RUN_DIR)"
@@ -297,9 +307,8 @@ hw:
 emconfig:
 	env ANVIL_PLATFORM=$(ANVIL_PLATFORM) TARGET=$(TARGET) EMCONFIG_DIR=$(EMCONFIG_DIR) bash scripts/emconfig.sh
 
-swemu:
+swemu: $(DATASET_STAMP)
 	@if [ "$(ANVIL_DEVICE_KIND)" != "accelerator" ]; then echo "make swemu currently requires an accelerator target; got TARGET=$(TARGET) ($(ANVIL_DEVICE_KIND))" >&2; exit 1; fi
-	$(MAKE) gen DATASET=$(DATASET)
 	$(MAKE) emconfig TARGET=$(TARGET)
 	cmake --preset $(ANVIL_SWEMU_PRESET) -B $(SWEMU_BUILD_DIR) $(CMAKE_PLATFORM_ARGS) -DANVIL_VITIS_TARGET=sw_emu
 	cmake --build $(SWEMU_BUILD_DIR) --target $(HOST_APP) $(XCLBIN_NAME)_xclbin
@@ -309,9 +318,8 @@ swemu:
 	env XCL_EMULATION_MODE=sw_emu EMCONFIG_PATH=$(EMCONFIG_DIR) $(SWEMU_HOST_BIN) --xclbin $(SWEMU_XCLBIN_PATH) --data-dir data/$(DATASET) --output "$(SWEMU_RUN_DIR)/out.bin" >"$(SWEMU_RUN_DIR)/stdout.log" 2>&1
 	printf '{"target":"%s","mode":"sw_emu","host_app":"%s","dataset":"%s","output":"%s"}\n' "$(TARGET)" "$(HOST_APP)" "$(DATASET)" "$(SWEMU_RUN_DIR)/out.bin" >"$(SWEMU_RUN_DIR)/run.json"
 
-hwemu:
+hwemu: $(DATASET_STAMP)
 	@if [ "$(ANVIL_DEVICE_KIND)" != "accelerator" ]; then echo "make hwemu currently requires an accelerator target; use make qemu for embedded targets" >&2; exit 1; fi
-	$(MAKE) gen DATASET=$(DATASET)
 	$(MAKE) emconfig TARGET=$(TARGET)
 	cmake --preset $(ANVIL_HWEMU_PRESET) $(CMAKE_PLATFORM_ARGS)
 	cmake --build --preset $(ANVIL_HWEMU_PRESET) --target $(HOST_APP) $(XCLBIN_NAME)_xclbin
@@ -321,9 +329,8 @@ hwemu:
 	env XCL_EMULATION_MODE=hw_emu EMCONFIG_PATH=$(EMCONFIG_DIR) $(HWEMU_HOST_BIN) --xclbin $(HWEMU_XCLBIN_PATH) --data-dir data/$(DATASET) --output "$(HWEMU_RUN_DIR)/out.bin" >"$(HWEMU_RUN_DIR)/stdout.log" 2>&1
 	printf '{"target":"%s","mode":"hw_emu","host_app":"%s","dataset":"%s","output":"%s"}\n' "$(TARGET)" "$(HOST_APP)" "$(DATASET)" "$(HWEMU_RUN_DIR)/out.bin" >"$(HWEMU_RUN_DIR)/run.json"
 
-qemu:
+qemu: $(DATASET_STAMP)
 	@if [ "$(ANVIL_DEVICE_KIND)" != "embedded" ]; then echo "make qemu currently requires an embedded target; use make swemu/hwemu for accelerator targets" >&2; exit 2; fi
-	$(MAKE) gen DATASET=$(DATASET)
 	$(MAKE) emconfig TARGET=$(TARGET)
 	cmake --preset $(ANVIL_PRESET) $(CMAKE_PLATFORM_ARGS)
 	cmake --build --preset $(ANVIL_PRESET) --target $(XCLBIN_NAME)_xclbin
@@ -408,13 +415,12 @@ test-cosim:
 	$(MAKE) cosim TARGET=$(TARGET) KERNEL=$(KERNEL)
 
 # test-hw — Full end-to-end hardware test / 完整的端到端硬件测试
-# Steps / 步骤: build (cross-compile + xclbin) → gen → deploy+run via board_run.py → compare
+# Steps / 步骤: build (cross-compile + xclbin) → dataset stamp → deploy+run via board_run.py → compare
 # Requires / 需要: BOARD_IP and (for embedded targets) PETALINUX_SYSROOT + Vitis env
-test-hw:
+test-hw: $(DATASET_STAMP)
 	@if [ -z "$(BOARD_IP)" ]; then echo "ERROR: BOARD_IP not set. Usage: make test-hw BOARD_IP=<ip> [TARGET=zcu102|kv260] [DATASET=tiny]" >&2; exit 1; fi
 	$(MAKE) build-host TARGET=$(TARGET) HOST_APP=$(HOST_APP)
 	$(MAKE) xclbin TARGET=$(TARGET) HOST_APP=$(HOST_APP)
-	$(MAKE) gen DATASET=$(DATASET)
 	$(MAKE) build-python
 	$(PYTHON) scripts/board_run.py \
 		--board-ip "$(BOARD_IP)" \
