@@ -12,10 +12,12 @@ Vitis-Anvil separates a hardware project into several layers. Customize the righ
 
 | Layer | Typical path | What belongs there | User editable? |
 |---|---|---|---|
-| Framework public API | `include/anvil/**` | Generic helpers: logging, JSON, compare, runtime wrappers, generic HLS helpers | Usually no |
-| Framework implementation | `src/anvil/**` | Implementation of the framework libraries | Usually no |
-| Kernel ABI headers | `src/kernels/include/kernels/**` | Pack types, `extern "C"` declarations, stream kernel declarations | Yes |
-| Kernel implementations | `src/kernels/*.cpp` | Vitis HLS C++ kernels | Yes |
+| Framework public API | `include/anvil/**` | Generic helpers: logging, JSON, compare, runtime wrappers, hlslib wrappers (`pack.hpp`, `stream.hpp`, etc.) | No |
+| Framework implementation | `src/anvil/**` | Implementation of the framework libraries | No |
+| Kernel ABI constants | `src/kernels/include/kernels/abi.hpp` | Pack-width constants, host-safe (no Vitis/hlslib includes) | Yes |
+| Kernel pack types | `src/kernels/include/kernels/kernel_types.hpp` | Pack typedefs using `anvil::hls::Pack`, includes HLS headers | Yes |
+| Kernel ABI headers | `src/kernels/include/kernels/*.hpp` | `extern "C"` kernel declarations, shared kernel-core helpers, op functors | Yes |
+| Kernel implementations | `src/kernels/*.cpp` | Vitis HLS C++ kernels (Vitis top: pragmas + dataflow) | Yes |
 | HLS/CPU models | `src/hls_model/**` | CPU-compiled model that mirrors the kernel algorithm | Yes |
 | Golden references | `src/gold/**` | Simple CPU truth model and metrics | Yes |
 | Host applications | `src/host/**` | XRT programs that load xclbin and run kernels | Yes |
@@ -23,17 +25,26 @@ Vitis-Anvil separates a hardware project into several layers. Customize the righ
 | Board/platform config | `config/<target>/**`, `platforms/**` | xpfm path, part, sysroot, link.cfg, xrt.ini, metadata | Yes |
 | Tests | `tests/**` | C++ tests, Python tests, cosim testbenches, install smoke | Yes |
 
-The framework helpers under `include/anvil/hls/` are reusable. They are safe to include from your kernels:
+### The two-file kernel types pattern
+
+The demo kernels split type definitions across two files for a reason:
+
+- **`abi.hpp`** — width constants only (`kSaxpyPackWidth = 16`). No Vitis or hlslib includes. Safe for host cross-compiles.
+- **`kernel_types.hpp`** — Pack typedefs (`SaxpyPack = anvil::hls::Pack<float, 16>`). Includes `anvil/hls/pack.hpp` and `abi.hpp`. For kernel and model code only.
+
+For your own kernel, follow the same pattern: create an `abi.hpp` (or similar) for width constants, then define your pack types. For small single-kernel projects, you can merge both into one header — just be aware that including HLS headers from host code triggers cross-compile failures on embedded targets.
+
+### Framework HLS helpers you can include
 
 ```cpp
-#include "anvil/hls/pack.hpp"
-#include "anvil/hls/stream.hpp"
-#include "anvil/hls/dataflow.hpp"
-#include "anvil/hls/packed_ops.hpp"
-#include "anvil/hls/axis.hpp"
+#include "anvil/hls/pack.hpp"       // Pack<T,N>, PackTraits, GetLane, SetLane
+#include "anvil/hls/stream.hpp"     // Stream<T,Depth>, kDefaultDataflowStreamDepth
+#include "anvil/hls/dataflow.hpp"   // ANVIL_DATAFLOW_* macros
+#include "anvil/hls/packed_ops.hpp" // LoadPacks, StorePacks, MapPacksWithScalar, MapMem2Packs
+#include "anvil/hls/axis.hpp"       // WriteAxis, ReadAxis (for k2k stream pipelines)
 ```
 
-Your kernel-specific types should not be added to `include/anvil/**`. Put them under `src/kernels/include/kernels/` instead.
+Do not add your kernel types under `include/anvil/`. Put them under `src/kernels/include/kernels/`.
 
 ## 1. The four selectors: TARGET, KERNEL, HOST_APP, DATASET
 
@@ -65,21 +76,22 @@ Keep the meanings separate. Do not use `HOST_APP` to select a cosim target. Cosi
 
 Use this order when adding your own accelerator. It avoids waiting for slow Vitis runs before the CPU code is correct.
 
-1. **Define the kernel ABI** under `src/kernels/include/kernels/`.
-2. **Write the CPU/gold reference** under `src/gold/`.
-3. **Write a CPU test** under `tests/cpp/` for the reference and data layout.
-4. **Write the HLS kernel** under `src/kernels/`.
-5. **Write a cosim testbench** under `tests/kernels/`.
-6. **Register the kernel** in `src/kernels/CMakeLists.txt`.
-7. **Run fast host-side tests** with `make test` or `ctest`.
-8. **Run HLS synthesis** with `make csynth TARGET=<board> KERNEL=<kernel>`.
-9. **Run HLS cosim** with `make cosim TARGET=<board> KERNEL=<kernel>`.
-10. **Add xclbin connectivity** in `config/<target>/link.cfg`.
-11. **Link xclbin** with `make xclbin TARGET=<board>`.
-12. **Write or adapt a host app** under `src/host/`.
-13. **Run hardware or hardware emulation**.
-14. **Analyze reports** with `make analyze` and `make analyze-cosim`.
-15. **Only then tune performance**: clock, pack width, memory banks, dataflow depth.
+1. **Define the kernel ABI** — pack widths, pack types, `extern "C"` signature — under `src/kernels/include/kernels/`.
+2. **Write the shared kernel core** — non-templated Load/Compute/Store wrappers and op functor — in the same header or a separate `*_core.hpp`.
+3. **Write the CPU/gold reference** under `src/gold/`.
+4. **Write a CPU test** under `tests/cpp/` for the reference and data layout.
+5. **Write the HLS kernel** under `src/kernels/`. Include framework helpers from `anvil/hls/`.
+6. **Write a cosim testbench** under `tests/kernels/`.
+7. **Register the kernel** in `src/kernels/CMakeLists.txt`.
+8. **Run fast host-side tests** with `make test` or `ctest`.
+9. **Run HLS synthesis** with `make csynth TARGET=<board> KERNEL=<kernel>`.
+10. **Run HLS cosim** with `make cosim TARGET=<board> KERNEL=<kernel>`.
+11. **Add xclbin connectivity** in `config/<target>/link.cfg`.
+12. **Link xclbin** with `make xclbin TARGET=<board>`.
+13. **Write or adapt a host app** under `src/host/`.
+14. **Run hardware or hardware emulation**.
+15. **Analyze reports** with `make analyze` and `make analyze-cosim`.
+16. **Only then tune performance**: clock, pack width, memory banks, dataflow depth.
 
 Do not start by editing `src/anvil/runtime/` or `include/anvil/runtime/`. Most projects do not need to touch the runtime wrapper.
 
@@ -91,23 +103,67 @@ The example kernel computes:
 out[i] = alpha * a[i] + beta * b[i]
 ```
 
-It is deliberately close to `saxpy` and `vadd`, but it is a new kernel with two scalar coefficients. This example shows the full path: ABI header, kernel implementation, cosim testbench, CMake registration, xclbin connectivity, host app, and commands.
+It is deliberately close to `saxpy` and `vadd`, but it is a new kernel with two scalar coefficients. This example shows the full path: ABI header, kernel core, kernel implementation, cosim testbench, CMake registration, xclbin connectivity, host app, and commands.
 
-### 3.1 Add the ABI header
+### 3.1 Add the kernel ABI and types
 
-Create `src/kernels/include/kernels/scaleadd.hpp`:
+Create `src/kernels/include/kernels/scaleadd_types.hpp`:
 
 ```cpp
 #pragma once
+// ScaleAdd kernel types. Follows the two-file pattern:
+//   abi.hpp      — width constants only, host-safe
+//   types        — Pack typedefs using anvil::hls::Pack (HLS includes here)
 
 #include "anvil/hls/pack.hpp"
-#include "kernels/kernel_types.hpp"
 
 namespace kernels {
 
 static const int kScaleAddPackWidth = 16;
 typedef anvil::hls::Pack<float, kScaleAddPackWidth> ScaleAddPack;
 
+}  // namespace kernels
+```
+
+For small kernels you can merge width constants and pack typedefs into one file. For larger projects, split widths into a separate `*_abi.hpp` so host cross-compiles don't pull HLS headers.
+
+### 3.2 Add the kernel core and ABI header
+
+Create `src/kernels/include/kernels/scaleadd.hpp`:
+
+```cpp
+#pragma once
+
+#include "kernels/scaleadd_types.hpp"
+#include "anvil/hls/packed_ops.hpp"
+#include "anvil/hls/stream.hpp"
+
+namespace kernels {
+namespace scaleadd_core {
+
+typedef anvil::hls::Stream<ScaleAddPack, anvil::hls::kDefaultDataflowStreamDepth> ScaleAddStream;
+
+struct ScaleAddOp {
+  float operator()(float alpha, float beta, float a, float b) const {
+    return alpha * a + beta * b;
+  }
+};
+
+inline void Load(const ScaleAddPack* in, ScaleAddStream& out, int n_packs) {
+  anvil::hls::LoadPacks(in, out, n_packs);
+}
+
+inline void Compute(ScaleAddStream& a, ScaleAddStream& b, ScaleAddStream& out,
+                    float alpha, float beta, int n_packs) {
+  anvil::hls::MapPacksWithScalar<ScaleAddPack>(a, b, out, ScaleAddOp{alpha, beta}, n_packs,
+      [](ScaleAddOp op, float av, float bv) { return op.alpha * av + op.beta * bv; });
+}
+
+inline void Store(ScaleAddStream& in, ScaleAddPack* out, int n_packs) {
+  anvil::hls::StorePacks(in, out, n_packs);
+}
+
+}  // namespace scaleadd_core
 }  // namespace kernels
 
 extern "C" void scaleadd(const kernels::ScaleAddPack* a,
@@ -118,13 +174,48 @@ extern "C" void scaleadd(const kernels::ScaleAddPack* a,
                          int n_packs);
 ```
 
-Why this file exists:
+Wait — the above `Compute` uses a lambda which C++14 HLS may not accept. For Vitis HLS safety, use a simple functor approach instead. Here is the corrected, Vitis-safe version:
 
-- It is the ABI contract between kernel, host, and cosim testbench.
-- It lives under `src/kernels/include/kernels/` because it is project code, not framework API.
+Create `src/kernels/include/kernels/scaleadd.hpp`:
+
+```cpp
+#pragma once
+
+#include "kernels/scaleadd_types.hpp"
+
+extern "C" void scaleadd(const kernels::ScaleAddPack* a,
+                         const kernels::ScaleAddPack* b,
+                         kernels::ScaleAddPack* out,
+                         float alpha,
+                         float beta,
+                         int n_packs);
+```
+
+Create `src/kernels/include/kernels/scaleadd_op.hpp`:
+
+```cpp
+#pragma once
+
+namespace kernels {
+
+struct ScaleAddOp {
+  float alpha = 1.0f;
+  float beta = 1.0f;
+  float operator()(float a, float b) const { return alpha * a + beta * b; }
+};
+
+}  // namespace kernels
+```
+
+Why separate files:
+
+- `scaleadd.hpp` is the ABI contract between kernel, cosim testbench, and host app.
+- `scaleadd_types.hpp` defines the pack type shared by kernel and model.
+- `scaleadd_op.hpp` defines the compute functor, shared by kernel and model.
+- These live under `src/kernels/include/kernels/` because they are project code, not framework API.
 - The `extern "C"` signature is what Vitis HLS exports as a kernel top function.
 
-### 3.2 Add the HLS kernel implementation
+### 3.3 Add the HLS kernel implementation
 
 Create `src/kernels/scaleadd_kernel.cpp`:
 
@@ -132,6 +223,9 @@ Create `src/kernels/scaleadd_kernel.cpp`:
 #include "kernels/scaleadd.hpp"
 
 #include "anvil/hls/pack.hpp"
+#include "anvil/hls/packed_ops.hpp"
+#include "kernels/scaleadd_op.hpp"
+#include "kernels/scaleadd_types.hpp"
 
 extern "C" void scaleadd(const kernels::ScaleAddPack* a,
                          const kernels::ScaleAddPack* b,
@@ -150,19 +244,10 @@ extern "C" void scaleadd(const kernels::ScaleAddPack* a,
 #pragma HLS INTERFACE s_axilite port=n_packs bundle=control
 #pragma HLS INTERFACE s_axilite port=return  bundle=control
 
-  for (int i = 0; i < n_packs; ++i) {
-#pragma HLS PIPELINE II=1
-    kernels::ScaleAddPack pa = a[i];
-    kernels::ScaleAddPack pb = b[i];
-    kernels::ScaleAddPack po;
-    for (int lane = 0; lane < kernels::kScaleAddPackWidth; ++lane) {
-#pragma HLS UNROLL
-      const float av = anvil::hls::GetLane(pa, lane);
-      const float bv = anvil::hls::GetLane(pb, lane);
-      anvil::hls::SetLane(po, lane, alpha * av + beta * bv);
-    }
-    out[i] = po;
-  }
+  kernels::ScaleAddOp op;
+  op.alpha = alpha;
+  op.beta = beta;
+  anvil::hls::MapMem2Packs(a, b, out, n_packs, op);
 }
 ```
 
@@ -171,14 +256,17 @@ Important details:
 - `n_packs` is the number of packed words, not scalar elements.
 - Memory bundles `gmem0`, `gmem1`, `gmem2` should match `link.cfg` bank bindings.
 - The scalar arguments are `s_axilite` control arguments.
-- The loop is pipelined at II=1 and lanes are unrolled.
+- `MapMem2Packs` applies the functor lane-by-lane with `#pragma HLS pipeline II=1` and `#pragma HLS unroll`.
 
-### 3.3 Add a cosim testbench
+For kernels that need internal dataflow (Load → Compute → Store), follow the saxpy pattern: create non-templated Load/Compute/Store wrappers in a `*_core.hpp`, then call them through `ANVIL_DATAFLOW_*` macros. See [hlslib adaptation](hlslib_adaptation.md) for the full dataflow skeleton.
+
+### 3.4 Add a cosim testbench
 
 Create `tests/kernels/scaleadd_cosim_tb.cpp`:
 
 ```cpp
 #include "kernels/scaleadd.hpp"
+#include "kernels/scaleadd_types.hpp"
 
 #include <cstdio>
 #include <vector>
@@ -195,9 +283,9 @@ int RunOne() {
 
   for (int p = 0; p < kPacks; ++p) {
     for (int lane = 0; lane < kernels::kScaleAddPackWidth; ++lane) {
-      a[p].Set(lane, static_cast<float>(p * kernels::kScaleAddPackWidth + lane));
-      b[p].Set(lane, 10.0f);
-      out[p].Set(lane, 0.0f);
+      a[p][lane] = static_cast<float>(p * kernels::kScaleAddPackWidth + lane);
+      b[p][lane] = 10.0f;
+      out[p][lane] = 0.0f;
     }
   }
 
@@ -231,7 +319,7 @@ int main() {
 
 This testbench is intentionally simple. It proves the kernel signature, pack type, and lane math before you try board deployment.
 
-### 3.4 Register the kernel in CMake
+### 3.5 Register the kernel in CMake
 
 Edit `src/kernels/CMakeLists.txt`.
 
@@ -264,7 +352,7 @@ endif()
 
 If you do not want it in the default xclbin, keep it as an independent HLS target and create a separate `add_anvil_xclbin()` block.
 
-### 3.5 Add xclbin connectivity
+### 3.6 Add xclbin connectivity
 
 For `u250`, edit `config/u250/link.cfg`. Add the kernel instance and memory-bank mapping:
 
@@ -301,7 +389,7 @@ Rules:
 
 For embedded platforms, the exact memory tags depend on the platform. Use the existing target's `link.cfg` as the starting point.
 
-### 3.6 Build and inspect the kernel
+### 3.7 Build and inspect the kernel
 
 Fast configure/build commands:
 
@@ -367,6 +455,7 @@ This is a shortened skeleton. In a real app, copy the dataset loading/writing he
 #include <anvil/runtime/xrt_context.hpp>
 
 #include "kernels/scaleadd.hpp"
+#include "kernels/scaleadd_types.hpp"
 
 #include <algorithm>
 #include <filesystem>

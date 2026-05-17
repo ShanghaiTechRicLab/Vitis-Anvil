@@ -36,7 +36,7 @@ The `.hpp` file is important because the same function signature must be visible
 
 - the kernel implementation
 - the cosim testbench
-- sometimes the host app, if it needs the same pack width or ABI constants
+- the host app, for pack width and ABI constants
 
 ### Host app
 
@@ -67,7 +67,7 @@ Gold code lives in:
 src/gold/**
 ```
 
-You use it to answer: “What should the FPGA output be?”
+You use it to answer: "What should the FPGA output be?"
 
 ### HLS model
 
@@ -89,38 +89,62 @@ A kernel core is project-owned HLS-compatible code shared by both the HLS model 
 src/kernels/include/kernels/saxpy_core.hpp
 ```
 
-It contains the packed operation and load/compute/store stage helpers. It does not contain host code, XRT code, or board configuration.
+It contains the packed operation and Load/Compute/Store stage helpers. It does not contain host code, XRT code, or board configuration. The kernel calls these helpers via `ANVIL_DATAFLOW_*` macros; the HLS model calls them identically from CPU simulation.
 
-### Vitis top
+### Kernel ABI header
 
-A Vitis top is the `extern "C"` wrapper that Vitis HLS turns into a hardware kernel. It owns the kernel ABI and interface pragmas. For `saxpy`, the top lives in:
+The kernel ABI header declares the `extern "C"` kernel signature and is the contract shared by kernel, cosim testbench, and host app. For `saxpy`:
 
 ```text
-src/kernels/saxpy_kernel.cpp
+src/kernels/include/kernels/saxpy_kernel.hpp
 ```
 
-The top calls the shared kernel core but keeps hardware-facing details such as `#pragma HLS INTERFACE` and the explicit dataflow region in the top-level kernel file.
+### Kernel types
+
+Kernel pack widths and typedefs are centralized in two files:
+
+- `src/kernels/include/kernels/abi.hpp` — width constants only, safe to include from host code (no Vitis or hlslib headers)
+- `src/kernels/include/kernels/kernel_types.hpp` — Pack typedefs using `anvil::hls::Pack`, includes HLS headers; for kernel and model code only
+
+This separation lets embedded host cross-compiles use `abi.hpp` without pulling synthesis dependencies.
 
 ### Saxpy file map
 
 The demo `saxpy` flow is intentionally split by responsibility:
 
 ```text
-src/gold/include/gold/saxpy_gold.hpp
-src/kernels/include/kernels/saxpy_core.hpp
-src/kernels/saxpy_kernel.cpp
-src/hls_model/include/hls_model/saxpy_hls_model.hpp
-src/hls_model/saxpy_hls_model.cpp
-src/host/run_saxpy.cpp
+src/gold/cpp/saxpy_gold.cpp                          ← CPU truth implementation
+src/kernels/include/kernels/abi.hpp                   ← pack-width constants, host-safe
+src/kernels/include/kernels/kernel_types.hpp          ← SaxpyPack typedef
+src/kernels/include/kernels/saxpy_kernel.hpp          ← extern "C" ABI
+src/kernels/include/kernels/saxpy_core.hpp            ← Load/Compute/Store + SaxpyOp
+src/kernels/saxpy_kernel.cpp                          ← Vitis top: HLS pragmas, dataflow
+src/hls_model/saxpy_hls_model.cpp                     ← CPU model, mirrors kernel structure
+src/host/run_saxpy.cpp                                ← XRT host, loads xclbin
 ```
 
-- `saxpy_gold.hpp` declares the plain CPU mathematical truth.
-- `saxpy_core.hpp` holds the HLS-compatible kernel core shared by model and top.
-- `saxpy_kernel.cpp` is the Vitis top: ABI, HLS pragmas, and explicit dataflow calls.
-- `saxpy_hls_model.hpp/.cpp` adapt scalar CPU spans into packed HLS-shaped data, call the shared core, and unpack the result.
-- `run_saxpy.cpp` is the XRT host application that runs an xclbin on a card or board.
+- `saxpy_gold.cpp` computes the mathematical truth on CPU.
+- `abi.hpp` defines `kSaxpyPackWidth` without pulling any HLS headers.
+- `kernel_types.hpp` declares `SaxpyPack = anvil::hls::Pack<float, kSaxpyPackWidth>`.
+- `saxpy_kernel.hpp` declares the `extern "C"` kernel signature.
+- `saxpy_core.hpp` holds the Load/Compute/Store non-templated wrappers and `SaxpyOp` functor, shared by both the HLS model and the Vitis top.
+- `saxpy_kernel.cpp` is the Vitis top — owns `#pragma HLS INTERFACE`, instantiates streams, and calls core helpers through `ANVIL_DATAFLOW_*`.
+- `saxpy_hls_model.cpp` packs scalars, calls the same core helpers, and unpacks results.
+- `run_saxpy.cpp` is the XRT host application.
 
-This pass focuses first-class HLS model support on m_axi-style packed kernels. Existing stream/k2k kernels remain supported, but first-class stream HLS models are a later design.
+### hlslib framework helpers
+
+Vitis-Anvil wraps selected hlslib primitives under `include/anvil/hls/` so kernel code uses one consistent namespace. These are framework code — include them from your kernels, do not modify them:
+
+| Header | Provides |
+|---|---|
+| `pack.hpp` | `anvil::hls::Pack<T,N>`, `PackTraits`, `GetLane`, `SetLane` |
+| `stream.hpp` | `anvil::hls::Stream<T,Depth>`, `kDefaultStreamDepth`, `kDefaultDataflowStreamDepth` |
+| `dataflow.hpp` | `ANVIL_DATAFLOW_INIT/FUNCTION/FINALIZE` macros |
+| `packed_ops.hpp` | `LoadPacks`, `StorePacks`, `MapPacks`, `MapPacksWithScalar`, `MapMem2Packs` |
+| `axis.hpp` | `WriteAxis`, `ReadAxis` — compatibility helpers for `hls::stream` and `hlslib::Stream` |
+
+Your project kernel headers go under `src/kernels/include/kernels/`. Do not add your kernel types to `include/anvil/`.
 
 ### Dataset
 
@@ -212,9 +236,36 @@ These Make variables select different things:
 
 Do not mix them. `HOST_APP` does not select cosim. `KERNEL` does.
 
+## Code boundary: framework vs project
+
+Vitis-Anvil draws a clear line:
+
+```
+include/anvil/**         ← Framework. Do not add your kernel types here.
+src/anvil/**             ← Framework implementation. Do not edit unless fixing a bug.
+
+src/kernels/**           ← Your kernel code. Edit freely.
+src/kernels/include/**   ← Your kernel ABI headers and shared cores.
+src/hls_model/**         ← Your HLS CPU models.
+src/gold/**              ← Your golden reference.
+src/host/**              ← Your XRT host applications.
+config/**                ← Your board/target configurations.
+```
+
+Include framework helpers from your kernel headers:
+
+```cpp
+#include "anvil/hls/pack.hpp"
+#include "anvil/hls/stream.hpp"
+#include "anvil/hls/dataflow.hpp"
+#include "anvil/hls/packed_ops.hpp"
+#include "anvil/hls/axis.hpp"
+```
+
 ## Where to go next
 
 - New user: read [Get started](get_started.md).
 - Want to add your own algorithm: read [Customization guide](customization.md).
 - Using an accelerator card: read [Accelerator-card flow](accelerator_flow.md).
 - Using an embedded board: read [Embedded flow](embedded_flow.md).
+- hlslib kernel skeleton pattern: read [hlslib adaptation](hlslib_adaptation.md).

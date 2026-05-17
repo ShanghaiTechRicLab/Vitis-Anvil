@@ -60,7 +60,7 @@ make test
 |---|---|---|
 | `saxpy` | `out = a*x + y` | `src/kernels/saxpy_kernel.cpp` |
 | `vadd` | `out = a + b` | `src/kernels/vadd_kernel.cpp` |
-| `pipeline_demo` | `saxpy_stream -> vadd_stream` | `src/kernels/` 里的 stream kernel |
+| `pipeline_demo` | `saxpy_stream → vadd_stream` | `src/kernels/saxpy_stream_kernel.cpp` / `vadd_stream_kernel.cpp` |
 
 默认 host app：
 
@@ -69,6 +69,48 @@ make test
 | `run_saxpy` | 加载包含 `saxpy_1` 的 xclbin |
 | `run_vadd` | 加载包含 `vadd_1` 的 xclbin |
 | `run_pipeline_demo` | 加载 stream pipeline xclbin |
+
+### 代码目录结构
+
+Demo 遵循分层结构：
+
+```
+src/kernels/include/kernels/   ← Kernel ABI 头文件和共享核心 helper
+  ├── abi.hpp                  ← pack 宽度常量（host 编译安全）
+  ├── kernel_types.hpp         ← Pack typedef（SaxpyPack、VaddPack 等）
+  ├── saxpy_kernel.hpp         ← extern "C" saxpy 签名
+  ├── saxpy_core.hpp           ← Load/Compute/Store wrapper + SaxpyOp
+  ├── vadd.hpp                 ← extern "C" vadd 签名
+  ├── vadd_op.hpp              ← VaddOp 函子
+  └── pipeline_types.hpp       ← k2k demo 的 PipelinePack 类型
+
+src/kernels/                   ← Vitis HLS kernel 实现（Vitis top）
+  ├── saxpy_kernel.cpp         ← top：pragma + ANVIL_DATAFLOW_* 调用
+  ├── vadd_kernel.cpp          ← top：使用 MapMem2Packs
+  ├── saxpy_stream_kernel.cpp  ← k2k producer（m_axi → axis stream）
+  └── vadd_stream_kernel.cpp   ← k2k consumer（axis stream → m_axi）
+
+src/hls_model/                 ← CPU 编译模型，镜像 kernel 结构
+  ├── saxpy_hls_model.cpp
+  └── vadd_hls_model.cpp
+
+src/gold/                      ← 标量 CPU 真值实现
+  └── cpp/saxpy_gold.cpp
+
+src/host/                      ← XRT host application
+  ├── run_saxpy.cpp
+  ├── run_vadd.cpp
+  └── run_pipeline_demo.cpp
+
+include/anvil/hls/             ← 框架 hlslib wrapper 头文件（不要编辑）
+  ├── pack.hpp                 ← Pack<T,N>、PackTraits、GetLane、SetLane
+  ├── stream.hpp               ← Stream<T,Depth>
+  ├── dataflow.hpp             ← ANVIL_DATAFLOW_* 宏
+  ├── packed_ops.hpp           ← LoadPacks、StorePacks、MapPacksWithScalar、MapMem2Packs
+  └── axis.hpp                 ← WriteAxis、ReadAxis
+```
+
+每个文件的作用见 [基本概念](concepts.md)，packed kernel 骨架模式见 [hlslib 适配](hlslib_adaptation.md)。
 
 ## 5. 跑 HLS 综合
 
@@ -224,7 +266,7 @@ make xclbin TARGET=zcu102
 ```
 
 然后把文件部署到板上。见 [Embedded 流程](embedded_flow.md) 和 [部署指南](deploy.md)。
-如果要跑 embedded QEMU，使用 `make qemu TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny QEMU_LAUNCHER=/path/to/qemu-launch.sh`；launcher 取决于 platform/image，并且必须创建 ``。
+如果要跑 embedded QEMU，使用 `make qemu TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny QEMU_LAUNCHER=/path/to/qemu-launch.sh`；launcher 取决于 platform/image，并且必须在 `runs/<target>/qemu/<host_app>/<dataset>/<run_key>/` 下创建 `$OUTPUT`。
 
 ## 12. 怎样算成功
 

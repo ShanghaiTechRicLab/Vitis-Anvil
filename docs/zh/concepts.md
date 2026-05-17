@@ -36,7 +36,7 @@ src/kernels/include/kernels/*.hpp
 
 - kernel 实现
 - cosim testbench
-- 有时 host app 也要用同样的 pack 宽度或 ABI 常量
+- host app（用于 pack 宽度和 ABI 常量）
 
 ### Host app
 
@@ -59,7 +59,7 @@ src/host/*.cpp
 
 ### Gold reference
 
-Gold reference 是最简单的 CPU 正确性实现，也就是“真值”。它应该容易读，不追求性能。
+Gold reference 是最简单的 CPU 正确性实现，也就是"真值"。它应该容易读，不追求性能。
 
 Gold 代码放在：
 
@@ -67,7 +67,7 @@ Gold 代码放在：
 src/gold/**
 ```
 
-它回答的问题是：“FPGA 正确输出应该是什么？”
+它回答的问题是："FPGA 正确输出应该是什么？"
 
 ### HLS model
 
@@ -89,38 +89,62 @@ src/hls_model/**
 src/kernels/include/kernels/saxpy_core.hpp
 ```
 
-它放 packed operation 和 load/compute/store 阶段 helper；不放 host 代码、XRT 代码或板卡配置。
+它放 Load/Compute/Store 阶段 helper 和操作函子；不放 host 代码、XRT 代码或板卡配置。kernel 通过 `ANVIL_DATAFLOW_*` 宏调用这些 helper；HLS 模型从 CPU 仿真中以相同方式调用。
 
-### Vitis top
+### Kernel ABI 头文件
 
-Vitis top 是 `extern "C"` 包装函数，Vitis HLS 会把它变成硬件 kernel。它拥有 kernel ABI 和 interface pragmas。`saxpy` 的 top 在：
+Kernel ABI 头文件声明 `extern "C"` kernel 签名，是 kernel、cosim testbench 和 host app 之间的契约。`saxpy` 的 ABI 头文件在：
 
 ```text
-src/kernels/saxpy_kernel.cpp
+src/kernels/include/kernels/saxpy_kernel.hpp
 ```
 
-top 会调用共享内核核心，但把 `#pragma HLS INTERFACE` 和显式 dataflow 区域这类硬件边界细节留在 top-level kernel 文件中。
+### Kernel 类型定义
+
+Kernel 的 pack 宽度和类型别名集中在两个文件：
+
+- `src/kernels/include/kernels/abi.hpp` — 仅宽度常量，可安全被 host 代码 include（不含 Vitis 或 hlslib 头文件）
+- `src/kernels/include/kernels/kernel_types.hpp` — 使用 `anvil::hls::Pack` 的 Pack typedef，include 了 HLS 头文件；仅供 kernel 和模型代码使用
+
+这样分开后，嵌入式 host 交叉编译只需 include `abi.hpp`，不会引入综合依赖。
 
 ### Saxpy 文件地图
 
 Demo `saxpy` 按职责拆成这些文件：
 
 ```text
-src/gold/include/gold/saxpy_gold.hpp
-src/kernels/include/kernels/saxpy_core.hpp
-src/kernels/saxpy_kernel.cpp
-src/hls_model/include/hls_model/saxpy_hls_model.hpp
-src/hls_model/saxpy_hls_model.cpp
-src/host/run_saxpy.cpp
+src/gold/cpp/saxpy_gold.cpp                          ← CPU 真值实现
+src/kernels/include/kernels/abi.hpp                   ← pack 宽度常量，host 可用
+src/kernels/include/kernels/kernel_types.hpp          ← SaxpyPack typedef
+src/kernels/include/kernels/saxpy_kernel.hpp          ← extern "C" ABI 声明
+src/kernels/include/kernels/saxpy_core.hpp            ← Load/Compute/Store + SaxpyOp
+src/kernels/saxpy_kernel.cpp                          ← Vitis top：HLS pragmas + dataflow
+src/hls_model/saxpy_hls_model.cpp                     ← CPU 模型，镜像 kernel 结构
+src/host/run_saxpy.cpp                                ← XRT host，加载 xclbin
 ```
 
-- `saxpy_gold.hpp` 声明普通 CPU 数学真值。
-- `saxpy_core.hpp` 放 HLS 兼容的 kernel core，由模型和 top 共享。
-- `saxpy_kernel.cpp` 是 Vitis top：ABI、HLS pragmas、显式 dataflow 调用。
-- `saxpy_hls_model.hpp/.cpp` 把 CPU scalar span 打包成 HLS 形状的数据，调用共享核心，再解包结果。
-- `run_saxpy.cpp` 是 XRT host app，负责在卡/板上运行 xclbin。
+- `saxpy_gold.cpp` 在 CPU 上计算数学真值。
+- `abi.hpp` 定义 `kSaxpyPackWidth`，不引入任何 HLS 头文件。
+- `kernel_types.hpp` 声明 `SaxpyPack = anvil::hls::Pack<float, kSaxpyPackWidth>`。
+- `saxpy_kernel.hpp` 声明 `extern "C"` kernel 签名。
+- `saxpy_core.hpp` 放 Load/Compute/Store 非模板 wrapper 和 `SaxpyOp` 函子，HLS 模型和 Vitis top 共享。
+- `saxpy_kernel.cpp` 是 Vitis top — 拥有 `#pragma HLS INTERFACE`，创建 stream，通过 `ANVIL_DATAFLOW_*` 调用核心 helper。
+- `saxpy_hls_model.cpp` 打包 scalar、调用同样的核心 helper、解包结果。
+- `run_saxpy.cpp` 是 XRT host application。
 
-这次 first-class HLS 模型主要覆盖 m_axi 风格的 packed kernels。现有 stream/k2k kernels 仍然支持，但 first-class stream HLS models 是后续设计。
+### hlslib 框架辅助
+
+Vitis-Anvil 在 `include/anvil/hls/` 下封装了选定的 hlslib 原语，让 kernel 代码使用统一的命名空间。这些是框架代码 — 从你的 kernel include 它们，不要修改：
+
+| 头文件 | 提供 |
+|---|---|
+| `pack.hpp` | `anvil::hls::Pack<T,N>`、`PackTraits`、`GetLane`、`SetLane` |
+| `stream.hpp` | `anvil::hls::Stream<T,Depth>`、`kDefaultStreamDepth`、`kDefaultDataflowStreamDepth` |
+| `dataflow.hpp` | `ANVIL_DATAFLOW_INIT/FUNCTION/FINALIZE` 宏 |
+| `packed_ops.hpp` | `LoadPacks`、`StorePacks`、`MapPacks`、`MapPacksWithScalar`、`MapMem2Packs` |
+| `axis.hpp` | `WriteAxis`、`ReadAxis` — 兼容 `hls::stream` 和 `hlslib::Stream` 的辅助函数 |
+
+你的项目 kernel 头文件放在 `src/kernels/include/kernels/`。不要把自己的 kernel 类型加到 `include/anvil/`。
 
 ### Dataset
 
@@ -211,9 +235,36 @@ XRT 是 host app 用来和 FPGA 通信的运行时库。如果 host app 编译�
 
 不要混用。`HOST_APP` 不选择 cosim；`KERNEL` 才选择 cosim。
 
+## 代码边界：框架 vs 项目
+
+Vitis-Anvil 画了一条清晰的线：
+
+```
+include/anvil/**         ← 框架代码。不要在这里添加你的 kernel 类型。
+src/anvil/**             ← 框架实现。除非修 bug，否则不要编辑。
+
+src/kernels/**           ← 你的 kernel 代码。自由编辑。
+src/kernels/include/**   ← 你的 kernel ABI 头文件和共享核心。
+src/hls_model/**         ← 你的 HLS CPU 模型。
+src/gold/**              ← 你的 golden reference。
+src/host/**              ← 你的 XRT host application。
+config/**                ← 你的板卡/target 配置。
+```
+
+从你的 kernel 头文件 include 框架辅助：
+
+```cpp
+#include "anvil/hls/pack.hpp"
+#include "anvil/hls/stream.hpp"
+#include "anvil/hls/dataflow.hpp"
+#include "anvil/hls/packed_ops.hpp"
+#include "anvil/hls/axis.hpp"
+```
+
 ## 下一步读什么
 
 - 第一次用：读 [快速开始](get_started.md)。
 - 想加自己的算法：读 [自定义指南](customization.md)。
 - 用加速卡：读 [加速卡流程](accelerator_flow.md)。
 - 用嵌入式板：读 [Embedded 流程](embedded_flow.md)。
+- hlslib kernel 骨架模式：读 [hlslib 适配](hlslib_adaptation.md)。

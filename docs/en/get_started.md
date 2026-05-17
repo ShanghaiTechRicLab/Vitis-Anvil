@@ -62,7 +62,7 @@ The default demo has these kernels:
 |---|---|---|
 | `saxpy` | `out = a*x + y` | `src/kernels/saxpy_kernel.cpp` |
 | `vadd` | `out = a + b` | `src/kernels/vadd_kernel.cpp` |
-| `pipeline_demo` | `saxpy_stream -> vadd_stream` | stream kernels in `src/kernels/` |
+| `pipeline_demo` | `saxpy_stream → vadd_stream` | `src/kernels/saxpy_stream_kernel.cpp` / `vadd_stream_kernel.cpp` |
 
 The default host apps are:
 
@@ -71,6 +71,48 @@ The default host apps are:
 | `run_saxpy` | loads an xclbin containing `saxpy_1` |
 | `run_vadd` | loads an xclbin containing `vadd_1` |
 | `run_pipeline_demo` | loads stream pipeline xclbin |
+
+### Where the code lives
+
+The demo follows a layered structure:
+
+```
+src/kernels/include/kernels/   ← Kernel ABI headers and shared core helpers
+  ├── abi.hpp                  ← pack-width constants (host-compile safe)
+  ├── kernel_types.hpp         ← Pack typedefs (SaxpyPack, VaddPack, etc.)
+  ├── saxpy_kernel.hpp         ← extern "C" saxpy signature
+  ├── saxpy_core.hpp           ← Load/Compute/Store wrappers + SaxpyOp
+  ├── vadd.hpp                 ← extern "C" vadd signature
+  ├── vadd_op.hpp              ← VaddOp functor
+  └── pipeline_types.hpp       ← PipelinePack type for k2k demos
+
+src/kernels/                   ← Vitis HLS kernel implementations (Vitis top)
+  ├── saxpy_kernel.cpp         ← top: pragmas + ANVIL_DATAFLOW_* calls
+  ├── vadd_kernel.cpp          ← top: uses MapMem2Packs
+  ├── saxpy_stream_kernel.cpp  ← k2k producer (m_axi → axis stream)
+  └── vadd_stream_kernel.cpp   ← k2k consumer (axis stream → m_axi)
+
+src/hls_model/                 ← CPU-compiled models mirroring kernel structure
+  ├── saxpy_hls_model.cpp
+  └── vadd_hls_model.cpp
+
+src/gold/                      ← Scalar CPU truth implementations
+  └── cpp/saxpy_gold.cpp
+
+src/host/                      ← XRT host applications
+  ├── run_saxpy.cpp
+  ├── run_vadd.cpp
+  └── run_pipeline_demo.cpp
+
+include/anvil/hls/             ← Framework hlslib wrapper headers (do not edit)
+  ├── pack.hpp                 ← Pack<T,N>, PackTraits, GetLane, SetLane
+  ├── stream.hpp               ← Stream<T,Depth>
+  ├── dataflow.hpp             ← ANVIL_DATAFLOW_* macros
+  ├── packed_ops.hpp           ← LoadPacks, StorePacks, MapPacksWithScalar, MapMem2Packs
+  └── axis.hpp                 ← WriteAxis, ReadAxis
+```
+
+See [Concepts](concepts.md) for what each file does, and [hlslib adaptation](hlslib_adaptation.md) for the packed kernel skeleton pattern.
 
 ## 5. Run HLS synthesis
 
@@ -227,7 +269,7 @@ make xclbin TARGET=zcu102
 ```
 
 Then deploy files to the board. See [Embedded flow](embedded_flow.md) and [Deployment guide](deploy.md).
-For embedded QEMU, use `make qemu TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny QEMU_LAUNCHER=/path/to/qemu-launch.sh`; the launcher is platform/image specific and must create ``.
+For embedded QEMU, use `make qemu TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny QEMU_LAUNCHER=/path/to/qemu-launch.sh`; the launcher is platform/image specific and must create `$OUTPUT` under `runs/<target>/qemu/<host_app>/<dataset>/<run_key>/`.
 
 ## 12. What success looks like
 

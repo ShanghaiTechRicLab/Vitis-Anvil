@@ -1,46 +1,86 @@
 # 自定义指南：把 demo 换成你的加速器
 
-这篇假设你只大概知道 FPGA 可以用 HLS 跑 C/C++，但还不知道一个 Vitis/XRT 工程要分哪些步骤。目标是从“我有一个算法”讲到“我能在板卡上跑并和 CPU 结果比较”。
+这篇假设你只大概知道 FPGA 可以用 HLS 跑 C/C++，但还不知道一个 Vitis/XRT 工程要分哪些步骤。目标是从"我有一个算法"讲到"我能在板卡上跑并和 CPU 结果比较"。
 
 最重要的规则：
 
 > `include/anvil/**` 和 `src/anvil/**` 是框架代码，默认不要改。你的项目代码放在 `src/kernels/**`、`src/hls_model/**`、`src/gold/**`、`src/host/**`、`src/apps/**`、`config/**`、`tests/**`。
 
-## 1. 自定义到底是在改什么？
+## 0. 自定义到底是在改什么？
 
 一个 FPGA 加速项目不只是一个 kernel 函数。它至少包含这些部分：
 
-| 部分 | 做什么 | 放在哪里 |
-|---|---|---|
-| Gold reference | CPU 上的正确实现，用来当真值 | `src/gold/**` |
-| HLS kernel | 会被综合成 FPGA 硬件的 C++ 函数 | `src/kernels/*.cpp` |
-| Kernel ABI header | kernel 函数签名、pack 类型、宽度常量 | `src/kernels/include/kernels/*.hpp` |
-| Cosim testbench | 不上板，先验证 RTL 行为 | `tests/kernels/*_cosim_tb.cpp` |
-| xclbin connectivity | 告诉 Vitis kernel 实例和内存 bank 怎么连 | `config/<target>/link.cfg` |
-| Host app | CPU 程序，加载 xclbin、分配 buffer、启动 kernel | `src/host/*.cpp` |
-| Dataset/compare | 输入、期望输出、`runs/` 下的运行输出、比较逻辑 | `data/`, `runs/`, `src/apps/`, `scripts/` |
+| 部分 | 做什么 | 放在哪里 | 可编辑？ |
+|---|---|---|---|
+| 框架公开 API | 通用 helper：log、JSON、compare、runtime wrapper、hlslib wrapper（`pack.hpp`、`stream.hpp` 等） | `include/anvil/**` | 否 |
+| 框架实现 | 框架库的 C++ 实现 | `src/anvil/**` | 否 |
+| Kernel ABI 常量 | pack 宽度常量，不含 Vitis/hlslib 头文件，host 编译可用 | `src/kernels/include/kernels/abi.hpp` | 是 |
+| Kernel pack 类型 | 使用 `anvil::hls::Pack` 的 Pack typedef，含 HLS 头文件 | `src/kernels/include/kernels/kernel_types.hpp` | 是 |
+| Kernel ABI 头文件 | `extern "C"` 声明、共享 kernel-core helper、操作函子 | `src/kernels/include/kernels/*.hpp` | 是 |
+| Kernel 实现 | Vitis HLS C++ kernel（Vitis top：pragma + dataflow） | `src/kernels/*.cpp` | 是 |
+| HLS/CPU 模型 | CPU 编译的模型，结构镜像 kernel | `src/hls_model/**` | 是 |
+| Golden reference | CPU 正确性实现和指标 | `src/gold/**` | 是 |
+| Host app | 加载 xclbin、运行 kernel 的 XRT 程序 | `src/host/**` | 是 |
+| 工具 | 数据集生成、比较、部署、分析 helper | `src/apps/**`、`scripts/**` | 是 |
+| 板卡/platform 配置 | xpfm 路径、part、sysroot、link.cfg、xrt.ini、元数据 | `config/<target>/**`、`platforms/**` | 是 |
+| 测试 | C++ 测试、Python 测试、cosim testbench、install smoke | `tests/**` | 是 |
 
-所以“加一个新算法”不是只写一个 `.cpp`。你要让每一层都知道同一件事：输入是什么、输出是什么、参数顺序是什么、文件名是什么、怎么判断正确。
+### 两文件 kernel 类型模式
+
+Demo kernel 刻意把类型定义拆成两个文件：
+
+- **`abi.hpp`** — 只有宽度常量（如 `kSaxpyPackWidth = 16`），不含 Vitis 或 hlslib 头文件。host 交叉编译安全。
+- **`kernel_types.hpp`** — Pack typedef（如 `SaxpyPack = anvil::hls::Pack<float, 16>`），include `anvil/hls/pack.hpp` 和 `abi.hpp`。仅供 kernel 和模型代码使用。
+
+对你自己的 kernel 也推荐这样做：创建 `abi.hpp` 放宽度常量，再定义 pack 类型。小项目可以合并成一个文件 — 但要知道主头文件 include HLS 头文件后，交叉编译 host 会失败。
+
+### 框架 HLS helper 头文件
+
+在你的 kernel 中可以 include 这些框架头文件：
+
+```cpp
+#include "anvil/hls/pack.hpp"       // Pack<T,N>、PackTraits、GetLane、SetLane
+#include "anvil/hls/stream.hpp"     // Stream<T,Depth>、kDefaultDataflowStreamDepth
+#include "anvil/hls/dataflow.hpp"   // ANVIL_DATAFLOW_* 宏
+#include "anvil/hls/packed_ops.hpp" // LoadPacks、StorePacks、MapPacksWithScalar、MapMem2Packs
+#include "anvil/hls/axis.hpp"       // WriteAxis、ReadAxis（k2k stream pipeline 用）
+```
+
+不要把自己的 kernel 类型加到 `include/anvil/`。放在 `src/kernels/include/kernels/`。
+
+## 1. 四大变量：TARGET、KERNEL、HOST_APP、DATASET
+
+日常命令大多由这四个变量控制：
+
+| 变量 | 选什么 | 例子 |
+|---|---|---|
+| `TARGET` | 板卡/platform 配置（`config/<target>/anvil.mk`） | `u250`, `u50`, `zcu102`, `kv260` |
+| `KERNEL` | HLS kernel 目标名 | `saxpy`, `vadd`, `pipeline_demo`, `all` |
+| `HOST_APP` | host 可执行文件名（`src/host/CMakeLists.txt`） | `run_saxpy`, `run_vadd` |
+| `DATASET` | 数据目录（`data/<dataset>/`） | `tiny`, `my_case_001` |
+
+不要混用。`HOST_APP` 不选择 cosim；`KERNEL` 才选择 cosim。
 
 ## 2. 推荐顺序
 
 按这个顺序做可以少等很多 Vitis 慢步骤：
 
 1. 写清楚算法公式和输入输出。
-2. 写 CPU gold reference。
-3. 给 gold 写 CPU 测试。
-4. 写 kernel ABI header。
-5. 写 HLS kernel。
-6. 写 cosim testbench。
-7. 在 `src/kernels/CMakeLists.txt` 注册 kernel。
-8. 跑 `make test`，先保证 CPU 侧没坏。
-9. 跑 `make csynth TARGET=<target> KERNEL=<kernel>`。
-10. 跑 `make cosim TARGET=<target> KERNEL=<kernel>`。
-11. 写/改 `link.cfg`。
-12. 跑 `make xclbin TARGET=<target>`。
-13. 写/改 host app。
-14. 生成 dataset、跑 gold、跑 host、compare。
-15. 最后再调性能：clock、pack 宽度、memory bank、dataflow 深度。
+2. 定义 kernel ABI — pack 宽度、pack 类型、`extern "C"` 签名 — 放在 `src/kernels/include/kernels/`。
+3. 写共享 kernel core — Load/Compute/Store wrapper 和操作函子 — 放在同一或单独的 `*_core.hpp`。
+4. 写 CPU gold reference。
+5. 给 gold 写 CPU 测试。
+6. 写 HLS kernel，从 `anvil/hls/` include 框架 helper。
+7. 写 cosim testbench。
+8. 在 `src/kernels/CMakeLists.txt` 注册 kernel。
+9. 跑 `make test`，先保证 CPU 侧没坏。
+10. 跑 `make csynth TARGET=<target> KERNEL=<kernel>`。
+11. 跑 `make cosim TARGET=<target> KERNEL=<kernel>`。
+12. 写/改 `link.cfg`。
+13. 跑 `make xclbin TARGET=<target>`。
+14. 写/改 host app。
+15. 生成 dataset、跑 gold、跑 host、compare。
+16. 最后再调性能：clock、pack 宽度、memory bank、dataflow 深度。
 
 ## 3. 完整例子：添加 `scaleadd`
 
@@ -52,12 +92,15 @@ out[i] = alpha * a[i] + beta * b[i]
 
 它有两个输入数组 `a`、`b`，一个输出数组 `out`，两个标量参数 `alpha`、`beta`。
 
-### 3.1 先定义 ABI 头文件
+### 3.1 先定义类型
 
-创建 `src/kernels/include/kernels/scaleadd.hpp`：
+创建 `src/kernels/include/kernels/scaleadd_types.hpp`：
 
 ```cpp
 #pragma once
+// ScaleAdd kernel 类型定义。遵循两文件模式：
+//   abi.hpp      — 仅宽度常量，host 编译安全
+//   types        — Pack typedef，使用 anvil::hls::Pack（含 HLS include）
 
 #include "anvil/hls/pack.hpp"
 
@@ -67,6 +110,18 @@ static const int kScaleAddPackWidth = 16;
 typedef anvil::hls::Pack<float, kScaleAddPackWidth> ScaleAddPack;
 
 }  // namespace kernels
+```
+
+小 kernel 可以把宽度常量和 pack typedef 合在一个文件。大项目建议拆开，让 host 交叉编译不拉 HLS 头文件。
+
+### 3.2 定义 ABI 头文件和操作函子
+
+创建 `src/kernels/include/kernels/scaleadd.hpp`：
+
+```cpp
+#pragma once
+
+#include "kernels/scaleadd_types.hpp"
 
 extern "C" void scaleadd(const kernels::ScaleAddPack* a,
                          const kernels::ScaleAddPack* b,
@@ -76,21 +131,40 @@ extern "C" void scaleadd(const kernels::ScaleAddPack* a,
                          int n_packs);
 ```
 
+创建 `src/kernels/include/kernels/scaleadd_op.hpp`：
+
+```cpp
+#pragma once
+
+namespace kernels {
+
+struct ScaleAddOp {
+  float alpha = 1.0f;
+  float beta = 1.0f;
+  float operator()(float a, float b) const { return alpha * a + beta * b; }
+};
+
+}  // namespace kernels
+```
+
 这一步做什么：
 
-- 定义硬件接口中的 packed 数据类型。
-- 定义 kernel top function 的参数顺序。
-- 给 kernel、cosim testbench、host app 共享同一份声明。
+- `scaleadd.hpp` 定义 `extern "C"` 签名，是 kernel、cosim testbench、host app 之间的 ABI 契约。
+- `scaleadd_types.hpp` 定义 pack 类型，kernel 和模型共享。
+- `scaleadd_op.hpp` 定义计算函子，kernel 和模型共享。
+- 这些文件放在 `src/kernels/include/kernels/`，因为它们是项目代码，不是框架 API。
 
-为什么不用 `include/anvil/`：这是你的项目 ABI，不是 Anvil 框架 API。
-
-### 3.2 写 HLS kernel
+### 3.3 写 HLS kernel
 
 创建 `src/kernels/scaleadd_kernel.cpp`：
 
 ```cpp
 #include "kernels/scaleadd.hpp"
+
 #include "anvil/hls/pack.hpp"
+#include "anvil/hls/packed_ops.hpp"
+#include "kernels/scaleadd_op.hpp"
+#include "kernels/scaleadd_types.hpp"
 
 extern "C" void scaleadd(const kernels::ScaleAddPack* a,
                          const kernels::ScaleAddPack* b,
@@ -109,51 +183,49 @@ extern "C" void scaleadd(const kernels::ScaleAddPack* a,
 #pragma HLS INTERFACE s_axilite port=n_packs bundle=control
 #pragma HLS INTERFACE s_axilite port=return  bundle=control
 
-  for (int i = 0; i < n_packs; ++i) {
-#pragma HLS PIPELINE II=1
-    kernels::ScaleAddPack pa = a[i];
-    kernels::ScaleAddPack pb = b[i];
-    kernels::ScaleAddPack po;
-    for (int lane = 0; lane < kernels::kScaleAddPackWidth; ++lane) {
-#pragma HLS UNROLL
-      const float av = anvil::hls::GetLane(pa, lane);
-      const float bv = anvil::hls::GetLane(pb, lane);
-      anvil::hls::SetLane(po, lane, alpha * av + beta * bv);
-    }
-    out[i] = po;
-  }
+  kernels::ScaleAddOp op;
+  op.alpha = alpha;
+  op.beta = beta;
+  anvil::hls::MapMem2Packs(a, b, out, n_packs, op);
 }
 ```
 
-这里每个 pragma 的含义：
+每个 pragma 的含义：
 
-- `m_axi`：这是大块内存接口，给数组指针用。
-- `s_axilite`：这是控制寄存器接口，给标量和指针地址用。
-- `PIPELINE II=1`：要求循环尽量每周期处理一个 pack。
-- `UNROLL`：把 pack 内 lane 并行展开。
+- `m_axi`：大块内存接口，给数组指针用。
+- `s_axilite`：控制寄存器接口，给标量和指针地址用。
+- `MapMem2Packs` 对每个 lane 应用函子，自动带 `#pragma HLS pipeline II=1` 和 `#pragma HLS unroll`。
 
-`n_packs` 是 pack 数，不是 float 元素数。如果有 1024 个 float，pack width 是 16，那么 `n_packs = 64`。
+`n_packs` 是 pack 数，不是 float 元素数。
 
-### 3.3 写 cosim testbench
+如果需要内部 dataflow（Load → Compute → Store），参考 saxpy 模式：在 `*_core.hpp` 中创建非模板 Load/Compute/Store wrapper，通过 `ANVIL_DATAFLOW_*` 宏调用。详见 [hlslib 适配](hlslib_adaptation.md)。
+
+### 3.4 写 cosim testbench
 
 创建 `tests/kernels/scaleadd_cosim_tb.cpp`：
 
 ```cpp
 #include "kernels/scaleadd.hpp"
+#include "kernels/scaleadd_types.hpp"
 
 #include <cstdio>
 #include <vector>
 
-int main() {
-  const int kPacks = 4;
-  const int kDepth = 1024;
-  std::vector<kernels::ScaleAddPack> a(kDepth), b(kDepth), out(kDepth);
+namespace {
+
+constexpr int kPacks = 4;
+constexpr int kInterfaceDepthPacks = 1024;
+
+int RunOne() {
+  std::vector<kernels::ScaleAddPack> a(kInterfaceDepthPacks);
+  std::vector<kernels::ScaleAddPack> b(kInterfaceDepthPacks);
+  std::vector<kernels::ScaleAddPack> out(kInterfaceDepthPacks);
 
   for (int p = 0; p < kPacks; ++p) {
     for (int lane = 0; lane < kernels::kScaleAddPackWidth; ++lane) {
-      a[p].Set(lane, static_cast<float>(p * kernels::kScaleAddPackWidth + lane));
-      b[p].Set(lane, 10.0f);
-      out[p].Set(lane, 0.0f);
+      a[p][lane] = static_cast<float>(p * kernels::kScaleAddPackWidth + lane);
+      b[p][lane] = 10.0f;
+      out[p][lane] = 0.0f;
     }
   }
 
@@ -171,9 +243,15 @@ int main() {
       }
     }
   }
-
-  std::printf("scaleadd cosim: PASS\n");
   return 0;
+}
+
+}  // namespace
+
+int main() {
+  const int rc = RunOne();
+  std::printf("scaleadd cosim: %s\n", rc == 0 ? "PASS" : "FAIL");
+  return rc;
 }
 ```
 
@@ -183,7 +261,7 @@ int main() {
 - 直接调用 kernel top function。
 - Vitis cosim 会用它验证生成的 RTL 是否正确。
 
-### 3.4 注册 kernel
+### 3.5 注册 kernel
 
 编辑 `src/kernels/CMakeLists.txt`，添加：
 
@@ -202,22 +280,15 @@ endif()
 add_anvil_kernel(${_scaleadd_kernel_args})
 ```
 
-这一步做什么：
+要不要放进默认 xclbin：
 
-- 创建 `scaleadd_xo` CMake target。
-- 如果有 `TESTBENCH`，创建 `scaleadd_cosim` target。
-- 让 `make csynth TARGET=u250 KERNEL=scaleadd` 知道该构建什么。
-
-### 3.5 运行 synthesis 和 cosim
-
-```bash
-make csynth TARGET=u250 KERNEL=scaleadd
-make analyze TARGET=u250 KERNEL=scaleadd
-make cosim TARGET=u250 KERNEL=scaleadd
-make analyze-cosim TARGET=u250 KERNEL=scaleadd
+```cmake
+if(ANVIL_PLATFORM_KIND MATCHES "^(zcu104|zcu102|zcu106|kv260)$")
+  set(_saxpy_xclbin_kernels saxpy_xo)
+else()
+  set(_saxpy_xclbin_kernels saxpy_xo vadd_xo scaleadd_xo)
+endif()
 ```
-
-如果 `csynth` 失败，问题通常在 HLS 代码、include path、platform。 如果 `cosim` 失败，问题通常在 kernel 行为或 testbench。
 
 ### 3.6 添加 link.cfg
 
@@ -246,7 +317,19 @@ host app 之后要用同一个名字：
 ctx.GetKernel("scaleadd:{scaleadd_1}");
 ```
 
-### 3.7 写 host app
+### 3.7 运行 synthesis 和 cosim
+
+```bash
+make csynth TARGET=u250 KERNEL=scaleadd
+make analyze TARGET=u250 KERNEL=scaleadd
+make cosim TARGET=u250 KERNEL=scaleadd
+make analyze-cosim TARGET=u250 KERNEL=scaleadd
+```
+
+如果 `csynth` 失败，问题通常在 HLS 代码、include path、platform。
+如果 `cosim` 失败，问题通常在 kernel 行为或 testbench。
+
+### 3.8 写 host app
 
 创建 `src/host/run_scaleadd.cpp`，它要做这些事：
 
