@@ -108,6 +108,9 @@ QEMU_LAUNCHER     ?=
 QEMU_ARGS         ?=
 DATASET_DIR       := data/$(DATASET)
 DATASET_STAMP     := $(DATASET_DIR)/.gen.stamp
+GOLD_STAMP        := $(DATASET_DIR)/.gold.$(ANVIL_LANG).stamp
+CPP_GOLD_DEPS     := src/gold/cpp/saxpy_gold_main.cpp src/gold/cpp/saxpy_gold.cpp src/gold/include/gold/saxpy_gold.hpp
+PY_GOLD_DEPS      := src/gold/python/saxpy_gold.py
 # Python venv / Python 虚拟环境
 PYTHON      := .venv/bin/python
 PIP         := $(PYTHON) -m pip
@@ -279,7 +282,9 @@ $(DATASET_STAMP): scripts/gen_dataset.py | build-python
 	@touch "$(DATASET_STAMP)"
 
 # gold — Run golden reference to produce expected output / 运行黄金参考生成期望输出
-gold: gen
+gold: $(GOLD_STAMP)
+
+$(GOLD_STAMP): $(DATASET_STAMP) scripts/run_gold.sh $(if $(filter cpp,$(ANVIL_LANG)),$(CPP_GOLD_DEPS),$(PY_GOLD_DEPS))
 	@if [ ! -f scripts/run_gold.sh ]; then echo "scripts/run_gold.sh is added in Task 15" >&2; exit 1; fi
 	@# Build C++ gold binary first if gold ref is in C++ / 如果黄金参考使用 C++，先构建 gold 二进制
 	@if [ "$(ANVIL_LANG)" = "cpp" ]; then \
@@ -287,6 +292,7 @@ gold: gen
 		cmake --build --preset $(ANVIL_HOST_PRESET) --target saxpy_gold_bin; \
 	fi
 	env ANVIL_LANG=$(ANVIL_LANG) DATASET=$(DATASET) ANVIL_PRESET=$(ANVIL_HOST_PRESET) bash scripts/run_gold.sh
+	@touch "$(GOLD_STAMP)"
 
 # ============================================================================
 # Run targets / 运行目标
