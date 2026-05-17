@@ -23,7 +23,7 @@ link xclbin for the card platform
   ↓
 build host app
   ↓
-run host app locally through XRT
+run with swemu, hwemu, or real hardware through XRT
   ↓
 compare output
 ```
@@ -75,7 +75,7 @@ If the platform path is wrong, every Vitis step will fail early.
 
 ```bash
 make csynth TARGET=u250 KERNEL=saxpy
-make analyze-flow TARGET=u250 KERNEL=saxpy
+make analyze TARGET=u250 KERNEL=saxpy
 make cosim TARGET=u250 KERNEL=saxpy
 make analyze-cosim TARGET=u250 KERNEL=saxpy
 ```
@@ -146,11 +146,11 @@ If link fails, inspect the Vitis link log. Common issues:
 make build TARGET=u250 HOST_APP=run_saxpy
 make gen DATASET=tiny
 make gold DATASET=tiny
-make run-host TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+make hw TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
 make compare DATASET=tiny
 ```
 
-What happens in `run-host`:
+What happens in `hw`:
 
 1. host app opens device 0
 2. loads the xclbin
@@ -159,26 +159,25 @@ What happens in `run-host`:
 5. copies input to the card
 6. launches kernel
 7. copies output back
-8. writes output under `data/tiny/`
+8. writes output under `runs/<target>/<mode>/<host_app>/tiny/<run_key>/`
 
-If `run-host` fails, determine whether it failed before or after kernel launch:
+If `hw` fails, determine whether it failed before or after kernel launch:
 
 - before launch: XRT/device/xclbin/kernel-name problem
 - after launch: buffer group, data layout, kernel correctness, or compare problem
 
 ## 8. Hardware emulation
 
-Hardware emulation runs an emulated device. It is slower than CPU tests but does not require a physical card.
+Software and hardware emulation run mode-specific xclbins without a physical card. They are slower than CPU tests and answer host/XRT integration questions, not kernel correctness questions.
 
-Typical flow:
+Typical flows:
 
 ```bash
-make xclbin-hwemu TARGET=u250
-make build TARGET=u250 HOST_APP=run_saxpy
-make xrt-emu TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+make swemu TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+make hwemu TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
 ```
 
-Use hw_emu when debugging host/XRT integration. Do not use it as a substitute for csynth/cosim; those answer different questions.
+`make swemu` builds a `sw_emu` xclbin in `build/<target>-host-swemu`; `make hwemu` builds a `hw_emu` xclbin in the target hwemu preset. Do not use either as a substitute for csynth/cosim; those answer different questions.
 
 ## 9. Stream pipeline demo
 

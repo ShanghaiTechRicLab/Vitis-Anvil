@@ -16,9 +16,14 @@ DATASET ?= tiny
 KERNEL ?= all
 # XRT host application to build / 要构建的 XRT 主机程序
 HOST_APP ?= run_saxpy
+# Execution mode for xclbin/run stages: hw, hw_emu, or sw_emu.
+MODE ?= hw
+RUN_KEY ?= latest
 
 # Include board-specific configuration / 引入板卡专用配置
 include config/$(TARGET)/anvil.mk
+# Optional declarative target schema used by the build-system redesign.
+-include config/$(TARGET)/target.mk
 
 # Infer xclbin name from the selected host app / 根据选中的 host app 推导 xclbin 名称
 ifeq ($(HOST_APP),run_pipeline_demo)
@@ -26,7 +31,7 @@ XCLBIN_NAME := pipeline_demo
 else
 XCLBIN_NAME := saxpy
 endif
-# Whether to run `make compare` after test-xrt-hw / test-xrt-hw 后是否执行 `make compare`
+# Whether to run `make compare` after test-hw / test-hw 后是否执行 `make compare`
 # vadd and pipeline_demo produce nondeterministic output; skip compare by default
 # vadd 和 pipeline_demo 输出不确定，默认跳过对比
 ifeq ($(HOST_APP),run_vadd)
@@ -82,6 +87,25 @@ ANVIL_HWEMU_PRESET ?= $(ANVIL_PRESET)-hwemu
 HWEMU_BUILD_DIR    := build/$(ANVIL_HWEMU_PRESET)
 HWEMU_HOST_BIN     := $(HWEMU_BUILD_DIR)/src/host/$(HOST_APP)
 HWEMU_XCLBIN_PATH  := $(HWEMU_BUILD_DIR)/src/kernels/$(XCLBIN_NAME)_xclbin/$(XCLBIN_NAME).xclbin
+# Software emulation uses the hw_emu preset shape but a separate build tree and
+# ANVIL_VITIS_TARGET=sw_emu, because sw_emu and hw_emu xclbins are not
+# interchangeable.
+ANVIL_SWEMU_PRESET ?= $(ANVIL_HWEMU_PRESET)
+SWEMU_BUILD_DIR    := build/$(TARGET)-host-swemu
+SWEMU_HOST_BIN     := $(SWEMU_BUILD_DIR)/src/host/$(HOST_APP)
+SWEMU_XCLBIN_PATH  := $(SWEMU_BUILD_DIR)/src/kernels/$(XCLBIN_NAME)_xclbin/$(XCLBIN_NAME).xclbin
+EMCONFIG_DIR       := build/$(TARGET)/emconfig
+EMCONFIG_JSON      := $(EMCONFIG_DIR)/emconfig.json
+RUN_DIR            := runs/$(TARGET)/$(MODE)/$(HOST_APP)/$(DATASET)/$(RUN_KEY)
+HW_RUN_DIR         := runs/$(TARGET)/hw/$(HOST_APP)/$(DATASET)/$(RUN_KEY)
+HWEMU_RUN_DIR      := runs/$(TARGET)/hw_emu/$(HOST_APP)/$(DATASET)/$(RUN_KEY)
+SWEMU_RUN_DIR      := runs/$(TARGET)/sw_emu/$(HOST_APP)/$(DATASET)/$(RUN_KEY)
+QEMU_RUN_DIR       := runs/$(TARGET)/qemu/$(HOST_APP)/$(DATASET)/$(RUN_KEY)
+RUN_HW_OUTPUT     ?= $(HW_RUN_DIR)/out.bin
+RUN_EMU_OUTPUT    ?= $(HWEMU_RUN_DIR)/out.bin
+QEMU_OUTPUT       ?= $(QEMU_RUN_DIR)/out.bin
+QEMU_LAUNCHER     ?=
+QEMU_ARGS         ?=
 # Python venv / Python 虚拟环境
 PYTHON      := .venv/bin/python
 PIP         := $(PYTHON) -m pip
@@ -98,13 +122,13 @@ BOARD_SSH_USER    ?= root
 BOARD_DEPLOY_DIR  ?= ~/anvil-deploy
 
 # --- Phony targets declaration / 伪目标声明 ---
-.PHONY: all configure build build-cpp build-python python-env python-install rebuild-python require-python-env clean clean-all help help-en help-zh \
+.PHONY: all configure build build-python python-env rebuild-python require-python-env clean clean-all help help-en help-zh \
         configure-kernel configure-host build-host build-kernel build-all \
-        csynth cosim xclbin xclbin-hwemu \
+        csynth cosim xclbin \
         require-pipeline-demo csynth-stream cosim-stream pipeline-demo \
-        gen gold run-host xrt-emu xrt-hw compare analyze analyze-legacy analyze-flow analyze-cosim analyze-link check-hls compare-hls emconfig \
+        gen gold swemu hwemu hw qemu compare analyze analyze-cosim analyze-link check-hls compare-hls emconfig \
         deploy deploy-bin deploy-xclbin deploy-data deploy-check \
-        test test-hls-model test-csynth test-cosim test-xrt-emu test-xrt-hw test-slow test-all
+        test test-csynth test-cosim test-hw test-slow test-all
 
 # ============================================================================
 # Top-level targets / 顶层目标
@@ -140,9 +164,6 @@ build: build-host
 # 明确的完整构建：需要 kernel + host + Python 时手动调用。
 build-all: build-kernel build-host
 
-# Backward-compatible C++ build alias: host-side C++ only, no HLS synthesis.
-build-cpp: build-host
-
 build-host: configure-host
 	cmake --build --preset $(ANVIL_HOST_PRESET) --target $(HOST_APP)
 
@@ -172,9 +193,6 @@ $(VENV_STAMP): pyproject.toml
 		$(PIP) install $(PIP_INDEX_ARGS) -e ".[test]" --quiet; \
 	fi
 	@touch $(VENV_STAMP)
-
-# python-install — Alias for python-env / python-env 的别名
-python-install: python-env
 
 # rebuild-python — Force-recreate .venv from scratch / 强制从头重建 .venv
 rebuild-python:
@@ -214,11 +232,6 @@ cosim:
 # xclbin — Link kernel into .xclbin bitstream / 将内核链接为 .xclbin 比特流
 xclbin: configure-kernel
 	cmake --build $(BUILD_DIR) --target $(XCLBIN_NAME)_xclbin
-
-# xclbin-hwemu — Build xclbin for hardware emulation / 构建硬件仿真用的 xclbin
-xclbin-hwemu:
-	cmake --preset $(ANVIL_HWEMU_PRESET) $(CMAKE_PLATFORM_ARGS)
-	cmake --build --preset $(ANVIL_HWEMU_PRESET) --target $(XCLBIN_NAME)_xclbin
 
 # --------------------------------------------------------------------------
 # Streaming pipeline targets (require config/<TARGET>/pipeline_demo.cfg)
@@ -265,29 +278,53 @@ gold: gen
 	env ANVIL_LANG=$(ANVIL_LANG) DATASET=$(DATASET) ANVIL_PRESET=$(ANVIL_HOST_PRESET) bash scripts/run_gold.sh
 
 # ============================================================================
-# Run on hardware / 在硬件上运行
+# Run targets / 运行目标
 # ============================================================================
 
-# run-host — Execute host binary on real hardware / 在真实硬件上执行主机程序
-run-host:
+# hw — Execute host binary on real hardware / 在真实硬件上执行主机程序
+hw:
 	@# Guard: pipeline demo needs the streaming kernel pipeline config / pipeline demo 需要流式内核配置
 	@if [ "$(HOST_APP)" = "run_pipeline_demo" ] && [ -z "$(PIPELINE_DEMO_SUPPORTED)" ]; then echo "HOST_APP=run_pipeline_demo requires $(PIPELINE_DEMO_CFG)" >&2; exit 1; fi
 	$(MAKE) build-host TARGET=$(TARGET) HOST_APP=$(HOST_APP)
 	$(MAKE) gen DATASET=$(DATASET)
 	@if [ ! -x $(HOST_BIN) ]; then echo "$(HOST_BIN) not built; use a preset with ANVIL_BUILD_XRT=ON" >&2; exit 1; fi
 	@if [ ! -f $(XCLBIN_PATH) ]; then echo "$(XCLBIN_PATH) not found; run make xclbin first" >&2; exit 1; fi
-	$(HOST_BIN) --xclbin $(XCLBIN_PATH) --data-dir data/$(DATASET) --output data/$(DATASET)/xrt_hw_out.bin
+	mkdir -p "$(HW_RUN_DIR)"
+	$(HOST_BIN) --xclbin $(XCLBIN_PATH) --data-dir data/$(DATASET) --output "$(HW_RUN_DIR)/out.bin" >"$(HW_RUN_DIR)/stdout.log" 2>&1
+	printf '{"target":"%s","mode":"hw","host_app":"%s","dataset":"%s","output":"%s"}\n' "$(TARGET)" "$(HOST_APP)" "$(DATASET)" "$(HW_RUN_DIR)/out.bin" >"$(HW_RUN_DIR)/run.json"
 
-# emconfig — Generate emconfig.json for hw_emu / 为硬件仿真生成 emconfig.json
+# emconfig — Generate shared emconfig.json for sw_emu/hw_emu / 生成 sw_emu/hw_emu 共享 emconfig.json
 emconfig:
-	env ANVIL_PLATFORM=$(ANVIL_PLATFORM) BUILD_DIR=$(HWEMU_BUILD_DIR) bash scripts/emconfig.sh
+	env ANVIL_PLATFORM=$(ANVIL_PLATFORM) TARGET=$(TARGET) EMCONFIG_DIR=$(EMCONFIG_DIR) bash scripts/emconfig.sh
 
-# xrt-emu — Run in hardware emulation / 在硬件仿真中运行
-# Handles both embedded (AArch64+QEMU) and accelerator (x86 hw_emu) flows
-# 同时支持嵌入式（AArch64+QEMU）和加速器（x86 hw_emu）流程
-ifeq ($(ANVIL_DEVICE_KIND),embedded)
-xrt-emu: gen
-	echo "[xrt-emu] TARGET=$(TARGET): building kernel ($(ANVIL_PRESET)) + AArch64 host ($(ANVIL_HOST_PRESET))..."
+swemu:
+	@if [ "$(ANVIL_DEVICE_KIND)" != "accelerator" ]; then echo "make swemu currently requires an accelerator target; got TARGET=$(TARGET) ($(ANVIL_DEVICE_KIND))" >&2; exit 1; fi
+	$(MAKE) gen DATASET=$(DATASET)
+	$(MAKE) emconfig TARGET=$(TARGET)
+	cmake --preset $(ANVIL_SWEMU_PRESET) -B $(SWEMU_BUILD_DIR) $(CMAKE_PLATFORM_ARGS) -DANVIL_VITIS_TARGET=sw_emu
+	cmake --build $(SWEMU_BUILD_DIR) --target $(HOST_APP) $(XCLBIN_NAME)_xclbin
+	@if [ ! -x $(SWEMU_HOST_BIN) ]; then echo "$(SWEMU_HOST_BIN) not built; use a preset with ANVIL_BUILD_XRT=ON" >&2; exit 1; fi
+	@if [ ! -f $(SWEMU_XCLBIN_PATH) ]; then echo "$(SWEMU_XCLBIN_PATH) not found; make swemu should have built $(XCLBIN_NAME)_xclbin" >&2; exit 1; fi
+	mkdir -p "$(SWEMU_RUN_DIR)"
+	env XCL_EMULATION_MODE=sw_emu EMCONFIG_PATH=$(EMCONFIG_DIR) $(SWEMU_HOST_BIN) --xclbin $(SWEMU_XCLBIN_PATH) --data-dir data/$(DATASET) --output "$(SWEMU_RUN_DIR)/out.bin" >"$(SWEMU_RUN_DIR)/stdout.log" 2>&1
+	printf '{"target":"%s","mode":"sw_emu","host_app":"%s","dataset":"%s","output":"%s"}\n' "$(TARGET)" "$(HOST_APP)" "$(DATASET)" "$(SWEMU_RUN_DIR)/out.bin" >"$(SWEMU_RUN_DIR)/run.json"
+
+hwemu:
+	@if [ "$(ANVIL_DEVICE_KIND)" != "accelerator" ]; then echo "make hwemu currently requires an accelerator target; use make qemu for embedded targets" >&2; exit 1; fi
+	$(MAKE) gen DATASET=$(DATASET)
+	$(MAKE) emconfig TARGET=$(TARGET)
+	cmake --preset $(ANVIL_HWEMU_PRESET) $(CMAKE_PLATFORM_ARGS)
+	cmake --build --preset $(ANVIL_HWEMU_PRESET) --target $(HOST_APP) $(XCLBIN_NAME)_xclbin
+	@if [ ! -x $(HWEMU_HOST_BIN) ]; then echo "$(HWEMU_HOST_BIN) not built; use a hw_emu preset with ANVIL_BUILD_XRT=ON" >&2; exit 1; fi
+	@if [ ! -f $(HWEMU_XCLBIN_PATH) ]; then echo "$(HWEMU_XCLBIN_PATH) not found; make hwemu should have built $(XCLBIN_NAME)_xclbin" >&2; exit 1; fi
+	mkdir -p "$(HWEMU_RUN_DIR)"
+	env XCL_EMULATION_MODE=hw_emu EMCONFIG_PATH=$(EMCONFIG_DIR) $(HWEMU_HOST_BIN) --xclbin $(HWEMU_XCLBIN_PATH) --data-dir data/$(DATASET) --output "$(HWEMU_RUN_DIR)/out.bin" >"$(HWEMU_RUN_DIR)/stdout.log" 2>&1
+	printf '{"target":"%s","mode":"hw_emu","host_app":"%s","dataset":"%s","output":"%s"}\n' "$(TARGET)" "$(HOST_APP)" "$(DATASET)" "$(HWEMU_RUN_DIR)/out.bin" >"$(HWEMU_RUN_DIR)/run.json"
+
+qemu:
+	@if [ "$(ANVIL_DEVICE_KIND)" != "embedded" ]; then echo "make qemu currently requires an embedded target; use make swemu/hwemu for accelerator targets" >&2; exit 2; fi
+	$(MAKE) gen DATASET=$(DATASET)
+	$(MAKE) emconfig TARGET=$(TARGET)
 	cmake --preset $(ANVIL_PRESET) $(CMAKE_PLATFORM_ARGS)
 	cmake --build --preset $(ANVIL_PRESET) --target $(XCLBIN_NAME)_xclbin
 	@if [ -n "$(ANVIL_SYSROOT)" ]; then \
@@ -296,27 +333,18 @@ xrt-emu: gen
 		cmake --preset $(ANVIL_HOST_PRESET) $(CMAKE_PLATFORM_ARGS); \
 	fi
 	cmake --build --preset $(ANVIL_HOST_PRESET) --target $(HOST_APP)
-	env ANVIL_PLATFORM=$(ANVIL_PLATFORM) BUILD_DIR=$(HWEMU_BUILD_DIR) bash scripts/emconfig.sh
-	echo ""
-	echo "Embedded hw_emu requires QEMU — see docs/en/deploy.md"
-	echo "  xclbin : $(XCLBIN_PATH)"
-	echo "  host   : $(HOST_BIN)  (AArch64)"
-	echo "  emcfg  : $(HWEMU_BUILD_DIR)/emconfig.json"
-else
-xrt-emu: gen
-	@if [ "$(ANVIL_DEVICE_KIND)" != "accelerator" ]; then echo "make xrt-emu currently requires an accelerator target with a combined host+kernel hw_emu preset; got TARGET=$(TARGET) ($(ANVIL_DEVICE_KIND))" >&2; exit 1; fi
-	cmake --preset $(ANVIL_HWEMU_PRESET) $(CMAKE_PLATFORM_ARGS)
-	cmake --build --preset $(ANVIL_HWEMU_PRESET) --target $(HOST_APP) $(XCLBIN_NAME)_xclbin
-	env ANVIL_PLATFORM=$(ANVIL_PLATFORM) BUILD_DIR=$(HWEMU_BUILD_DIR) bash scripts/emconfig.sh
-	@if [ ! -x $(HWEMU_HOST_BIN) ]; then echo "$(HWEMU_HOST_BIN) not built; use a hw_emu preset with ANVIL_BUILD_XRT=ON" >&2; exit 1; fi
-	@if [ ! -f $(HWEMU_XCLBIN_PATH) ]; then echo "$(HWEMU_XCLBIN_PATH) not found; make xrt-emu should have built $(XCLBIN_NAME)_xclbin" >&2; exit 1; fi
-	env XCL_EMULATION_MODE=hw_emu EMCONFIG_PATH=$(HWEMU_BUILD_DIR) $(HWEMU_HOST_BIN) --xclbin $(HWEMU_XCLBIN_PATH) --data-dir data/$(DATASET) --output data/$(DATASET)/xrt_emu_out.bin
-endif
-
-# xrt-hw — Run on real hardware. Delegates to run-host with all args forwarded.
-#          在真实硬件上运行。委托给 run-host 并透传所有参数。
-xrt-hw:
-	$(MAKE) run-host TARGET=$(TARGET) HOST_APP=$(HOST_APP) DATASET=$(DATASET)
+	env ANVIL_PLATFORM=$(ANVIL_PLATFORM) TARGET=$(TARGET) EMCONFIG_DIR=$(EMCONFIG_DIR) bash scripts/emconfig.sh
+	@if [ -z "$(QEMU_LAUNCHER)" ]; then echo "make qemu requires QEMU_LAUNCHER=/path/to/launcher (or set it in config/$(TARGET)/target.mk)" >&2; exit 2; fi
+	@if [ ! -x $(HOST_BIN) ]; then echo "$(HOST_BIN) not built" >&2; exit 1; fi
+	@if [ ! -f $(XCLBIN_PATH) ]; then echo "$(XCLBIN_PATH) not found" >&2; exit 1; fi
+	mkdir -p "$(QEMU_RUN_DIR)"
+	env TARGET="$(TARGET)" HOST_APP="$(HOST_APP)" DATASET="$(DATASET)" RUN_KEY="$(RUN_KEY)" \
+		ANVIL_PLATFORM="$(ANVIL_PLATFORM)" EMCONFIG_PATH="$(EMCONFIG_DIR)" \
+		HOST_BIN="$(HOST_BIN)" XCLBIN_PATH="$(XCLBIN_PATH)" DATA_DIR="data/$(DATASET)" \
+		RUN_DIR="$(QEMU_RUN_DIR)" OUTPUT="$(QEMU_OUTPUT)" \
+		$(QEMU_LAUNCHER) $(QEMU_ARGS) >"$(QEMU_RUN_DIR)/stdout.log" 2>&1
+	@if [ ! -f "$(QEMU_OUTPUT)" ]; then echo "QEMU launcher completed but did not create $(QEMU_OUTPUT)" >&2; exit 1; fi
+	printf '{"target":"%s","mode":"qemu","host_app":"%s","dataset":"%s","output":"%s"}\n' "$(TARGET)" "$(HOST_APP)" "$(DATASET)" "$(QEMU_OUTPUT)" >"$(QEMU_RUN_DIR)/run.json"
 
 # ============================================================================
 # Analysis and comparison / 分析与对比
@@ -326,31 +354,25 @@ xrt-hw:
 compare:
 	@if [ ! -f scripts/compare.py ]; then echo "scripts/compare.py is added in Task 16" >&2; exit 1; fi
 	$(MAKE) build-python
-	$(PYTHON) scripts/compare.py --dataset $(DATASET)
+	$(PYTHON) scripts/compare.py --dataset $(DATASET) --emu-output "$(RUN_EMU_OUTPUT)" --hw-output "$(RUN_HW_OUTPUT)"
 
 # analyze — Deep HLS flow analysis via hlsflow / 通过 hlsflow 进行深度 HLS 流程分析
 analyze: require-python-env
 	@if [ ! -d tools/hlsflow ]; then echo "tools/hlsflow not present" >&2; exit 1; fi
+	@if [ "$(BUILD)" = "1" ]; then $(MAKE) csynth TARGET=$(TARGET) KERNEL=$(KERNEL); fi
 	env $(HLSFLOW_PYTHON) -m hlsflow collect --build-dir $(BUILD_DIR) --kernel $(KERNEL) --target csynth --platform $(TARGET)
-
-# analyze-flow — Backward-compatible alias / 兼容旧入口
-analyze-flow: analyze
 
 # analyze-cosim — Collect cosim report into hlsflow database / 收集 cosim 报告到 hlsflow 数据库
 analyze-cosim: require-python-env
 	@if [ ! -d tools/hlsflow ]; then echo "tools/hlsflow not present" >&2; exit 1; fi
+	@if [ "$(BUILD)" = "1" ]; then $(MAKE) cosim TARGET=$(TARGET) KERNEL=$(KERNEL); fi
 	env $(HLSFLOW_PYTHON) -m hlsflow collect --build-dir $(BUILD_DIR) --kernel $(KERNEL) --target cosim --platform $(TARGET)
 
 # analyze-link — Collect v++ link/xclbin report into hlsflow database / 收集 v++ link/xclbin 报告到 hlsflow 数据库
 analyze-link: require-python-env
 	@if [ ! -d tools/hlsflow ]; then echo "tools/hlsflow not present" >&2; exit 1; fi
+	@if [ "$(BUILD)" = "1" ]; then $(MAKE) xclbin TARGET=$(TARGET) HOST_APP=$(HOST_APP); fi
 	env $(HLSFLOW_PYTHON) -m hlsflow collect --build-dir $(BUILD_DIR) --kernel $(XCLBIN_NAME) --target link --platform $(TARGET)
-
-# analyze-legacy — Old simple parser (kept for backward compatibility)
-#                  旧版简易解析器（向后兼容保留）
-analyze-legacy: require-python-env
-	@if [ ! -f scripts/analyze.py ]; then echo "scripts/analyze.py is added in Task 16" >&2; exit 1; fi
-	$(PYTHON) scripts/analyze.py --build-dir $(BUILD_DIR)
 
 # check-hls — Run HLS threshold checks / 运行 HLS 阈值检查
 check-hls: require-python-env
@@ -376,10 +398,6 @@ test:
 	$(MAKE) build-python
 	$(PYTHON) -m pytest -m fast tests/python -v
 
-# test-hls-model — Explicit pre-Vitis CPU suite: gold + HLS model + HLS helper tests
-#                  显式的 Vitis 前 CPU 测试：gold + HLS 模型 + HLS helper 测试
-test-hls-model: test
-
 # Label-specific CTest targets / 按标签筛选的 CTest 目标
 # Run CTest with csynth label / 使用 csynth 标签运行 CTest
 test-csynth: configure-kernel
@@ -389,15 +407,11 @@ test-csynth: configure-kernel
 test-cosim:
 	$(MAKE) cosim TARGET=$(TARGET) KERNEL=$(KERNEL)
 
-# test-xrt-emu — Run hardware emulation test (delegates to xrt-emu) / 运行硬件仿真测试（委托给 xrt-emu）
-test-xrt-emu:
-	$(MAKE) xrt-emu
-
-# test-xrt-hw — Full end-to-end hardware test / 完整的端到端硬件测试
+# test-hw — Full end-to-end hardware test / 完整的端到端硬件测试
 # Steps / 步骤: build (cross-compile + xclbin) → gen → deploy+run via board_run.py → compare
 # Requires / 需要: BOARD_IP and (for embedded targets) PETALINUX_SYSROOT + Vitis env
-test-xrt-hw:
-	@if [ -z "$(BOARD_IP)" ]; then echo "ERROR: BOARD_IP not set. Usage: make test-xrt-hw BOARD_IP=<ip> [TARGET=zcu102|kv260] [DATASET=tiny]" >&2; exit 1; fi
+test-hw:
+	@if [ -z "$(BOARD_IP)" ]; then echo "ERROR: BOARD_IP not set. Usage: make test-hw BOARD_IP=<ip> [TARGET=zcu102|kv260] [DATASET=tiny]" >&2; exit 1; fi
 	$(MAKE) build-host TARGET=$(TARGET) HOST_APP=$(HOST_APP)
 	$(MAKE) xclbin TARGET=$(TARGET) HOST_APP=$(HOST_APP)
 	$(MAKE) gen DATASET=$(DATASET)
@@ -410,13 +424,14 @@ test-xrt-hw:
 		--host-bin "$(HOST_BIN)" \
 		--host-app "$(HOST_APP)" \
 		--xclbin-name "$(XCLBIN_NAME)" \
-		--dataset "$(DATASET)"
+		--dataset "$(DATASET)" \
+		--local-output "$(HW_RUN_DIR)/out.bin"
 	@# Only compare if the host app produces deterministic output / 仅当 host app 产生确定性输出时才进行对比
 	@if [ "$(COMPARE_AFTER_HW)" = "yes" ]; then $(MAKE) compare DATASET=$(DATASET); else echo "Skipping make compare for HOST_APP=$(HOST_APP)"; fi
 
 # test-slow — Run all slow hardware tests + slow Python tests / 运行所有慢速硬件测试和 Python 测试
 test-slow: configure
-	ctest --test-dir $(BUILD_DIR) -L "csynth|cosim|xrt_emu" -V
+	ctest --test-dir $(BUILD_DIR) -L "csynth|cosim|hwemu" -V
 	@$(PYTHON) -m pytest -m slow tests/python -v; status=$$?; if [ $$status -eq 5 ]; then echo "No slow Python tests selected"; elif [ $$status -ne 0 ]; then exit $$status; fi
 
 # test-all — Run all tests (fast + slow) / 运行所有测试（快速 + 慢速）
@@ -494,7 +509,6 @@ help-en:
 	@echo ""
 	@echo "Fast local development:"
 	@echo "  make test                                      CPU-only tests; no Vitis/XRT/platform"
-	@echo "  make test-hls-model                            Explicit pre-Vitis CPU suite; alias for make test"
 	@echo "  make build TARGET=u250 HOST_APP=run_saxpy     Build selected host binary only"
 	@echo "  make python-env [PYPI_INDEX=]                  Create/update .venv; uv first, venv fallback"
 	@echo "  make rebuild-python [PYPI_INDEX=]              Recreate .venv"
@@ -502,7 +516,7 @@ help-en:
 	@echo "HLS kernel flow:"
 	@echo "  make csynth TARGET=u250 KERNEL=saxpy           Run Vitis HLS synthesis"
 	@echo "  make cosim TARGET=u250 KERNEL=saxpy            Run HLS C/RTL cosimulation"
-	@echo "  make analyze-flow TARGET=u250 KERNEL=saxpy     Analyze csynth reports"
+	@echo "  make analyze TARGET=u250 KERNEL=saxpy          Analyze existing csynth reports"
 	@echo "  make analyze-cosim TARGET=u250 KERNEL=saxpy    Analyze cosim reports"
 	@echo "  make analyze-link TARGET=u250 HOST_APP=run_saxpy Analyze link/xclbin reports"
 	@echo "  make check-hls                                 Check latest HLS run thresholds"
@@ -512,31 +526,30 @@ help-en:
 	@echo "  make gen DATASET=tiny                          Generate input dataset"
 	@echo "  make gold DATASET=tiny ANVIL_LANG=cpp          Generate gold output"
 	@echo "  make xclbin TARGET=u250                        Link hardware xclbin; long-running"
-	@echo "  make xclbin-hwemu TARGET=u250                  Link hw_emu xclbin"
-	@echo "  make xrt-emu TARGET=u250 HOST_APP=run_saxpy    Run accelerator hw_emu or print embedded QEMU note"
-	@echo "  make run-host TARGET=u250 HOST_APP=run_saxpy   Run selected host app on real hardware"
-	@echo "  make xrt-hw TARGET=u250 HOST_APP=run_saxpy     Alias for run-host"
+	@echo "  make swemu TARGET=u250 HOST_APP=run_saxpy      Run software emulation"
+	@echo "  make hwemu TARGET=u250 HOST_APP=run_saxpy      Run accelerator hw_emu"
+	@echo "  make qemu TARGET=zcu102 HOST_APP=run_saxpy     Run embedded QEMU via QEMU_LAUNCHER"
+	@echo "  make hw TARGET=u250 HOST_APP=run_saxpy         Run selected host app on real hardware"
 	@echo "  make compare DATASET=tiny                      Compare output with gold"
 	@echo ""
 	@echo "Embedded deployment flow:"
 	@echo "  PETALINUX_SYSROOT=/path make build-host TARGET=zcu102 HOST_APP=run_saxpy"
 	@echo "  make xclbin TARGET=zcu102"
 	@echo "  make deploy TARGET=zcu102 BOARD_IP=<ip> DATASET=tiny"
-	@echo "  make test-xrt-hw TARGET=zcu102 BOARD_IP=<ip> DATASET=tiny"
+	@echo "  make test-hw TARGET=zcu102 BOARD_IP=<ip> DATASET=tiny"
 	@echo "  make deploy-bin|deploy-xclbin|deploy-data TARGET=zcu102 BOARD_IP=<ip>"
 	@echo ""
 	@echo "Stream pipeline demo:"
 	@echo "  make csynth-stream TARGET=u250|u55c|u50|u200|u280|vck5000"
 	@echo "  make cosim-stream TARGET=u250|u55c|u50|u200|u280|vck5000"
 	@echo "  make pipeline-demo TARGET=u250|u55c|u50|u200|u280|vck5000"
-	@echo "  make run-host TARGET=u250|u55c|u50|u200|u280|vck5000 HOST_APP=run_pipeline_demo"
+	@echo "  make hw TARGET=u250|u55c|u50|u200|u280|vck5000 HOST_APP=run_pipeline_demo"
 	@echo ""
-	@echo "Maintenance / compatibility aliases:"
+	@echo "Maintenance:"
 	@echo "  make configure|configure-kernel|configure-host  Configure CMake presets"
-	@echo "  make build-kernel|build-all|build-cpp           Build aliases"
+	@echo "  make build-kernel|build-all                     Build kernel or complete local artifacts"
 	@echo "  make analyze|analyze-cosim|analyze-link          Analysis entrypoints"
-	@echo "  make test-hls-model|test-csynth|test-cosim      HLS model and Vitis test entrypoints"
-	@echo "  make test-xrt-emu                               Hardware-emulation test"
+	@echo "  make test|test-csynth|test-cosim                HLS model and Vitis test entrypoints"
 	@echo "  make clean|clean-all                            Remove build artifacts"
 	@echo "  make help-zh                                    Chinese help"
 	@echo ""
@@ -558,7 +571,6 @@ help-zh:
 	@echo ""
 	@echo "快速本地开发:"
 	@echo "  make test                                      CPU-only 测试；不需要 Vitis/XRT/platform"
-	@echo "  make test-hls-model                            显式 Vitis 前 CPU 测试；make test 的别名"
 	@echo "  make build TARGET=u250 HOST_APP=run_saxpy     只构建选定 host binary"
 	@echo "  make python-env [PYPI_INDEX=]                  创建/更新 .venv；优先 uv，fallback venv"
 	@echo "  make rebuild-python [PYPI_INDEX=]              重建 .venv"
@@ -566,7 +578,7 @@ help-zh:
 	@echo "HLS kernel 流程:"
 	@echo "  make csynth TARGET=u250 KERNEL=saxpy           运行 Vitis HLS synthesis"
 	@echo "  make cosim TARGET=u250 KERNEL=saxpy            运行 HLS C/RTL cosimulation"
-	@echo "  make analyze-flow TARGET=u250 KERNEL=saxpy     分析 csynth 报告"
+	@echo "  make analyze TARGET=u250 KERNEL=saxpy          分析已有 csynth 报告"
 	@echo "  make analyze-cosim TARGET=u250 KERNEL=saxpy    分析 cosim 报告"
 	@echo "  make analyze-link TARGET=u250 HOST_APP=run_saxpy 分析 link/xclbin 报告"
 	@echo "  make check-hls                                 检查最新 HLS run 阈值"
@@ -576,31 +588,30 @@ help-zh:
 	@echo "  make gen DATASET=tiny                          生成输入数据"
 	@echo "  make gold DATASET=tiny ANVIL_LANG=cpp          生成 gold output"
 	@echo "  make xclbin TARGET=u250                        链接硬件 xclbin；耗时较长"
-	@echo "  make xclbin-hwemu TARGET=u250                  链接 hw_emu xclbin"
-	@echo "  make xrt-emu TARGET=u250 HOST_APP=run_saxpy    跑加速卡 hw_emu；embedded 打印 QEMU 提示"
-	@echo "  make run-host TARGET=u250 HOST_APP=run_saxpy   在真实硬件上运行选定 host app"
-	@echo "  make xrt-hw TARGET=u250 HOST_APP=run_saxpy     run-host 别名"
+	@echo "  make swemu TARGET=u250 HOST_APP=run_saxpy      跑 software emulation"
+	@echo "  make hwemu TARGET=u250 HOST_APP=run_saxpy      跑加速卡 hw_emu"
+	@echo "  make qemu TARGET=zcu102 HOST_APP=run_saxpy     通过 QEMU_LAUNCHER 跑 embedded QEMU"
+	@echo "  make hw TARGET=u250 HOST_APP=run_saxpy         在真实硬件上运行选定 host app"
 	@echo "  make compare DATASET=tiny                      和 gold 比较输出"
 	@echo ""
 	@echo "Embedded 部署流程:"
 	@echo "  PETALINUX_SYSROOT=/path make build-host TARGET=zcu102 HOST_APP=run_saxpy"
 	@echo "  make xclbin TARGET=zcu102"
 	@echo "  make deploy TARGET=zcu102 BOARD_IP=<ip> DATASET=tiny"
-	@echo "  make test-xrt-hw TARGET=zcu102 BOARD_IP=<ip> DATASET=tiny"
+	@echo "  make test-hw TARGET=zcu102 BOARD_IP=<ip> DATASET=tiny"
 	@echo "  make deploy-bin|deploy-xclbin|deploy-data TARGET=zcu102 BOARD_IP=<ip>"
 	@echo ""
 	@echo "Stream pipeline demo:"
 	@echo "  make csynth-stream TARGET=u250|u55c|u50|u200|u280|vck5000"
 	@echo "  make cosim-stream TARGET=u250|u55c|u50|u200|u280|vck5000"
 	@echo "  make pipeline-demo TARGET=u250|u55c|u50|u200|u280|vck5000"
-	@echo "  make run-host TARGET=u250|u55c|u50|u200|u280|vck5000 HOST_APP=run_pipeline_demo"
+	@echo "  make hw TARGET=u250|u55c|u50|u200|u280|vck5000 HOST_APP=run_pipeline_demo"
 	@echo ""
-	@echo "维护 / 兼容别名:"
+	@echo "维护:"
 	@echo "  make configure|configure-kernel|configure-host  配置 CMake presets"
-	@echo "  make build-kernel|build-all|build-cpp           构建别名"
+	@echo "  make build-kernel|build-all                     构建 kernel 或完整本地产物"
 	@echo "  make analyze|analyze-cosim|analyze-link          分析入口"
-	@echo "  make test-hls-model|test-csynth|test-cosim      HLS 模型和 Vitis 测试入口"
-	@echo "  make test-xrt-emu                               硬件仿真测试"
+	@echo "  make test|test-csynth|test-cosim                HLS 模型和 Vitis 测试入口"
 	@echo "  make clean|clean-all                            清理构建产物"
 	@echo "  make help-en                                    英文帮助"
 	@echo ""

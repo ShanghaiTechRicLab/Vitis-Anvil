@@ -96,7 +96,7 @@ Project-specific HLS-compatible helpers belong under `src/kernels/include/kernel
 That split supports the model-first ladder:
 
 ```text
-gold -> hls_model -> csynth -> cosim -> xclbin -> host
+gold -> hls_model -> csynth -> cosim -> xclbin -> swemu/hwemu/qemu/hw
 ```
 
 Do not hide a Vitis dataflow region in a convenience wrapper unless synthesis reports prove the generated hardware is unchanged. Keeping `ANVIL_DATAFLOW_INIT`, `ANVIL_DATAFLOW_FUNCTION`, and `ANVIL_DATAFLOW_FINALIZE` explicit in the Vitis top makes the hardware boundary easier to review.

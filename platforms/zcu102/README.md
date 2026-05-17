@@ -21,7 +21,7 @@ typically at `/etc/profile.d/xrt_setup.sh`.
 
 ## Typical lab IP
 
-Set `BOARD_IP=<your-lab-ip>` when calling `make deploy` or `make test-xrt-hw`.
+Set `BOARD_IP=<your-lab-ip>` when calling `make deploy` or `make test-hw`.
 The tracked `[deploy].default_ip` remains empty; use environment variables or
 local shell aliases for lab-specific IPs.
 

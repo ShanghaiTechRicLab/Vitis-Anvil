@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# emconfig.sh — generate emconfig.json for hw_emu using emconfigutil.
+# emconfig.sh — generate target-level emconfig.json using emconfigutil.
 set -euo pipefail
 
 PLATFORM="${ANVIL_PLATFORM:-}"
-BUILD_DIR="${BUILD_DIR:-build/${ANVIL_PRESET:-hls-model-linux-debug}}"
+BUILD_DIR="${BUILD_DIR:-${EMCONFIG_DIR:-build/${TARGET:-unknown}/emconfig}}"
 
 if [[ -z "${PLATFORM}" ]]; then
     echo "ERROR: ANVIL_PLATFORM not set. Source config/<target>/anvil.mk or export it." >&2

@@ -2,6 +2,8 @@
 
 This page explains the Make targets. It is not just a list of commands; it explains what each target consumes and produces.
 
+For the dependency model behind these commands, read [Build system model](build_system.md).
+
 ## 1. The four selectors
 
 Most commands accept these variables:
@@ -15,7 +17,7 @@ make <target> TARGET=u250 KERNEL=saxpy HOST_APP=run_saxpy DATASET=tiny
 | `TARGET` | board/platform config | `u250`, `zcu102` | CMake uses wrong platform, part, sysroot, or link.cfg |
 | `KERNEL` | HLS kernel target | `saxpy`, `vadd`, `all` | You synthesize/cosim the wrong kernel |
 | `HOST_APP` | CPU executable | `run_saxpy` | You build/run the wrong host program |
-| `DATASET` | input/output data directory | `tiny` | gold, host, compare look at different files |
+| `DATASET` | input/reference dataset name | `tiny` | gold, run, compare look at different cases |
 
 ## 2. Fast CPU-only targets
 
@@ -117,14 +119,14 @@ If this fails, inspect the Vitis HLS log first. Common causes:
 - invalid platform path
 - unsupported C++ features for HLS
 
-### `make analyze-flow TARGET=<target> KERNEL=<kernel>`
+### `make analyze TARGET=<target> KERNEL=<kernel>`
 
 Purpose: read HLS reports and show a human-friendly summary.
 
 Example:
 
 ```bash
-make analyze-flow TARGET=u250 KERNEL=saxpy
+make analyze TARGET=u250 KERNEL=saxpy
 ```
 
 Use this after `csynth`. It does not synthesize by itself if reports already exist.
@@ -187,7 +189,7 @@ This can be slow. Run `csynth` and `cosim` first so you do not wait for link jus
 
 ### `make analyze-link TARGET=<target> HOST_APP=<host-app>`
 
-Purpose: summarize Vitis link/xclbin artifacts after `make xclbin` or `make xclbin-hwemu`.
+Purpose: summarize Vitis link/xclbin artifacts after `make xclbin` or an emulation link performed by `make swemu`/`make hwemu`.
 
 Example:
 
@@ -211,11 +213,29 @@ What it shows:
 
 Use this before debugging the host app. If link did not put the expected compute unit or memory binding into the xclbin, the host app cannot fix it.
 
-### `make xclbin-hwemu TARGET=<target>`
+### `make swemu TARGET=<target> HOST_APP=<app> DATASET=<data>`
 
-Purpose: build an xclbin for hardware emulation instead of real hardware.
+Purpose: build a `sw_emu` xclbin in a separate build tree and run the selected host app in software emulation.
 
-Use it when you want to test the host/XRT flow without a physical card, assuming your platform supports emulation.
+Use it for quick host/XRT smoke tests without a physical card.
+
+### `make hwemu TARGET=<target> HOST_APP=<app> DATASET=<data>`
+
+Purpose: build a `hw_emu` xclbin and run the selected host app in hardware emulation.
+
+Use it when you want a closer host/XRT/device integration test without a physical card, assuming your platform supports emulation.
+
+### `make qemu TARGET=<embedded-target> HOST_APP=<app> DATASET=<data>`
+
+Purpose: build the embedded QEMU inputs and execute the board/BSP QEMU launcher.
+
+QEMU is not the same thing as accelerator `hw_emu`. It models the embedded PS
+side and depends on the platform/image QEMU launch scripts supplied with your
+board support package. Set `QEMU_LAUNCHER=/path/to/qemu-launch.sh`; the launcher
+receives `HOST_BIN`, `XCLBIN_PATH`, `DATA_DIR`, `RUN_DIR`, `OUTPUT`,
+`EMCONFIG_PATH`, `TARGET`, `HOST_APP`, `DATASET`, and `ANVIL_PLATFORM` in its
+environment. It must create `$OUTPUT`, usually
+`runs/<target>/qemu/<host_app>/<dataset>/<run_key>/out.bin`.
 
 ## 7. Dataset and correctness targets
 
@@ -229,20 +249,20 @@ Purpose: run the CPU reference and write expected output.
 
 ### `make compare DATASET=<name>`
 
-Purpose: compare hardware output with gold output.
+Purpose: compare run output with gold output.
 
 A typical correctness sequence is:
 
 ```bash
 make gen DATASET=tiny
 make gold DATASET=tiny
-make run-host TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+make hw TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
 make compare DATASET=tiny
 ```
 
 ## 8. Host run and deployment targets
 
-### `make run-host TARGET=<target> HOST_APP=<app> DATASET=<data>`
+### `make hw TARGET=<target> HOST_APP=<app> DATASET=<data>`
 
 Purpose: run a host app locally on a machine with an FPGA card and XRT.
 
@@ -268,8 +288,8 @@ Read [Deployment guide](deploy.md) before using these targets.
 | I changed kernel HLS code | `make csynth TARGET=<target> KERNEL=<kernel>` |
 | I changed kernel behavior | `make cosim TARGET=<target> KERNEL=<kernel>` |
 | I changed link.cfg | `make xclbin TARGET=<target>` |
-| I changed data format | `make gen`, `make gold`, host run, `make compare` |
-| I want report summaries | `make analyze-flow`, `make analyze-cosim` |
+| I changed data format | `make gen`, `make gold`, `make swemu`/`make hwemu`/`make qemu`/`make hw`, `make compare` |
+| I want report summaries | `make analyze`, `make analyze-cosim` |
 | I need Python tools | `make python-env` |
 
 ## 10. Common build failures

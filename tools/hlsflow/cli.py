@@ -463,14 +463,17 @@ def summary(reports_dir: Path, output: Path | None) -> None:
               help="Max-abs-error pass threshold (default: 1e-5)")
 @click.option("--reports-dir", default="reports", type=click.Path(path_type=Path))
 @click.option("--data-dir", default="data", type=click.Path(path_type=Path))
+@click.option("--hw-output", default=None, type=click.Path(path_type=Path),
+              help="Hardware/emulation output path")
 def compare_gold_cmd(dataset: str, kernel: str, platform: str, tol: float,
-                     reports_dir: Path, data_dir: Path) -> None:
-    """Compare gold_out.bin vs xrt_hw_out.bin; append hw record to runs.jsonl."""
+                     reports_dir: Path, data_dir: Path, hw_output: Path | None) -> None:
+    """Compare gold_out.bin vs a run output; append hw record to runs.jsonl."""
     console = Console()
     try:
         rec = compare_gold_hw(
             data_dir / dataset, kernel, platform, tol=tol,
             git_commit=_git_commit(), vitis_version=_vitis_version(),
+            hw_output=hw_output,
         )
     except (FileNotFoundError, ValueError) as exc:
         console.print(f"[red]error[/red]: {exc}")

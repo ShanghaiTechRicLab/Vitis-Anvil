@@ -60,7 +60,7 @@ rename include/anvil to include/my_company
 对 m_axi 风格 packed kernels，使用这个阶梯：
 
 ```text
-gold -> hls_model -> csynth -> cosim -> xclbin -> host
+gold -> hls_model -> csynth -> cosim -> xclbin -> swemu/hwemu/qemu/hw
 ```
 
 把内核核心放在 `src/kernels/include/kernels/**`，同时给 `src/hls_model/**` 和 `src/kernels/*.cpp` 里的 Vitis top 复用。HLS 模型能提前抓 packed layout 和 tail bug，但不能替代 synthesis、cosim、xclbin link 或 host/XRT 测试。

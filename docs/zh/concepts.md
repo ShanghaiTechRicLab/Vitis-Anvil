@@ -16,7 +16,7 @@
 正常开发流程采用 model-first 顺序：
 
 ```text
-gold -> hls_model -> csynth -> cosim -> xclbin -> host
+gold -> hls_model -> csynth -> cosim -> xclbin -> swemu/hwemu/qemu/hw
 ```
 
 Vitis-Anvil 给每一步固定了目录和 Make 命令。
@@ -124,17 +124,19 @@ src/host/run_saxpy.cpp
 
 ### Dataset
 
-Dataset 是一组输入/输出文件。通常长这样：
+Dataset 是输入和参考输出目录。通常长这样：
 
 ```text
 data/<name>/meta.json
 data/<name>/x.bin
 data/<name>/y.bin
 data/<name>/gold_out.bin
-data/<name>/xrt_hw_out.bin
 ```
 
-具体文件取决于你的 kernel。关键是 generator、gold、host app、compare 工具必须对文件名和含义达成一致。
+运行输出是独立产物，放在
+`runs/<target>/<mode>/<host_app>/<dataset>/<run_key>/out.bin`，不会写回
+`data/`。具体文件取决于你的 kernel。关键是 generator、gold、host app、compare
+工具必须对文件名和含义达成一致。
 
 ### csynth
 

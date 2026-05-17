@@ -39,7 +39,7 @@ make cosim TARGET=u250 KERNEL=saxpy
 对一个 kernel 运行 C/RTL 协同仿真。
 
 ```bash
-make analyze-flow TARGET=u250 KERNEL=saxpy
+make analyze TARGET=u250 KERNEL=saxpy
 make analyze-cosim TARGET=u250 KERNEL=saxpy
 ```
 
@@ -54,13 +54,15 @@ make xclbin TARGET=u250
 把综合出的 kernel 链接成 FPGA 二进制。
 
 ```bash
-make run-host TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+make swemu TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+make hwemu TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+make hw TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
 ```
 
-在本机已安装 FPGA 卡的情况下运行 host app。
+用 software emulation、hardware emulation 或本机已安装 FPGA 卡运行 host app。
 
 ```bash
-make test-xrt-hw TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny BOARD_IP=192.168.1.10
+make test-hw TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny BOARD_IP=192.168.1.10
 ```
 
 通过 SSH 部署并在远端 embedded 板上运行。
@@ -73,7 +75,7 @@ make gold DATASET=tiny
 make compare DATASET=tiny
 ```
 
-生成输入、计算 CPU 期望输出、比较硬件输出。
+生成输入、计算 CPU 期望输出、比较选定 run 输出。
 
 ## 6. 变量
 

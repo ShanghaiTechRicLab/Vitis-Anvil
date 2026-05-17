@@ -7,11 +7,11 @@ This page gives the day-to-day order for changing code. The main rule is: use th
 Use this order:
 
 ```text
-gold -> hls_model -> csynth -> cosim -> xclbin -> host
+gold -> hls_model -> csynth -> cosim -> xclbin -> swemu/hwemu/qemu/hw
 ```
 
 1. **Gold and CPU unit tests** — catches normal C++/Python mistakes.
-2. **HLS model (`make test-hls-model`)** — runs the pre-Vitis CPU suite: gold + FPGA-shaped HLS model + HLS helper tests.
+2. **HLS model (`make test`)** — runs the pre-Vitis CPU suite: gold + FPGA-shaped HLS model + HLS helper tests.
 3. **HLS synthesis (`csynth`)** — catches HLS-incompatible C++ and reports estimated hardware.
 4. **HLS cosim (`cosim`)** — catches RTL behavior mismatch.
 5. **xclbin link** — catches platform/connectivity/memory-bank problems.
@@ -31,11 +31,7 @@ Run:
 make test
 ```
 
-`make test` and `make test-hls-model` currently run the same pre-Vitis CPU suite. Use the explicit name when you want to document that the HLS model is the first FPGA-shaped check after the plain gold/unit tests:
-
-```bash
-make test-hls-model
-```
+`make test` is the pre-Vitis CPU suite and is the first FPGA-shaped check after the plain gold/unit tests.
 
 If Python tools are involved:
 
@@ -51,9 +47,9 @@ This should be fast and should not need Vitis or XRT.
 Run:
 
 ```bash
-make test-hls-model
+make test
 make csynth TARGET=u250 KERNEL=<kernel>
-make analyze-flow TARGET=u250 KERNEL=<kernel>
+make analyze TARGET=u250 KERNEL=<kernel>
 make cosim TARGET=u250 KERNEL=<kernel>
 make analyze-cosim TARGET=u250 KERNEL=<kernel>
 ```
@@ -69,7 +65,7 @@ src/hls_model/saxpy_hls_model.cpp                 # scalar adapter around the sh
 src/host/run_saxpy.cpp                            # XRT host app
 ```
 
-Keep that split for new m_axi-style packed kernels: gold first, then HLS model, then csynth/cosim/xclbin/host. Stream/k2k kernels are supported by the existing Vitis flow, but first-class stream HLS models are not yet the default pattern.
+Keep that split for new m_axi-style packed kernels: gold first, then HLS model, then csynth/cosim/xclbin/swemu/hwemu/qemu/hw. Stream/k2k kernels are supported by the existing Vitis flow, but first-class stream HLS models are not yet the default pattern.
 
 Interpretation:
 
@@ -112,7 +108,7 @@ Start with configure-only and synthesis before hardware:
 
 ```bash
 make csynth TARGET=<target> KERNEL=saxpy
-make analyze-flow TARGET=<target> KERNEL=saxpy
+make analyze TARGET=<target> KERNEL=saxpy
 ```
 
 Only after that try:
@@ -121,6 +117,8 @@ Only after that try:
 make xclbin TARGET=<target>
 make analyze-link TARGET=<target> HOST_APP=run_saxpy
 make build TARGET=<target> HOST_APP=run_saxpy
+make swemu TARGET=<target> HOST_APP=run_saxpy DATASET=tiny
+make hwemu TARGET=<target> HOST_APP=run_saxpy DATASET=tiny
 ```
 
 `analyze-link` is the checkpoint between xclbin and host. It confirms that the xclbin exists, which compute units were linked, and how kernel ports were bound to DDR/HBM banks.

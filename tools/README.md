@@ -7,7 +7,7 @@ Automation scripts and helper tools.
 Vitis HLS report collection / analysis CLI. See [`hlsflow/README.md`](hlsflow/README.md).
 
 ```bash
-make analyze-flow TARGET=u250
+make analyze TARGET=u250
 make check-hls
 make compare-hls BASELINE=<id> CANDIDATE=<id>
 ```

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare gold vs HLS model vs XRT outputs for a dataset."""
+"""Compare gold vs HLS model vs run outputs for a dataset."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -28,7 +28,19 @@ def load_bin(path: Path) -> np.ndarray | None:
 @click.command()
 @click.option("--dataset", default="tiny", callback=_validate_dataset, help="Dataset name")
 @click.option("--tol", default=1e-5, type=float, help="Max-abs-error tolerance for PASS")
-def main(dataset: str, tol: float) -> None:
+@click.option("--hls-output", type=click.Path(path_type=Path), default=None,
+              help="Optional HLS model output path (defaults to data/<dataset>/hls_model_out.bin)")
+@click.option("--emu-output", type=click.Path(path_type=Path), default=None,
+              help="Optional emulation run output path")
+@click.option("--hw-output", type=click.Path(path_type=Path), default=None,
+              help="Optional hardware run output path")
+def main(
+    dataset: str,
+    tol: float,
+    hls_output: Path | None,
+    emu_output: Path | None,
+    hw_output: Path | None,
+) -> None:
     log.init("compare")
     data_dir = Path("data") / dataset
 
@@ -40,16 +52,16 @@ def main(dataset: str, tol: float) -> None:
     gold = load_bin(data_dir / "gold_out.bin")
     if gold is None:
         gold = load_bin(data_dir / f"{dataset}_gold_out.bin")
-    hls = load_bin(data_dir / "hls_model_out.bin")
-    xrt_emu = load_bin(data_dir / "xrt_emu_out.bin")
-    xrt_hw = load_bin(data_dir / "xrt_hw_out.bin")
+    hls = load_bin(hls_output or (data_dir / "hls_model_out.bin"))
+    emu = load_bin(emu_output) if emu_output else None
+    hw = load_bin(hw_output) if hw_output else None
 
     rows = [["impl", "max_abs", "rms", "verdict"]]
     compared = False
     any_fail = False
     if gold is not None:
         rows.append(["gold", "0", "0", "ref"])
-    for label, data in [("hls_model", hls), ("xrt_emu", xrt_emu), ("xrt_hw", xrt_hw)]:
+    for label, data in [("hls_model", hls), ("emu", emu), ("hw", hw)]:
         if data is None:
             continue
         if gold is None:

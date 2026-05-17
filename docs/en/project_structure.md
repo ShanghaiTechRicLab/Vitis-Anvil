@@ -20,7 +20,8 @@ This page explains the repository layout from the point of view of someone build
 | `scripts/` | Shell/Python flow helpers | Board run, dataset helpers, legacy wrappers |
 | `docs/` | User documentation | How to use and adapt the template |
 | `build/` | Generated build trees | Created by CMake; do not edit or commit |
-| `data/` | Generated datasets | Inputs and outputs for examples |
+| `data/` | Generated datasets | Inputs and reference outputs for examples |
+| `runs/` | Runtime outputs | Per-target/mode/host/dataset run artifacts |
 | `reports/` | Generated analysis reports | HTML/TXT/JSONL summaries from hlsflow |
 
 ## Framework code vs project code
@@ -79,7 +80,7 @@ A host app is not synthesized. It runs on CPU and uses XRT. It needs to know:
 - xclbin path
 - kernel compute-unit name, such as `saxpy:{saxpy_1}`
 - buffer argument order
-- dataset input/output file names
+- dataset input/reference file names and runtime output path
 
 Host executables are registered in `src/host/CMakeLists.txt`.
 
@@ -120,14 +121,21 @@ Do not edit files under `build/`. If generated files look wrong, fix the source 
 
 ## Data and reports
 
-Dataset directories contain inputs and outputs:
+Dataset directories contain inputs and reference outputs:
 
 ```text
 data/tiny/meta.json
 data/tiny/x.bin
 data/tiny/y.bin
 data/tiny/gold_out.bin
-data/tiny/xrt_hw_out.bin
+```
+
+Hardware/emulation run outputs are kept separately, for example:
+
+```text
+runs/u250/hw_emu/run_saxpy/tiny/latest/out.bin
+runs/u250/hw_emu/run_saxpy/tiny/latest/run.json
+runs/u250/hw_emu/run_saxpy/tiny/latest/stdout.log
 ```
 
 Report directories contain analysis artifacts:

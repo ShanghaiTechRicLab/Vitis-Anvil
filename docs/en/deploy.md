@@ -27,7 +27,7 @@ make xclbin TARGET=u250
 make build TARGET=u250 HOST_APP=run_saxpy
 make gen DATASET=tiny
 make gold DATASET=tiny
-make run-host TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+make hw TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
 make compare DATASET=tiny
 ```
 
@@ -71,7 +71,8 @@ ssh root@$BOARD_IP
 cd ~/anvil-deploy
 . /etc/profile.d/xrt_setup.sh
 ls -l
-./run_saxpy --xclbin saxpy.xclbin --data-dir data/tiny --output data/tiny/xrt_hw_out.bin
+mkdir -p runs/zcu102/hw/run_saxpy/tiny/latest
+./run_saxpy --xclbin saxpy.xclbin --data-dir data/tiny --output runs/zcu102/hw/run_saxpy/tiny/latest/out.bin
 ```
 
 This tells you immediately whether:
@@ -82,12 +83,16 @@ This tells you immediately whether:
 - dataset path is correct
 - the program fails before or after kernel launch
 
+For the normal `make test-hw` flow, `scripts/board_run.py` retrieves that remote
+output into `runs/<target>/hw/<host_app>/<dataset>/<run_key>/out.bin`, and
+`make compare` reads the retrieved run output on the workstation.
+
 ## 5. All-in-one hardware test
 
 After manual run works, use:
 
 ```bash
-make test-xrt-hw TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny BOARD_IP=$BOARD_IP
+make test-hw TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny BOARD_IP=$BOARD_IP
 ```
 
 This target is convenient, but it hides several steps. If it fails, split it back into deploy and manual run.

@@ -476,7 +476,7 @@
       },
       "filter": {
         "exclude": {
-          "label": "csynth|cosim|xrt_emu|build"
+          "label": "csynth|cosim|hwemu|build"
         }
       }
     },
@@ -488,7 +488,7 @@
       },
       "filter": {
         "exclude": {
-          "label": "csynth|cosim|xrt_emu|build"
+          "label": "csynth|cosim|hwemu|build"
         }
       }
     },
@@ -500,7 +500,7 @@
       },
       "filter": {
         "exclude": {
-          "label": "csynth|cosim|xrt_emu|build"
+          "label": "csynth|cosim|hwemu|build"
         }
       }
     },
@@ -512,7 +512,7 @@
       },
       "filter": {
         "exclude": {
-          "label": "csynth|cosim|xrt_emu|build"
+          "label": "csynth|cosim|hwemu|build"
         }
       }
     },
@@ -524,7 +524,7 @@
       },
       "filter": {
         "exclude": {
-          "label": "csynth|cosim|xrt_emu|build"
+          "label": "csynth|cosim|hwemu|build"
         }
       }
     },
@@ -536,7 +536,7 @@
       },
       "filter": {
         "exclude": {
-          "label": "csynth|cosim|xrt_emu|build"
+          "label": "csynth|cosim|hwemu|build"
         }
       }
     },
@@ -548,7 +548,7 @@
       },
       "filter": {
         "exclude": {
-          "label": "csynth|cosim|xrt_emu|build"
+          "label": "csynth|cosim|hwemu|build"
         }
       }
     },
@@ -560,7 +560,7 @@
       },
       "filter": {
         "exclude": {
-          "label": "csynth|cosim|xrt_emu|build"
+          "label": "csynth|cosim|hwemu|build"
         }
       }
     },
@@ -572,7 +572,7 @@
       },
       "filter": {
         "exclude": {
-          "label": "csynth|cosim|xrt_emu|build"
+          "label": "csynth|cosim|hwemu|build"
         }
       }
     },
@@ -584,7 +584,7 @@
       },
       "filter": {
         "exclude": {
-          "label": "csynth|cosim|xrt_emu|build"
+          "label": "csynth|cosim|hwemu|build"
         }
       }
     },
@@ -596,7 +596,7 @@
       },
       "filter": {
         "exclude": {
-          "label": "csynth|cosim|xrt_emu|build"
+          "label": "csynth|cosim|hwemu|build"
         }
       }
     },
@@ -608,7 +608,7 @@
       },
       "filter": {
         "exclude": {
-          "label": "csynth|cosim|xrt_emu|build"
+          "label": "csynth|cosim|hwemu|build"
         }
       }
     },
@@ -620,7 +620,7 @@
       },
       "filter": {
         "exclude": {
-          "label": "csynth|cosim|xrt_emu|build"
+          "label": "csynth|cosim|hwemu|build"
         }
       }
     },
@@ -632,7 +632,7 @@
       },
       "filter": {
         "exclude": {
-          "label": "csynth|cosim|xrt_emu|build"
+          "label": "csynth|cosim|hwemu|build"
         }
       }
     },
@@ -644,7 +644,7 @@
       },
       "filter": {
         "exclude": {
-          "label": "csynth|cosim|xrt_emu|build"
+          "label": "csynth|cosim|hwemu|build"
         }
       }
     },
@@ -656,7 +656,7 @@
       },
       "filter": {
         "exclude": {
-          "label": "csynth|cosim|xrt_emu|build"
+          "label": "csynth|cosim|hwemu|build"
         }
       }
     },
@@ -668,7 +668,7 @@
       },
       "filter": {
         "exclude": {
-          "label": "csynth|cosim|xrt_emu|build"
+          "label": "csynth|cosim|hwemu|build"
         }
       }
     },
@@ -680,7 +680,7 @@
       },
       "filter": {
         "exclude": {
-          "label": "csynth|cosim|xrt_emu|build"
+          "label": "csynth|cosim|hwemu|build"
         }
       }
     },
@@ -692,7 +692,7 @@
       },
       "filter": {
         "exclude": {
-          "label": "csynth|cosim|xrt_emu|build"
+          "label": "csynth|cosim|hwemu|build"
         }
       }
     },
@@ -704,7 +704,7 @@
       },
       "filter": {
         "exclude": {
-          "label": "csynth|cosim|xrt_emu|build"
+          "label": "csynth|cosim|hwemu|build"
         }
       }
     }

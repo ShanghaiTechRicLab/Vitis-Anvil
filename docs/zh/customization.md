@@ -18,7 +18,7 @@
 | Cosim testbench | 不上板，先验证 RTL 行为 | `tests/kernels/*_cosim_tb.cpp` |
 | xclbin connectivity | 告诉 Vitis kernel 实例和内存 bank 怎么连 | `config/<target>/link.cfg` |
 | Host app | CPU 程序，加载 xclbin、分配 buffer、启动 kernel | `src/host/*.cpp` |
-| Dataset/compare | 输入、期望输出、硬件输出、比较逻辑 | `data/`, `src/apps/`, `scripts/` |
+| Dataset/compare | 输入、期望输出、`runs/` 下的运行输出、比较逻辑 | `data/`, `runs/`, `src/apps/`, `scripts/` |
 
 所以“加一个新算法”不是只写一个 `.cpp`。你要让每一层都知道同一件事：输入是什么、输出是什么、参数顺序是什么、文件名是什么、怎么判断正确。
 
@@ -212,7 +212,7 @@ add_anvil_kernel(${_scaleadd_kernel_args})
 
 ```bash
 make csynth TARGET=u250 KERNEL=scaleadd
-make analyze-flow TARGET=u250 KERNEL=scaleadd
+make analyze TARGET=u250 KERNEL=scaleadd
 make cosim TARGET=u250 KERNEL=scaleadd
 make analyze-cosim TARGET=u250 KERNEL=scaleadd
 ```
@@ -292,7 +292,7 @@ make build TARGET=u250 HOST_APP=run_scaleadd
 
 ## 4. 自定义数据集和 gold
 
-如果你要完整比较硬件输出，需要数据格式。先定义 `meta.json`，例如：
+如果你要完整比较 run 输出，需要数据格式。先定义 `meta.json`，例如：
 
 ```json
 {
@@ -302,8 +302,7 @@ make build TARGET=u250 HOST_APP=run_scaleadd
   "beta": 3.0,
   "a": "a.bin",
   "b": "b.bin",
-  "gold": "gold_out.bin",
-  "hw": "xrt_hw_out.bin"
+  "gold": "gold_out.bin"
 }
 ```
 
@@ -313,10 +312,10 @@ make build TARGET=u250 HOST_APP=run_scaleadd
 |---|---|
 | dataset generator | 写 `a.bin`、`b.bin`、`meta.json` |
 | gold reference | 读 `meta.json` 和输入，写 `gold_out.bin` |
-| host app | 读输入，运行硬件，写 `xrt_hw_out.bin` |
-| compare | 比较 `gold_out.bin` 和 `xrt_hw_out.bin` |
+| host app | 读输入，运行硬件，写 Make target 传入的 `--output` 路径 |
+| compare | 比较 `gold_out.bin` 和 run 输出 |
 
-不要让每个程序各自发明文件名。文件名不一致会让你误以为 kernel 错了。
+不要让每个程序各自发明文件名。host 忽略 `--output` 会让你误以为 kernel 错了。
 
 ## 5. 添加板卡
 
@@ -363,7 +362,7 @@ ANVIL_COSIM_TARGETS  := saxpy_cosim
 - [ ] `make test` 通过。
 - [ ] `make csynth TARGET=<target> KERNEL=<kernel>` 通过。
 - [ ] 有 testbench 的话，`make cosim TARGET=<target> KERNEL=<kernel>` 通过。
-- [ ] host app 能 `make build TARGET=<target> HOST_APP=<app>`。
+- [ ] host app 能 `make build TARGET=<target> HOST_APP=<app>`，并能通过 `make swemu`/`make hwemu`/`make qemu`/`make hw` 写出 run 输出。
 - [ ] dataset 文件名在 generator/gold/host/compare 中一致。
 - [ ] 文档写清楚板卡环境和运行命令。
 

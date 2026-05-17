@@ -60,7 +60,7 @@ This keeps a known-good reference while you are debugging your own code.
 For m_axi-style packed kernels, use the ladder:
 
 ```text
-gold -> hls_model -> csynth -> cosim -> xclbin -> host
+gold -> hls_model -> csynth -> cosim -> xclbin -> swemu/hwemu/qemu/hw
 ```
 
 Keep the kernel core under `src/kernels/include/kernels/**` and share it between `src/hls_model/**` and the Vitis top in `src/kernels/*.cpp`. The HLS model catches packed layout and tail bugs early, but it does not replace synthesis, cosim, xclbin link, or host/XRT testing.

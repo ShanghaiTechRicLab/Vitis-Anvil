@@ -27,7 +27,7 @@ make xclbin TARGET=u250
 make build TARGET=u250 HOST_APP=run_saxpy
 make gen DATASET=tiny
 make gold DATASET=tiny
-make run-host TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+make hw TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
 make compare DATASET=tiny
 ```
 
@@ -71,7 +71,8 @@ ssh root@$BOARD_IP
 cd ~/anvil-deploy
 . /etc/profile.d/xrt_setup.sh
 ls -l
-./run_saxpy --xclbin saxpy.xclbin --data-dir data/tiny --output data/tiny/xrt_hw_out.bin
+mkdir -p runs/zcu102/hw/run_saxpy/tiny/latest
+./run_saxpy --xclbin saxpy.xclbin --data-dir data/tiny --output runs/zcu102/hw/run_saxpy/tiny/latest/out.bin
 ```
 
 这能立刻告诉你：
@@ -82,12 +83,16 @@ ls -l
 - dataset 路径是否正确
 - 程序是在 kernel launch 前失败还是后失败
 
+正常的 `make test-hw` flow 会由 `scripts/board_run.py` 把远端输出取回到
+`runs/<target>/hw/<host_app>/<dataset>/<run_key>/out.bin`，然后在工作站上由
+`make compare` 读取这个 run 输出。
+
 ## 5. All-in-one 硬件测试
 
 手动运行成功后，可以用：
 
 ```bash
-make test-xrt-hw TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny BOARD_IP=$BOARD_IP
+make test-hw TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny BOARD_IP=$BOARD_IP
 ```
 
 这个 target 方便，但隐藏了多个步骤。如果失败，把它拆回 deploy 和手动运行。

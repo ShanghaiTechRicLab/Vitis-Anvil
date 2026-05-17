@@ -16,7 +16,7 @@ Between those two programs is an FPGA binary:
 A normal development flow is model-first:
 
 ```text
-gold -> hls_model -> csynth -> cosim -> xclbin -> host
+gold -> hls_model -> csynth -> cosim -> xclbin -> swemu/hwemu/qemu/hw
 ```
 
 Vitis-Anvil gives each step a fixed place in the repository and a Make target.
@@ -124,17 +124,20 @@ This pass focuses first-class HLS model support on m_axi-style packed kernels. E
 
 ### Dataset
 
-A dataset is a directory of input/output files. It normally includes:
+A dataset is an input/reference directory. It normally includes:
 
 ```text
 data/<name>/meta.json
 data/<name>/x.bin
 data/<name>/y.bin
 data/<name>/gold_out.bin
-data/<name>/xrt_hw_out.bin
 ```
 
-The exact files depend on your kernel. The key point is that generator, gold, host app, and compare tool must all agree on the file names and meanings.
+Run outputs are separate build products under
+`runs/<target>/<mode>/<host_app>/<dataset>/<run_key>/out.bin`, so accelerator
+or board runs do not write back into `data/`. The exact files depend on your
+kernel. The key point is that generator, gold, host app, and compare tool must
+all agree on the file names and meanings.
 
 ### csynth
 

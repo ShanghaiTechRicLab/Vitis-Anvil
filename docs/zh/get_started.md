@@ -11,9 +11,9 @@
 | CPU-only 测试 | `make test` | 否 | 否 | 否 | 检查普通 C++/Python 代码和示例 |
 | HLS 综合 | `make csynth TARGET=... KERNEL=...` | 是 | 否 | 否 | 检查 Vitis 能否把 kernel C++ 转成硬件 |
 | HLS cosim | `make cosim TARGET=... KERNEL=...` | 是 | 否 | 否 | 检查生成的 RTL 是否和 C++ kernel 行为一致 |
-| 硬件运行 | `make xclbin`、`make run-host` 或 deploy | 是 | 是 | 是或 hw_emu | 构建/加载 FPGA 二进制并执行 |
+| 设备运行 | `make xclbin`，再 `make swemu`/`make hwemu`/`make qemu`/`make hw` 或 deploy | 是 | 是 | 可选 | 构建/加载对应 mode 的 FPGA 二进制并执行 |
 
-不要一上来就跑硬件。先 CPU-only，再 synthesis，再 cosim，再 xclbin/host。
+不要一上来就跑硬件。先 CPU-only，再 synthesis，再 cosim，再 xclbin，最后 `swemu`/`hwemu`/`qemu`/`hw`。
 
 ## 2. 检查仓库状态
 
@@ -23,7 +23,7 @@
 git status --short
 ```
 
-工作树干净时最容易调试。构建输出在 `build/`，生成数据在 `data/`，报告在 `reports/`。
+工作树干净时最容易调试。构建输出在 `build/`，数据集在 `data/`，运行输出在 `runs/`，报告在 `reports/`。
 
 ## 3. 跑 CPU-only 测试
 
@@ -94,7 +94,7 @@ build/u250-host/src/kernels/saxpy_hls/hls/syn/report/saxpy_csynth.xml
 然后查看报告：
 
 ```bash
-make analyze-flow TARGET=u250 KERNEL=saxpy
+make analyze TARGET=u250 KERNEL=saxpy
 ```
 
 报告会告诉你 timing、II、latency、resource。此时还没有在 FPGA 上运行。
@@ -174,14 +174,26 @@ make gold DATASET=tiny
 - `make gen` 在 `data/tiny/` 下创建输入文件和 `meta.json`。
 - `make gold` 运行 CPU reference，写入期望输出。
 
-之后 FPGA 运行也应该把硬件输出写到同一个 dataset 目录，方便 compare 检查。
+之后 FPGA 运行会把输出写到 `runs/<target>/<mode>/<host_app>/<dataset>/<run_key>/`；`make compare` 读取这些 run 输出，不写回 `data/`。
 
-## 10. 在硬件或硬件仿真上运行
+## 10. 在 software emulation、hardware emulation 或硬件上运行
+
+没有加速卡的烟测先用 software emulation：
+
+```bash
+make swemu TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+```
+
+想更接近加速卡 XRT/device 集成但没有物理卡，用 hardware emulation：
+
+```bash
+make hwemu TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+```
 
 如果机器上有支持的 FPGA 卡，并且 XRT 已 source：
 
 ```bash
-make run-host TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+make hw TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
 ```
 
 这个命令会用 xclbin 路径和 dataset 路径调用 host app。host app 会加载 xclbin、拷贝输入 buffer、启动 kernel、读回输出、写结果文件。
@@ -192,7 +204,7 @@ make run-host TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
 make compare DATASET=tiny
 ```
 
-如果你使用 hardware emulation，读 [加速卡流程](accelerator_flow.md) 的对应说明。
+三种 run mode 都写到 `runs/<target>/<mode>/<host_app>/<dataset>/<run_key>/`。更多 target-specific 说明见 [加速卡流程](accelerator_flow.md)。
 
 ## 11. 嵌入式板卡
 
@@ -212,6 +224,7 @@ make xclbin TARGET=zcu102
 ```
 
 然后把文件部署到板上。见 [Embedded 流程](embedded_flow.md) 和 [部署指南](deploy.md)。
+如果要跑 embedded QEMU，使用 `make qemu TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny QEMU_LAUNCHER=/path/to/qemu-launch.sh`；launcher 取决于 platform/image，并且必须创建 ``。
 
 ## 12. 怎样算成功
 
@@ -221,6 +234,6 @@ make xclbin TARGET=zcu102
 - 至少一个 kernel 通过 `csynth`。
 - 同一个 kernel 通过 `cosim`。
 - host app 可以构建。
-- 如果有硬件，硬件输出和 gold 输出一致。
+- 如果有硬件或 emulation，run 输出和 gold 输出一致。
 
 之后再读 [自定义指南](customization.md)，把 demo 换成你自己的算法。

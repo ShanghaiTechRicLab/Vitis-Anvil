@@ -23,7 +23,7 @@ case "${ANVIL_LANG}" in
 cpp)
     GOLD_BIN="${BUILD_DIR}/src/gold/cpp/saxpy_gold_bin"
     if [[ ! -x "${GOLD_BIN}" ]]; then
-        echo "ERROR: ${GOLD_BIN} not found. Run 'make build-cpp' first." >&2
+        echo "ERROR: ${GOLD_BIN} not found. Run 'make gold' first." >&2
         exit 1
     fi
     echo "[run_gold] running C++ gold for dataset=${DATASET}"

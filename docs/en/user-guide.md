@@ -39,7 +39,7 @@ make cosim TARGET=u250 KERNEL=saxpy
 Runs C/RTL cosimulation for one kernel.
 
 ```bash
-make analyze-flow TARGET=u250 KERNEL=saxpy
+make analyze TARGET=u250 KERNEL=saxpy
 make analyze-cosim TARGET=u250 KERNEL=saxpy
 ```
 
@@ -54,13 +54,15 @@ make xclbin TARGET=u250
 Links synthesized kernels into an FPGA binary.
 
 ```bash
-make run-host TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+make swemu TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+make hwemu TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+make hw TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
 ```
 
-Runs a host app locally against an installed FPGA card.
+Runs a host app in software emulation, hardware emulation, or locally against an installed FPGA card.
 
 ```bash
-make test-xrt-hw TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny BOARD_IP=192.168.1.10
+make test-hw TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny BOARD_IP=192.168.1.10
 ```
 
 Deploys/runs on a remote embedded board through SSH.
@@ -73,7 +75,7 @@ make gold DATASET=tiny
 make compare DATASET=tiny
 ```
 
-Generate input, compute CPU expected output, and compare hardware output.
+Generate input, compute CPU expected output, and compare the selected run output.
 
 ## 6. Variables
 

@@ -20,6 +20,22 @@ function(_anvil_write_file_if_changed output_path content)
   endif()
 endfunction()
 
+function(_anvil_vitis_include_dir out_var)
+  if(DEFINED ENV{XILINX_VITIS} AND EXISTS "$ENV{XILINX_VITIS}/include")
+    set(${out_var} "$ENV{XILINX_VITIS}/include" PARENT_SCOPE)
+    return()
+  endif()
+  if(VPP_EXECUTABLE)
+    get_filename_component(_anvil_vpp_bin "${VPP_EXECUTABLE}" DIRECTORY)
+    get_filename_component(_anvil_vitis_root "${_anvil_vpp_bin}" DIRECTORY)
+    if(EXISTS "${_anvil_vitis_root}/include")
+      set(${out_var} "${_anvil_vitis_root}/include" PARENT_SCOPE)
+      return()
+    endif()
+  endif()
+  set(${out_var} "" PARENT_SCOPE)
+endfunction()
+
 function(add_anvil_kernel)
   set(options NO_ALL)
   set(one_value_args NAME TOP CLOCK_HZ PLATFORM_KIND TESTBENCH)
@@ -121,6 +137,13 @@ function(add_anvil_kernel)
   set(_ak_cfg "${_ak_work_dir}/hls.cfg")
   set(_ak_cosim_cfg "${_ak_work_dir}/cosim.cfg")
   set(_ak_xo "${_ak_work_dir}/${AK_NAME}.xo")
+  set(_ak_csynth_stamp "${_ak_work_dir}/.csynth.stamp")
+  set(_ak_csynth_depfile "${_ak_work_dir}/.csynth.d")
+  set(_ak_csynth_action_json "${_ak_work_dir}/csynth.action.json")
+  set(_ak_csynth_action_sha "${_ak_work_dir}/csynth.action.sha256")
+  set(_ak_csynth_env_json "${_ak_work_dir}/csynth.env.json")
+  set(_ak_csynth_env_sha "${_ak_work_dir}/csynth.env.sha256")
+  set(_ak_csynth_manifest "${_ak_work_dir}/csynth.manifest.json")
   set(_ak_csynth_xml "${_ak_work_dir}/hls/syn/report/${AK_TOP}_csynth.xml")
 
   _anvil_kernel_reject_space_path("${AK_NAME}" "source directory" "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -150,6 +173,33 @@ function(add_anvil_kernel)
     "-std=${ANVIL_HLS_STD} -DHLSLIB_SYNTHESIS -I${PROJECT_SOURCE_DIR}/include -I${CMAKE_BINARY_DIR}/generated -I${PROJECT_SOURCE_DIR}/src/kernels/include -I${PROJECT_SOURCE_DIR}/third_party/hlslib/include")
   set(_ak_tb_cflags
     "-std=${ANVIL_HLS_STD} -I${PROJECT_SOURCE_DIR}/include -I${CMAKE_BINARY_DIR}/generated -I${PROJECT_SOURCE_DIR}/src/kernels/include -I${PROJECT_SOURCE_DIR}/third_party/hlslib/include")
+  _anvil_vitis_include_dir(_ak_vitis_include_dir)
+  set(_ak_dep_include_args
+    --dep-include "${PROJECT_SOURCE_DIR}/include"
+    --dep-include "${CMAKE_BINARY_DIR}/generated"
+    --dep-include "${PROJECT_SOURCE_DIR}/src/kernels/include"
+    --dep-include "${PROJECT_SOURCE_DIR}/third_party/hlslib/include")
+  if(_ak_vitis_include_dir)
+    list(APPEND _ak_dep_include_args --dep-include "${_ak_vitis_include_dir}")
+  endif()
+  set(_ak_dep_source_args)
+  set(_ak_input_args)
+  foreach(_ak_abs_src IN LISTS _ak_abs_sources)
+    list(APPEND _ak_dep_source_args --dep-source "${_ak_abs_src}")
+    list(APPEND _ak_input_args --input "${_ak_abs_src}")
+  endforeach()
+  set(_ak_action_meta_args
+    --target-identity "${AK_PLATFORM_KIND}"
+    --mode-identity "${ANVIL_VITIS_TARGET}"
+    --platform "${ANVIL_VITIS_PLATFORM}"
+    --clock "${AK_CLOCK_HZ}"
+    --top "${AK_TOP}")
+  if(ANVIL_DEVICE_KIND)
+    list(APPEND _ak_action_meta_args --target-kind "${ANVIL_DEVICE_KIND}")
+  endif()
+  if(ANVIL_VITIS_PART)
+    list(APPEND _ak_action_meta_args --part "${ANVIL_VITIS_PART}")
+  endif()
 
   # Vitis 2024.2 HLS compile mode accepts platform/frequency but not --target;
   # ANVIL_VITIS_TARGET is retained as target metadata for future xclbin/link work.
@@ -186,34 +236,63 @@ function(add_anvil_kernel)
     _anvil_write_file_if_changed("${_ak_cosim_cfg}" "${_ak_cosim_cfg_content}")
   endif()
 
-  file(GLOB_RECURSE _ak_hls_header_deps CONFIGURE_DEPENDS
-    "${PROJECT_SOURCE_DIR}/include/anvil/hls/*.hpp"
-    "${PROJECT_SOURCE_DIR}/src/kernels/include/kernels/*.hpp"
-    "${CMAKE_BINARY_DIR}/generated/*.hpp")
-
   add_custom_command(
-    OUTPUT "${_ak_xo}" "${_ak_csynth_xml}"
+    OUTPUT "${_ak_csynth_stamp}"
+    BYPRODUCTS
+      "${_ak_xo}"
+      "${_ak_csynth_xml}"
+      "${_ak_csynth_depfile}"
+      "${_ak_csynth_action_json}"
+      "${_ak_csynth_action_sha}"
+      "${_ak_csynth_env_json}"
+      "${_ak_csynth_env_sha}"
+      "${_ak_csynth_manifest}"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${_ak_work_dir}"
-    COMMAND "${VPP_EXECUTABLE}"
+    COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/tools"
+            "${Python3_EXECUTABLE}" -m hlsflow.action_runner
+            --stage csynth
+            --stamp "${_ak_csynth_stamp}"
+            --manifest "${_ak_csynth_manifest}"
+            --action-json "${_ak_csynth_action_json}"
+            --action-sha "${_ak_csynth_action_sha}"
+            --env-json "${_ak_csynth_env_json}"
+            --env-sha "${_ak_csynth_env_sha}"
+            ${_ak_action_meta_args}
+            --config "${_ak_cfg}"
+            --depfile "${_ak_csynth_depfile}"
+            --dep-compiler "${CMAKE_CXX_COMPILER}"
+            --dep-std "${ANVIL_HLS_STD}"
+            --dep-define HLSLIB_SYNTHESIS
+            ${_ak_dep_include_args}
+            ${_ak_dep_source_args}
+            ${_ak_input_args}
+            --input "${_ak_cfg}"
+            --output "${_ak_xo}"
+            --output "${_ak_csynth_xml}"
+            --
+            "${VPP_EXECUTABLE}"
             --compile
             --mode hls
             --config "${_ak_cfg}"
             --work_dir "${_ak_work_dir}"
-    DEPENDS ${_ak_abs_sources} ${_ak_hls_header_deps} "${_ak_cfg}"
+    DEPENDS ${_ak_abs_sources} "${_ak_cfg}"
+    DEPFILE "${_ak_csynth_depfile}"
     COMMENT "Running Vitis HLS csynth for ${AK_NAME}"
+    COMMAND_EXPAND_LISTS
     VERBATIM
     USES_TERMINAL)
 
   if(AK_NO_ALL)
     add_custom_target("${AK_NAME}_xo"
-      DEPENDS "${_ak_xo}")
+      DEPENDS "${_ak_csynth_stamp}")
   else()
     add_custom_target("${AK_NAME}_xo" ALL
-      DEPENDS "${_ak_xo}")
+      DEPENDS "${_ak_csynth_stamp}")
   endif()
 
   set_target_properties("${AK_NAME}_xo" PROPERTIES
     ANVIL_KERNEL_ARTIFACT "${_ak_xo}"
+    ANVIL_KERNEL_CSYNTH_STAMP "${_ak_csynth_stamp}"
     ANVIL_KERNEL_CSYNTH_XML "${_ak_csynth_xml}"
     ANVIL_KERNEL_WORK_DIR "${_ak_work_dir}"
     ANVIL_KERNEL_TOP "${AK_TOP}"
@@ -223,19 +302,59 @@ function(add_anvil_kernel)
 
   if(AK_TESTBENCH)
     set(_ak_cosim_stamp "${_ak_work_dir}/.cosim.stamp")
+    set(_ak_cosim_depfile "${_ak_work_dir}/.cosim.d")
+    set(_ak_cosim_action_json "${_ak_work_dir}/cosim.action.json")
+    set(_ak_cosim_action_sha "${_ak_work_dir}/cosim.action.sha256")
+    set(_ak_cosim_env_json "${_ak_work_dir}/cosim.env.json")
+    set(_ak_cosim_env_sha "${_ak_work_dir}/cosim.env.sha256")
+    set(_ak_cosim_manifest "${_ak_work_dir}/cosim.manifest.json")
+    set(_ak_cosim_dep_source_args ${_ak_dep_source_args})
+    list(APPEND _ak_cosim_dep_source_args --dep-source "${_ak_abs_testbench}")
+    set(_ak_cosim_input_args ${_ak_input_args})
+    list(APPEND _ak_cosim_input_args
+      --input "${_ak_xo}"
+      --input "${_ak_abs_testbench}"
+      --input "${_ak_cosim_cfg}")
     # vitis-run 2024.2 defaults to --mode hls; the flag is intentionally
     # omitted so this command stays valid if a future release renames mode
     # tokens (we only need the HLS cosim mode here).
     add_custom_command(
       OUTPUT "${_ak_cosim_stamp}"
+      BYPRODUCTS
+        "${_ak_cosim_depfile}"
+        "${_ak_cosim_action_json}"
+        "${_ak_cosim_action_sha}"
+        "${_ak_cosim_env_json}"
+        "${_ak_cosim_env_sha}"
+        "${_ak_cosim_manifest}"
       COMMAND "${CMAKE_COMMAND}" -E make_directory "${_ak_work_dir}"
-      COMMAND "${VITIS_RUN_EXECUTABLE}"
+      COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/tools"
+              "${Python3_EXECUTABLE}" -m hlsflow.action_runner
+              --stage cosim
+              --stamp "${_ak_cosim_stamp}"
+              --manifest "${_ak_cosim_manifest}"
+              --action-json "${_ak_cosim_action_json}"
+              --action-sha "${_ak_cosim_action_sha}"
+              --env-json "${_ak_cosim_env_json}"
+              --env-sha "${_ak_cosim_env_sha}"
+              ${_ak_action_meta_args}
+              --config "${_ak_cosim_cfg}"
+              --depfile "${_ak_cosim_depfile}"
+              --dep-compiler "${CMAKE_CXX_COMPILER}"
+              --dep-std "${ANVIL_HLS_STD}"
+              ${_ak_dep_include_args}
+              ${_ak_cosim_dep_source_args}
+              ${_ak_cosim_input_args}
+              --output "${_ak_cosim_stamp}"
+              --
+              "${VITIS_RUN_EXECUTABLE}"
               --cosim
               --config "${_ak_cosim_cfg}"
               --work_dir "${_ak_work_dir}"
-      COMMAND "${CMAKE_COMMAND}" -E touch "${_ak_cosim_stamp}"
-      DEPENDS "${_ak_xo}" "${_ak_abs_testbench}" "${_ak_cosim_cfg}" ${_ak_abs_sources} ${_ak_hls_header_deps}
+      DEPENDS "${_ak_csynth_stamp}" "${_ak_abs_testbench}" "${_ak_cosim_cfg}" ${_ak_abs_sources}
+      DEPFILE "${_ak_cosim_depfile}"
       COMMENT "Running Vitis HLS cosim for ${AK_NAME}"
+      COMMAND_EXPAND_LISTS
       VERBATIM
       USES_TERMINAL)
 
@@ -359,11 +478,53 @@ function(add_anvil_xclbin)
   set(_akx_out_dir "${CMAKE_CURRENT_BINARY_DIR}/${AKX_NAME}_xclbin")
   set(_akx_work_dir "${_akx_out_dir}/work")
   set(_akx_xclbin "${_akx_out_dir}/${AKX_NAME}.xclbin")
+  set(_akx_link_stamp "${_akx_out_dir}/.link.stamp")
+  set(_akx_action_json "${_akx_out_dir}/link.action.json")
+  set(_akx_action_sha "${_akx_out_dir}/link.action.sha256")
+  set(_akx_env_json "${_akx_out_dir}/link.env.json")
+  set(_akx_env_sha "${_akx_out_dir}/link.env.sha256")
+  set(_akx_manifest "${_akx_out_dir}/link.manifest.json")
+  set(_akx_input_args)
+  foreach(_akx_artifact IN LISTS _akx_artifacts)
+    list(APPEND _akx_input_args --input "${_akx_artifact}")
+  endforeach()
+  list(APPEND _akx_input_args --input "${AKX_LINK_CFG}")
+  set(_akx_action_meta_args
+    --target-identity "${AKX_PLATFORM_KIND}"
+    --mode-identity "${AKX_MODE}"
+    --platform "${ANVIL_VITIS_PLATFORM}")
+  if(ANVIL_DEVICE_KIND)
+    list(APPEND _akx_action_meta_args --target-kind "${ANVIL_DEVICE_KIND}")
+  endif()
+  if(ANVIL_VITIS_PART)
+    list(APPEND _akx_action_meta_args --part "${ANVIL_VITIS_PART}")
+  endif()
 
   add_custom_command(
-    OUTPUT "${_akx_xclbin}"
+    OUTPUT "${_akx_link_stamp}"
+    BYPRODUCTS
+      "${_akx_xclbin}"
+      "${_akx_action_json}"
+      "${_akx_action_sha}"
+      "${_akx_env_json}"
+      "${_akx_env_sha}"
+      "${_akx_manifest}"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${_akx_out_dir}" "${_akx_work_dir}"
-    COMMAND "${VPP_EXECUTABLE}"
+    COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/tools"
+            "${Python3_EXECUTABLE}" -m hlsflow.action_runner
+            --stage xclbin
+            --stamp "${_akx_link_stamp}"
+            --manifest "${_akx_manifest}"
+            --action-json "${_akx_action_json}"
+            --action-sha "${_akx_action_sha}"
+            --env-json "${_akx_env_json}"
+            --env-sha "${_akx_env_sha}"
+            ${_akx_action_meta_args}
+            --config "${AKX_LINK_CFG}"
+            ${_akx_input_args}
+            --output "${_akx_xclbin}"
+            --
+            "${VPP_EXECUTABLE}"
             --link
             --platform "${ANVIL_VITIS_PLATFORM}"
             --target "${AKX_MODE}"
@@ -373,14 +534,16 @@ function(add_anvil_xclbin)
             -o "${_akx_xclbin}"
     DEPENDS ${_akx_artifacts} "${AKX_LINK_CFG}"
     COMMENT "Linking Vitis xclbin for ${AKX_NAME} (${AKX_PLATFORM_KIND}, ${AKX_MODE})"
+    COMMAND_EXPAND_LISTS
     VERBATIM
     USES_TERMINAL)
 
   add_custom_target("${AKX_NAME}_xclbin"
-    DEPENDS "${_akx_xclbin}")
+    DEPENDS "${_akx_link_stamp}")
 
   set_target_properties("${AKX_NAME}_xclbin" PROPERTIES
     ANVIL_XCLBIN "${_akx_xclbin}"
+    ANVIL_XCLBIN_LINK_STAMP "${_akx_link_stamp}"
     ANVIL_XCLBIN_MODE "${AKX_MODE}"
     ANVIL_XCLBIN_LINK_CFG "${AKX_LINK_CFG}"
     ANVIL_XCLBIN_PLATFORM_KIND "${AKX_PLATFORM_KIND}")

@@ -2,6 +2,8 @@
 
 这篇解释 Make target。它不是简单列命令，而是说明每个 target 消费什么、产生什么。
 
+这些命令背后的依赖模型见 [构建系统模型](build_system.md)。
+
 ## 1. 四个选择器
 
 多数命令都接受这些变量：
@@ -15,7 +17,7 @@ make <target> TARGET=u250 KERNEL=saxpy HOST_APP=run_saxpy DATASET=tiny
 | `TARGET` | 板卡/platform 配置 | `u250`, `zcu102` | CMake 用错 platform、part、sysroot 或 link.cfg |
 | `KERNEL` | HLS kernel 目标 | `saxpy`, `vadd`, `all` | 综合/cosim 了错误 kernel |
 | `HOST_APP` | CPU 可执行程序 | `run_saxpy` | 构建/运行了错误 host 程序 |
-| `DATASET` | 输入/输出数据目录 | `tiny` | gold、host、compare 看不同文件 |
+| `DATASET` | 输入/参考数据集名 | `tiny` | gold、run、compare 看不同 case |
 
 ## 2. 快速 CPU-only 目标
 
@@ -117,14 +119,14 @@ make csynth TARGET=u250 KERNEL=saxpy
 - platform 路径无效
 - 使用了 HLS 不支持的 C++ 特性
 
-### `make analyze-flow TARGET=<target> KERNEL=<kernel>`
+### `make analyze TARGET=<target> KERNEL=<kernel>`
 
 目的：读取 HLS 报告，并用人能读的格式显示摘要。
 
 例子：
 
 ```bash
-make analyze-flow TARGET=u250 KERNEL=saxpy
+make analyze TARGET=u250 KERNEL=saxpy
 ```
 
 通常在 `csynth` 后使用。如果报告已经存在，它本身不重新综合。
@@ -187,7 +189,7 @@ build/<preset>/src/kernels/<name>_xclbin/<name>.xclbin
 
 ### `make analyze-link TARGET=<target> HOST_APP=<host-app>`
 
-目的：在 `make xclbin` 或 `make xclbin-hwemu` 之后汇总 Vitis link/xclbin 产物。
+目的：在 `make xclbin` 或 `make swemu`/`make hwemu` 触发的 emulation link 之后汇总 Vitis link/xclbin 产物。
 
 例子：
 
@@ -211,11 +213,27 @@ make analyze-link TARGET=u250 HOST_APP=run_saxpy
 
 先看这个再调 host app。如果 link 没把预期 compute unit 或 memory binding 放进 xclbin，host app 修不好。
 
-### `make xclbin-hwemu TARGET=<target>`
+### `make swemu TARGET=<target> HOST_APP=<app> DATASET=<data>`
 
-目的：构建 hardware emulation 用的 xclbin，而不是真实硬件 xclbin。
+目的：在独立 build tree 中构建 `sw_emu` xclbin，并用 software emulation 运行选定 host app。
 
-当你想测试 host/XRT 流程但没有物理卡时使用，前提是 platform 支持 emulation。
+用于没有物理卡时快速 smoke test host/XRT 流程。
+
+### `make hwemu TARGET=<target> HOST_APP=<app> DATASET=<data>`
+
+目的：构建 `hw_emu` xclbin，并用 hardware emulation 运行选定 host app。
+
+当你想更接近 host/XRT/device 集成但没有物理卡时使用，前提是 platform 支持 emulation。
+
+### `make qemu TARGET=<embedded-target> HOST_APP=<app> DATASET=<data>`
+
+目的：构建 embedded QEMU 输入，并执行板卡/BSP 提供的 QEMU launcher。
+
+QEMU 不是加速卡 `hw_emu` 的同义入口。它模拟 embedded PS 侧，并依赖板卡 BSP/platform
+提供的 QEMU 启动脚本。设置 `QEMU_LAUNCHER=/path/to/qemu-launch.sh`；launcher 会通过
+环境变量收到 `HOST_BIN`、`XCLBIN_PATH`、`DATA_DIR`、`RUN_DIR`、`OUTPUT`、
+`EMCONFIG_PATH`、`TARGET`、`HOST_APP`、`DATASET` 和 `ANVIL_PLATFORM`。它必须创建
+`$OUTPUT`，通常是 `runs/<target>/qemu/<host_app>/<dataset>/<run_key>/out.bin`。
 
 ## 7. 数据和正确性目标
 
@@ -229,20 +247,20 @@ make analyze-link TARGET=u250 HOST_APP=run_saxpy
 
 ### `make compare DATASET=<name>`
 
-目的：比较硬件输出和 gold 输出。
+目的：比较 run 输出和 gold 输出。
 
 典型正确性流程：
 
 ```bash
 make gen DATASET=tiny
 make gold DATASET=tiny
-make run-host TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+make hw TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
 make compare DATASET=tiny
 ```
 
 ## 8. Host 运行和部署目标
 
-### `make run-host TARGET=<target> HOST_APP=<app> DATASET=<data>`
+### `make hw TARGET=<target> HOST_APP=<app> DATASET=<data>`
 
 目的：在有 FPGA 卡和 XRT 的本机运行 host app。
 
@@ -268,8 +286,8 @@ make compare DATASET=tiny
 | 改了 kernel HLS 代码 | `make csynth TARGET=<target> KERNEL=<kernel>` |
 | 改了 kernel 行为 | `make cosim TARGET=<target> KERNEL=<kernel>` |
 | 改了 link.cfg | `make xclbin TARGET=<target>` |
-| 改了数据格式 | `make gen`, `make gold`, host run, `make compare` |
-| 想看报告摘要 | `make analyze-flow`, `make analyze-cosim` |
+| 改了数据格式 | `make gen`, `make gold`, `make swemu`/`make hwemu`/`make qemu`/`make hw`, `make compare` |
+| 想看报告摘要 | `make analyze`, `make analyze-cosim` |
 | 需要 Python 工具 | `make python-env` |
 
 ## 10. 常见构建失败

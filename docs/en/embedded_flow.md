@@ -143,12 +143,47 @@ What gets copied:
 - `xrt.ini`
 - dataset files
 
-## 9. Run on the board
+## 9. QEMU emulation
+
+QEMU is the embedded simulation path. It is not the same as accelerator-card
+`hwemu`: QEMU models the Arm PS side and usually comes from the board platform
+or PetaLinux image. The exact launch command is target/image specific, so Anvil
+uses an explicit `QEMU_LAUNCHER` hook instead of hiding board policy in the
+Makefile.
+
+Run QEMU through a board/BSP launcher:
+
+```bash
+PETALINUX_SYSROOT=/path/to/sysroot \
+  make qemu TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny \
+  QEMU_LAUNCHER=/path/to/qemu-launch.sh
+```
+
+The target builds:
+
+- AArch64 host binary under `build/<target>-host/`
+- embedded emulation xclbin under `build/<target>-kernel/`
+- target-level `build/<target>/emconfig/emconfig.json`
+- dataset files under `data/<dataset>/`
+
+Then it executes `QEMU_LAUNCHER`. The launcher receives these environment
+variables: `HOST_BIN`, `XCLBIN_PATH`, `DATA_DIR`, `RUN_DIR`, `OUTPUT`,
+`EMCONFIG_PATH`, `TARGET`, `HOST_APP`, `DATASET`, and `ANVIL_PLATFORM`.
+The launcher must create `$OUTPUT`, which defaults to
+`runs/<target>/qemu/<host_app>/<dataset>/<run_key>/out.bin`.
+
+Compare a QEMU run by pointing `make compare` at that output:
+
+```bash
+make compare DATASET=tiny RUN_HW_OUTPUT=runs/zcu102/qemu/run_saxpy/tiny/latest/out.bin
+```
+
+## 10. Run on the board
 
 You can use the all-in-one target:
 
 ```bash
-make test-xrt-hw TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny BOARD_IP=$BOARD_IP
+make test-hw TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny BOARD_IP=$BOARD_IP
 ```
 
 Or log in and run manually:
@@ -157,12 +192,16 @@ Or log in and run manually:
 ssh root@$BOARD_IP
 cd ~/anvil-deploy
 . /etc/profile.d/xrt_setup.sh
-./run_saxpy --xclbin saxpy.xclbin --data-dir data/tiny --output data/tiny/xrt_hw_out.bin
+mkdir -p runs/zcu102/hw/run_saxpy/tiny/latest
+./run_saxpy --xclbin saxpy.xclbin --data-dir data/tiny --output runs/zcu102/hw/run_saxpy/tiny/latest/out.bin
 ```
 
 Manual run is better when debugging because you can inspect files and environment directly.
+In the automated `make test-hw` path, `scripts/board_run.py` copies the remote
+output back to `runs/<target>/hw/<host_app>/<dataset>/<run_key>/out.bin` before
+the workstation-side compare step.
 
-## 10. Compare output
+## 11. Compare output
 
 If output is copied back to the workstation, run:
 
@@ -172,7 +211,7 @@ make compare DATASET=tiny
 
 If comparing on the board, make sure the compare tool and Python environment exist there. Usually it is simpler to copy output back and compare on the workstation.
 
-## 11. Common embedded failures
+## 12. Common embedded failures
 
 ### Host build says `SYSROOT environment variable not set`
 
@@ -196,6 +235,6 @@ Check:
 4. dataset files copied to the board
 5. cache/sync calls in the host app
 
-## 12. When to use embedded vs accelerator-card docs
+## 13. When to use embedded vs accelerator-card docs
 
 Use this page when the host app runs on the board's ARM CPU. Use [Accelerator-card flow](accelerator_flow.md) when the host app runs on the same x86_64 machine that contains a PCIe FPGA card.

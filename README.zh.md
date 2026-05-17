@@ -35,23 +35,26 @@ Anvil 是铁砧 — 把金属放上去锻造成型。Vitis-Anvil 对 FPGA 开发
 
 ```bash
 make test                                      # 仅 CPU 测试（不需要 Vitis/XRT/platform）
-make test-hls-model                            # 显式 Vitis 前测试：gold + HLS 模型 + helpers
 make build TARGET=u250 HOST_APP=run_saxpy     # 构建一个 host app
 make csynth TARGET=u250 KERNEL=saxpy          # HLS 综合
 make cosim TARGET=u250 KERNEL=saxpy           # HLS C/RTL 协同仿真
-make analyze-flow TARGET=u250 KERNEL=saxpy    # 查看综合报告
+make analyze TARGET=u250 KERNEL=saxpy         # 查看已有综合报告
 make analyze-cosim TARGET=u250 KERNEL=saxpy   # 查看协同仿真报告
 make analyze-link TARGET=u250 HOST_APP=run_saxpy # 查看 link/xclbin 报告
 make xclbin TARGET=u250                       # 链接硬件 xclbin（耗时较长）
-make run-host TARGET=u250 HOST_APP=run_saxpy  # 在已安装的加速卡上运行
+make swemu TARGET=u250 HOST_APP=run_saxpy DATASET=tiny # software emulation 运行
+make hwemu TARGET=u250 HOST_APP=run_saxpy DATASET=tiny # hardware emulation 运行
+make hw TARGET=u250 HOST_APP=run_saxpy DATASET=tiny    # 在已安装的加速卡上运行
+make qemu TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny QEMU_LAUNCHER=/path/to/qemu-launch.sh
 ```
 
-推荐正确性阶梯：`gold -> hls_model -> csynth -> cosim -> xclbin -> host`。
+推荐正确性阶梯：`gold -> hls_model -> csynth -> cosim -> xclbin -> swemu/hwemu/qemu/hw`。
 
-嵌入式板卡需要设置 `PETALINUX_SYSROOT`：
+嵌入式板卡的硬件运行和 QEMU 准备需要设置 `PETALINUX_SYSROOT`：
 
 ```bash
 PETALINUX_SYSROOT=/path/to/sysroot make build-host TARGET=zcu102
+PETALINUX_SYSROOT=/path/to/sysroot make qemu TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny QEMU_LAUNCHER=/path/to/qemu-launch.sh
 ```
 
 完整部署流程见 [docs/zh/embedded_flow.md](docs/zh/embedded_flow.md)。

@@ -35,23 +35,26 @@ The name is short because it is meant to be used on the command line. Future wra
 
 ```bash
 make test                                      # CPU-only tests (no Vitis, no XRT, no platform)
-make test-hls-model                            # explicit pre-Vitis suite: gold + HLS model + helpers
 make build TARGET=u250 HOST_APP=run_saxpy     # build one host app
 make csynth TARGET=u250 KERNEL=saxpy          # HLS synthesis for one kernel
 make cosim TARGET=u250 KERNEL=saxpy           # HLS C/RTL cosimulation
-make analyze-flow TARGET=u250 KERNEL=saxpy    # inspect synthesis reports
+make analyze TARGET=u250 KERNEL=saxpy         # inspect existing synthesis reports
 make analyze-cosim TARGET=u250 KERNEL=saxpy   # inspect cosimulation reports
 make analyze-link TARGET=u250 HOST_APP=run_saxpy # inspect link/xclbin reports
 make xclbin TARGET=u250                       # link the hardware xclbin (slow)
-make run-host TARGET=u250 HOST_APP=run_saxpy  # run on an installed accelerator card
+make swemu TARGET=u250 HOST_APP=run_saxpy DATASET=tiny # software emulation run
+make hwemu TARGET=u250 HOST_APP=run_saxpy DATASET=tiny # hardware emulation run
+make hw TARGET=u250 HOST_APP=run_saxpy DATASET=tiny    # run on an installed accelerator card
+make qemu TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny QEMU_LAUNCHER=/path/to/qemu-launch.sh
 ```
 
-Recommended correctness ladder: `gold -> hls_model -> csynth -> cosim -> xclbin -> host`.
+Recommended correctness ladder: `gold -> hls_model -> csynth -> cosim -> xclbin -> swemu/hwemu/qemu/hw`.
 
-For embedded boards you need `PETALINUX_SYSROOT`:
+For embedded boards, hardware runs and QEMU runs need `PETALINUX_SYSROOT`:
 
 ```bash
 PETALINUX_SYSROOT=/path/to/sysroot make build-host TARGET=zcu102
+PETALINUX_SYSROOT=/path/to/sysroot make qemu TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny QEMU_LAUNCHER=/path/to/qemu-launch.sh
 ```
 
 The full deployment flow is in [docs/en/embedded_flow.md](docs/en/embedded_flow.md).

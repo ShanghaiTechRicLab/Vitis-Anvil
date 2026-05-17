@@ -23,7 +23,7 @@ csynth/cosim kernel
   ↓
 构建 host app
   ↓
-通过 XRT 在本机运行 host app
+通过 swemu、hwemu 或真实硬件运行 XRT host app
   ↓
 比较输出
 ```
@@ -75,7 +75,7 @@ ANVIL_COSIM_TARGETS  := saxpy_cosim vadd_cosim
 
 ```bash
 make csynth TARGET=u250 KERNEL=saxpy
-make analyze-flow TARGET=u250 KERNEL=saxpy
+make analyze TARGET=u250 KERNEL=saxpy
 make cosim TARGET=u250 KERNEL=saxpy
 make analyze-cosim TARGET=u250 KERNEL=saxpy
 ```
@@ -146,11 +146,11 @@ make analyze-link TARGET=u250 HOST_APP=run_saxpy
 make build TARGET=u250 HOST_APP=run_saxpy
 make gen DATASET=tiny
 make gold DATASET=tiny
-make run-host TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+make hw TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
 make compare DATASET=tiny
 ```
 
-`run-host` 中发生的事：
+`hw` 中发生的事：
 
 1. host app 打开 device 0
 2. 加载 xclbin
@@ -159,26 +159,25 @@ make compare DATASET=tiny
 5. 把输入拷到卡上
 6. 启动 kernel
 7. 把输出拷回
-8. 把输出写到 `data/tiny/`
+8. 把输出写到 `runs/<target>/<mode>/<host_app>/tiny/<run_key>/`
 
-如果 `run-host` 失败，先判断失败发生在 kernel launch 前还是后：
+如果 `hw` 失败，先判断失败发生在 kernel launch 前还是后：
 
 - launch 前：XRT、device、xclbin、kernel 名问题
 - launch 后：buffer group、数据布局、kernel 正确性或 compare 问题
 
 ## 8. Hardware emulation
 
-Hardware emulation 使用仿真的设备。它比 CPU 测试慢，但不需要物理卡。
+Software/hardware emulation 可以在没有物理卡时运行对应 mode 的 xclbin。它们比 CPU 测试慢，回答的是 host/XRT 集成问题，不是 kernel 正确性问题。
 
 典型流程：
 
 ```bash
-make xclbin-hwemu TARGET=u250
-make build TARGET=u250 HOST_APP=run_saxpy
-make xrt-emu TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+make swemu TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+make hwemu TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
 ```
 
-hw_emu 用来调 host/XRT 集成。它不能替代 csynth/cosim，因为它们回答的是不同问题。
+`make swemu` 在 `build/<target>-host-swemu` 里构建 `sw_emu` xclbin；`make hwemu` 使用 target 的 hwemu preset 构建 `hw_emu` xclbin。二者都不能替代 csynth/cosim，因为它们回答的是不同问题。
 
 ## 9. Stream pipeline demo
 

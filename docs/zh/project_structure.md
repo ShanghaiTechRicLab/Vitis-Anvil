@@ -20,7 +20,8 @@
 | `scripts/` | Shell/Python 流程辅助 | 板端运行、数据辅助、旧 wrapper |
 | `docs/` | 用户文档 | 如何使用和适配模板 |
 | `build/` | 生成的构建目录 | CMake 创建，不要编辑或提交 |
-| `data/` | 生成的数据集 | 示例输入输出 |
+| `data/` | 生成的数据集 | 示例输入和参考输出 |
+| `runs/` | 运行输出 | 按 target/mode/host/dataset 拆分的 run 产物 |
 | `reports/` | 生成的分析报告 | hlsflow 的 HTML/TXT/JSONL 输出 |
 
 ## 框架代码 vs 项目代码
@@ -120,14 +121,21 @@ build/zcu102-host/
 
 ## 数据和报告
 
-Dataset 目录包含输入输出：
+Dataset 目录包含输入和参考输出：
 
 ```text
 data/tiny/meta.json
 data/tiny/x.bin
 data/tiny/y.bin
 data/tiny/gold_out.bin
-data/tiny/xrt_hw_out.bin
+```
+
+硬件/仿真运行输出单独保存，例如：
+
+```text
+runs/u250/hw_emu/run_saxpy/tiny/latest/out.bin
+runs/u250/hw_emu/run_saxpy/tiny/latest/run.json
+runs/u250/hw_emu/run_saxpy/tiny/latest/stdout.log
 ```
 
 Report 目录包含分析产物：

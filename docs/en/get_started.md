@@ -13,9 +13,9 @@ You will run four levels of work:
 | CPU-only tests | `make test` | No | No | No | Check normal C++/Python code and examples |
 | HLS synthesis | `make csynth TARGET=... KERNEL=...` | Yes | No | No | Check Vitis can turn kernel C++ into hardware |
 | HLS cosim | `make cosim TARGET=... KERNEL=...` | Yes | No | No | Check generated RTL behaves like the C++ kernel |
-| Hardware run | `make xclbin`, `make run-host` or deploy | Yes | Yes | Yes or hw_emu | Build/load FPGA binary and execute it |
+| Device run | `make xclbin`, then `make swemu`/`make hwemu`/`make qemu`/`make hw` or deploy | Yes | Yes | Optional | Build/load a mode-specific FPGA binary and execute it |
 
-Do not start with hardware. Start with CPU-only tests, then synthesis, then cosim, then xclbin/host.
+Do not start with hardware. Start with CPU-only tests, then synthesis, then cosim, then xclbin, then `swemu`/`hwemu`/`qemu`/`hw`.
 
 ## 2. Check the repository
 
@@ -25,7 +25,7 @@ From the repository root:
 git status --short
 ```
 
-A clean tree is easier to debug. Build outputs go under `build/`, generated data under `data/`, reports under `reports/`.
+A clean tree is easier to debug. Build outputs go under `build/`, datasets under `data/`, runtime outputs under `runs/`, reports under `reports/`.
 
 ## 3. Run CPU-only tests
 
@@ -96,7 +96,7 @@ build/u250-host/src/kernels/saxpy_hls/hls/syn/report/saxpy_csynth.xml
 Now inspect it with:
 
 ```bash
-make analyze-flow TARGET=u250 KERNEL=saxpy
+make analyze TARGET=u250 KERNEL=saxpy
 ```
 
 The report tells you timing, II, latency, and resource use. At this stage you are not running on the FPGA yet.
@@ -176,14 +176,26 @@ What this does:
 - `make gen` creates input files and `meta.json` under `data/tiny/`.
 - `make gold` runs the CPU reference and writes expected output.
 
-The FPGA run should later write hardware output into the same dataset directory so the compare step can check it.
+The FPGA run writes output under `runs/<target>/<mode>/<host_app>/<dataset>/<run_key>/`; `make compare` reads those run outputs instead of writing back into `data/`.
 
-## 10. Run on hardware or hardware emulation
+## 10. Run in software emulation, hardware emulation, or hardware
+
+For a no-card accelerator smoke test, use software emulation:
+
+```bash
+make swemu TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+```
+
+For a closer accelerator XRT/device integration test without a physical card, use hardware emulation:
+
+```bash
+make hwemu TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+```
 
 If a supported FPGA card is installed and XRT is sourced, run:
 
 ```bash
-make run-host TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+make hw TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
 ```
 
 This calls the host app with the xclbin path and dataset path. The host app loads the xclbin, copies input buffers, starts the kernel, reads output, and writes a result file.
@@ -194,7 +206,8 @@ Then compare:
 make compare DATASET=tiny
 ```
 
-If you are using hardware emulation instead, read the target-specific notes in [Accelerator-card flow](accelerator_flow.md).
+All three run modes write under `runs/<target>/<mode>/<host_app>/<dataset>/<run_key>/`.
+Read the target-specific notes in [Accelerator-card flow](accelerator_flow.md).
 
 ## 11. For embedded boards
 
@@ -214,6 +227,7 @@ make xclbin TARGET=zcu102
 ```
 
 Then deploy files to the board. See [Embedded flow](embedded_flow.md) and [Deployment guide](deploy.md).
+For embedded QEMU, use `make qemu TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny QEMU_LAUNCHER=/path/to/qemu-launch.sh`; the launcher is platform/image specific and must create ``.
 
 ## 12. What success looks like
 
@@ -223,6 +237,6 @@ A successful first pass means:
 - At least one kernel passes `csynth`.
 - The same kernel passes `cosim`.
 - You can build a host app.
-- If hardware is available, host output matches gold output.
+- If hardware or emulation is available, run output matches gold output.
 
 After that, move to [Customization guide](customization.md) to replace the demos with your own algorithm.

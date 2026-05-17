@@ -44,7 +44,7 @@ Most day-to-day commands are controlled by four variables:
 | `TARGET` | Board/platform configuration from `config/<target>/anvil.mk` | `u250`, `u50`, `zcu102`, `kv260` | configure, build, xclbin, deploy |
 | `KERNEL` | HLS kernel target name | `saxpy`, `vadd`, `pipeline_demo`, `all` | `make csynth`, `make cosim`, analysis |
 | `HOST_APP` | Host executable name from `src/host/CMakeLists.txt` | `run_saxpy`, `run_vadd`, `run_pipeline_demo` | host build/run/deploy |
-| `DATASET` | Dataset directory under `data/<dataset>/` | `tiny`, `my_case_001` | generation, gold, compare, host runs |
+| `DATASET` | Input/reference dataset under `data/<dataset>/` | `tiny`, `my_case_001` | generation, gold, run, and compare use different cases |
 
 Examples:
 
@@ -54,8 +54,8 @@ make build TARGET=u250 HOST_APP=run_saxpy
 make csynth TARGET=u250 KERNEL=saxpy
 make cosim TARGET=zcu102 KERNEL=vadd
 make xclbin TARGET=u250
-make run-host TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
-make analyze-flow TARGET=zcu102 KERNEL=all
+make hw TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+make analyze TARGET=zcu102 KERNEL=all
 make analyze-cosim TARGET=zcu102 KERNEL=vadd
 ```
 
@@ -78,7 +78,7 @@ Use this order when adding your own accelerator. It avoids waiting for slow Viti
 11. **Link xclbin** with `make xclbin TARGET=<board>`.
 12. **Write or adapt a host app** under `src/host/`.
 13. **Run hardware or hardware emulation**.
-14. **Analyze reports** with `make analyze-flow` and `make analyze-cosim`.
+14. **Analyze reports** with `make analyze` and `make analyze-cosim`.
 15. **Only then tune performance**: clock, pack width, memory banks, dataflow depth.
 
 Do not start by editing `src/anvil/runtime/` or `include/anvil/runtime/`. Most projects do not need to touch the runtime wrapper.
@@ -307,7 +307,7 @@ Fast configure/build commands:
 
 ```bash
 make csynth TARGET=u250 KERNEL=scaleadd
-make analyze-flow TARGET=u250 KERNEL=scaleadd
+make analyze TARGET=u250 KERNEL=scaleadd
 make cosim TARGET=u250 KERNEL=scaleadd
 make analyze-cosim TARGET=u250 KERNEL=scaleadd
 ```
@@ -315,7 +315,7 @@ make analyze-cosim TARGET=u250 KERNEL=scaleadd
 Expected results:
 
 - `csynth` produces a `scaleadd_csynth.xml` report under the build tree.
-- `analyze-flow` shows II, latency, timing, and resource use.
+- `analyze` shows II, latency, timing, and resource use.
 - `cosim` runs `tests/kernels/scaleadd_cosim_tb.cpp` through Vitis HLS C/RTL cosimulation.
 - `analyze-cosim` shows pass/fail and latency extracted from the cosim reports.
 
@@ -540,16 +540,18 @@ Register extra source files in `src/hls_model/CMakeLists.txt` if you add them.
 
 ## 7. Customize data generation and comparison
 
-The default flow uses `data/<dataset>/` directories. A dataset typically contains:
+The default flow uses `data/<dataset>/` for inputs and reference output. A dataset typically contains:
 
 ```text
 data/tiny/
 ├── meta.json
 ├── x.bin
 ├── y.bin
-├── gold_out.bin
-└── xrt_hw_out.bin
+└── gold_out.bin
 ```
+
+Hardware and emulation outputs live under
+`runs/<target>/<mode>/<host_app>/<dataset>/<run_key>/out.bin`.
 
 For a custom kernel, decide the file contract first. For `scaleadd` you might use:
 
@@ -561,8 +563,7 @@ For a custom kernel, decide the file contract first. For `scaleadd` you might us
   "beta": 3.0,
   "a": "a.bin",
   "b": "b.bin",
-  "gold": "gold_out.bin",
-  "hw": "xrt_hw_out.bin"
+  "gold": "gold_out.bin"
 }
 ```
 
@@ -572,10 +573,10 @@ Then update:
 |---|---|
 | `scripts/gen_dataset.py` or `src/apps/gen_dataset.cpp` | Write the new input files and `meta.json` fields |
 | `src/gold/**` | Read the same fields and write `gold_out.bin` |
-| `src/host/run_<kernel>.cpp` | Read the same inputs and write `xrt_hw_out.bin` |
+| `src/host/run_<kernel>.cpp` | Read the same inputs and write the `--output` path passed by the Make target |
 | `scripts/compare.py` or `tools/hlsflow compare-gold` | Compare the right files and tolerances |
 
-Keep the data contract explicit. If your host writes `scaleadd_hw.bin` but compare expects `xrt_hw_out.bin`, the flow will look broken even if the kernel is correct.
+Keep the data contract explicit. If your host ignores `--output`, the flow will look broken even if the kernel is correct.
 
 ## 8. Add a new target/device
 
@@ -643,7 +644,7 @@ If the host compiler cannot find `crtbeginS.o` or `-lgcc`, your sysroot/toolchai
 
 ## 9. Customize platform metadata for reports
 
-`hlsflow` uses `tools/hlsflow/platform_info.py` to display device information such as resource totals, family, memory notes, and default clock. Add your board there when `analyze-flow` shows unknown totals.
+`hlsflow` uses `tools/hlsflow/platform_info.py` to display device information such as resource totals, family, memory notes, and default clock. Add your board there when `analyze` shows unknown totals.
 
 A useful metadata entry should include:
 
@@ -692,7 +693,7 @@ Deployment is split so you can run only the part you need:
 make deploy-bin TARGET=zcu102 HOST_APP=run_saxpy BOARD_IP=192.168.1.10
 make deploy-xclbin TARGET=zcu102 BOARD_IP=192.168.1.10
 make deploy-data TARGET=zcu102 DATASET=tiny BOARD_IP=192.168.1.10
-make test-xrt-hw TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny BOARD_IP=192.168.1.10
+make test-hw TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny BOARD_IP=192.168.1.10
 ```
 
 For a new host app, check these details:
@@ -714,9 +715,10 @@ Use this checklist for every new kernel or board:
 - [ ] `KERNEL=<name>` works for `make csynth`.
 - [ ] `KERNEL=<name>` works for `make cosim` if a testbench exists.
 - [ ] `HOST_APP=<name>` builds with `make build`.
+- [ ] The host app can produce run output through the relevant run entrypoint: `make swemu`, `make hwemu`, `make qemu`, or `make hw`.
 - [ ] Dataset file names are consistent across generator, gold, host, and compare.
 - [ ] `make test` still passes and does not require Vitis/XRT/platform files.
-- [ ] `make analyze-flow` shows meaningful platform totals or you added metadata.
+- [ ] `make analyze` shows meaningful platform totals or you added metadata.
 - [ ] User docs mention any non-obvious deployment or board setup requirement.
 
 ## 13. Troubleshooting common customization failures

@@ -96,7 +96,7 @@ ANVIL_DATAFLOW_FINALIZE();
 这个拆分服务于 model-first 阶梯：
 
 ```text
-gold -> hls_model -> csynth -> cosim -> xclbin -> host
+gold -> hls_model -> csynth -> cosim -> xclbin -> swemu/hwemu/qemu/hw
 ```
 
 除非综合报告证明硬件不变，不要为了方便把 Vitis dataflow 区域藏进 wrapper。把 `ANVIL_DATAFLOW_INIT`、`ANVIL_DATAFLOW_FUNCTION` 和 `ANVIL_DATAFLOW_FINALIZE` 显式留在 Vitis top 里，更容易审查硬件边界。

@@ -1,4 +1,4 @@
-"""Compare gold_out.bin vs xrt_hw_out.bin and produce a hw RunRecord."""
+"""Compare gold_out.bin vs a hardware/emulation run output."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -18,18 +18,21 @@ def compare_gold_hw(
     git_commit: str = "unknown",
     build_dir: str = "",
     vitis_version: str = "unknown",
+    hw_output: Path | None = None,
 ) -> RunRecord:
-    """Load gold_out.bin and xrt_hw_out.bin, compute mae/rms, return RunRecord."""
+    """Load gold_out.bin and a run output, compute mae/rms, return RunRecord."""
     gold_path = dataset_dir / "gold_out.bin"
     if not gold_path.exists():
         legacy_gold_path = dataset_dir / f"{dataset_dir.name}_gold_out.bin"
         if legacy_gold_path.exists():
             gold_path = legacy_gold_path
-    hw_path = dataset_dir / "xrt_hw_out.bin"
+    if hw_output is None:
+        raise FileNotFoundError("run output path must be provided")
+    hw_path = hw_output
     if not gold_path.exists():
         raise FileNotFoundError(f"gold_out.bin not found in {dataset_dir}")
     if not hw_path.exists():
-        raise FileNotFoundError(f"xrt_hw_out.bin not found in {dataset_dir}")
+        raise FileNotFoundError(f"hardware output not found: {hw_path}")
 
     gold = np.fromfile(gold_path, dtype=np.float32)
     hw = np.fromfile(hw_path, dtype=np.float32)
@@ -53,6 +56,6 @@ def compare_gold_hw(
         vitis_version=vitis_version,
         status=verdict,
         timestamp=datetime.now(timezone.utc).isoformat(),
-        reports={"gold_bin": str(gold_path), "xrt_hw_bin": str(hw_path)},
+        reports={"gold_bin": str(gold_path), "run_output_bin": str(hw_path)},
         metrics={"mae": mae, "rms": rms, "tol": tol, "n_elems": int(gold.size)},
     )

@@ -7,11 +7,11 @@
 按这个顺序：
 
 ```text
-gold -> hls_model -> csynth -> cosim -> xclbin -> host
+gold -> hls_model -> csynth -> cosim -> xclbin -> swemu/hwemu/qemu/hw
 ```
 
 1. **Gold 和 CPU unit tests** — 抓普通 C++/Python 错误。
-2. **HLS 模型 (`make test-hls-model`)** — 运行 Vitis 前 CPU 测试：gold + FPGA 形状的 HLS 模型 + HLS helper 测试。
+2. **HLS 模型 (`make test`)** — 运行 Vitis 前 CPU 测试：gold + FPGA 形状的 HLS 模型 + HLS helper 测试。
 3. **HLS 综合 (`csynth`)** — 抓 HLS 不兼容 C++，查看硬件估算。
 4. **HLS cosim (`cosim`)** — 抓 RTL 行为不一致。
 5. **xclbin link** — 抓 platform/connectivity/memory-bank 问题。
@@ -31,11 +31,7 @@ HLS 模型是第一个 FPGA 形状检查：它会把 scalar 数据打成 pack，
 make test
 ```
 
-`make test` 和 `make test-hls-model` 目前运行同一套 Vitis 前 CPU 测试。需要明确表达“HLS 模型是 gold/unit tests 之后第一个 FPGA 形状检查”时，用显式名字：
-
-```bash
-make test-hls-model
-```
+`make test` 是 Vitis 前 CPU 测试套件，也是 gold/unit tests 之后第一个 FPGA 形状检查。
 
 如果涉及 Python 工具：
 
@@ -51,9 +47,9 @@ make test
 运行：
 
 ```bash
-make test-hls-model
+make test
 make csynth TARGET=u250 KERNEL=<kernel>
-make analyze-flow TARGET=u250 KERNEL=<kernel>
+make analyze TARGET=u250 KERNEL=<kernel>
 make cosim TARGET=u250 KERNEL=<kernel>
 make analyze-cosim TARGET=u250 KERNEL=<kernel>
 ```
@@ -69,7 +65,7 @@ src/hls_model/saxpy_hls_model.cpp                 # 共享核心外面的 scalar
 src/host/run_saxpy.cpp                            # XRT host app
 ```
 
-新 m_axi 风格 packed kernel 也按这个拆分：先 gold，再 HLS 模型，再 csynth/cosim/xclbin/host。Stream/k2k kernels 仍由现有 Vitis flow 支持，但 first-class stream HLS models 还不是默认模式。
+新 m_axi 风格 packed kernel 也按这个拆分：先 gold，再 HLS 模型，再 csynth/cosim/xclbin/swemu/hwemu/qemu/hw。Stream/k2k kernels 仍由现有 Vitis flow 支持，但 first-class stream HLS models 还不是默认模式。
 
 怎么理解：
 
@@ -112,7 +108,7 @@ make xclbin TARGET=u250
 
 ```bash
 make csynth TARGET=<target> KERNEL=saxpy
-make analyze-flow TARGET=<target> KERNEL=saxpy
+make analyze TARGET=<target> KERNEL=saxpy
 ```
 
 之后再试：
@@ -121,6 +117,8 @@ make analyze-flow TARGET=<target> KERNEL=saxpy
 make xclbin TARGET=<target>
 make analyze-link TARGET=<target> HOST_APP=run_saxpy
 make build TARGET=<target> HOST_APP=run_saxpy
+make swemu TARGET=<target> HOST_APP=run_saxpy DATASET=tiny
+make hwemu TARGET=<target> HOST_APP=run_saxpy DATASET=tiny
 ```
 
 `analyze-link` 是 xclbin 和 host 之间的检查点。它确认 xclbin 是否存在、哪些 compute unit 被链接进去、kernel 端口绑定到了哪些 DDR/HBM bank。

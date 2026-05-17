@@ -68,6 +68,10 @@ def _scp_remote(target: str, path: str) -> str:
               help="Remote xclbin basename without .xclbin")
 @click.option("--dataset", default="tiny", show_default=True, callback=_validate_dataset_name,
               help="Dataset name under data/ (safe name: letters, digits, underscore, dot, dash)")
+@click.option("--local-output", type=click.Path(path_type=Path), default=None,
+              help="Local output path for retrieved hardware result")
+@click.option("--remote-output", default="out.bin", show_default=True,
+              help="Remote output filename inside the deployed dataset directory")
 @click.option("--xrt-setup", default=". /etc/profile.d/xrt_setup.sh",
               show_default=True, help="Command to source XRT on board (POSIX dot preferred over bash source)")
 @click.option("--dry-run", is_flag=True, default=False,
@@ -81,19 +85,22 @@ def main(
     host_app: str,
     xclbin_name: str,
     dataset: str,
+    local_output: Path | None,
+    remote_output: str,
     xrt_setup: str,
     dry_run: bool,
 ) -> None:
     log.init("board_run")
     target = f"{ssh_user}@{board_ip}"
     data_dir = Path("data") / dataset
-    out_bin = data_dir / "xrt_hw_out.bin"
+    out_bin = local_output or (Path("runs") / "board" / "hw" / host_app / dataset / "latest" / "out.bin")
     remote_data_dir = _remote_path(deploy_dir, "data", dataset)
-    remote_out = _remote_path(remote_data_dir, "xrt_hw_out.bin")
+    remote_out = _remote_path(remote_data_dir, remote_output)
 
     if dry_run:
         log.info("[DRY RUN] commands will be printed but not executed")
 
+    out_bin.parent.mkdir(parents=True, exist_ok=True)
     _run(["ssh", target, f"mkdir -p {_quote_remote_path(remote_data_dir)}"], dry_run)
     remote_host = host_app
     remote_xclbin = f"{xclbin_name}.xclbin"
@@ -107,13 +114,13 @@ def main(
         f"chmod +x {shlex.quote(remote_host)} && "
         f"./{shlex.quote(remote_host)} --xclbin {shlex.quote(remote_xclbin)} "
         f"--data-dir {shlex.quote('data/' + dataset)} "
-        f"--output {shlex.quote('data/' + dataset + '/xrt_hw_out.bin')}"
+        f"--output {shlex.quote('data/' + dataset + '/' + remote_output)}"
     )
     _run(["ssh", target, remote_cmd], dry_run)
     _run(["scp", _scp_remote(target, remote_out), str(out_bin)], dry_run)
 
     log.info("board_run: output retrieved to {}", str(out_bin))
-    log.info("Run 'make compare DATASET={}' to validate against gold.", dataset)
+    log.info("Run 'make compare DATASET={} RUN_HW_OUTPUT={}' to validate against gold.", dataset, str(out_bin))
 
 
 if __name__ == "__main__":
