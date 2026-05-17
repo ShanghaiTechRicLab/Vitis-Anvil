@@ -102,7 +102,7 @@ BOARD_DEPLOY_DIR  ?= ~/anvil-deploy
         configure-kernel configure-host build-host build-kernel build-all \
         csynth cosim xclbin xclbin-hwemu \
         require-pipeline-demo csynth-stream cosim-stream pipeline-demo \
-        gen gold run-host xrt-emu xrt-hw compare analyze analyze-legacy analyze-flow analyze-cosim check-hls compare-hls emconfig \
+        gen gold run-host xrt-emu xrt-hw compare analyze analyze-legacy analyze-flow analyze-cosim analyze-link check-hls compare-hls emconfig \
         deploy deploy-bin deploy-xclbin deploy-data deploy-check \
         test test-hls-model test-csynth test-cosim test-xrt-emu test-xrt-hw test-slow test-all
 
@@ -341,6 +341,11 @@ analyze-cosim: require-python-env
 	@if [ ! -d tools/hlsflow ]; then echo "tools/hlsflow not present" >&2; exit 1; fi
 	env $(HLSFLOW_PYTHON) -m hlsflow collect --build-dir $(BUILD_DIR) --kernel $(KERNEL) --target cosim --platform $(TARGET)
 
+# analyze-link — Collect v++ link/xclbin report into hlsflow database / 收集 v++ link/xclbin 报告到 hlsflow 数据库
+analyze-link: require-python-env
+	@if [ ! -d tools/hlsflow ]; then echo "tools/hlsflow not present" >&2; exit 1; fi
+	env $(HLSFLOW_PYTHON) -m hlsflow collect --build-dir $(BUILD_DIR) --kernel $(XCLBIN_NAME) --target link --platform $(TARGET)
+
 # analyze-legacy — Old simple parser (kept for backward compatibility)
 #                  旧版简易解析器（向后兼容保留）
 analyze-legacy: require-python-env
@@ -499,6 +504,7 @@ help-en:
 	@echo "  make cosim TARGET=u250 KERNEL=saxpy            Run HLS C/RTL cosimulation"
 	@echo "  make analyze-flow TARGET=u250 KERNEL=saxpy     Analyze csynth reports"
 	@echo "  make analyze-cosim TARGET=u250 KERNEL=saxpy    Analyze cosim reports"
+	@echo "  make analyze-link TARGET=u250 HOST_APP=run_saxpy Analyze link/xclbin reports"
 	@echo "  make check-hls                                 Check latest HLS run thresholds"
 	@echo "  make compare-hls BASELINE=<id> CANDIDATE=<id>  Compare two HLS runs"
 	@echo ""
@@ -528,7 +534,7 @@ help-en:
 	@echo "Maintenance / compatibility aliases:"
 	@echo "  make configure|configure-kernel|configure-host  Configure CMake presets"
 	@echo "  make build-kernel|build-all|build-cpp           Build aliases"
-	@echo "  make analyze|analyze-legacy|analyze-flow        Analysis entrypoints"
+	@echo "  make analyze|analyze-cosim|analyze-link          Analysis entrypoints"
 	@echo "  make test-hls-model|test-csynth|test-cosim      HLS model and Vitis test entrypoints"
 	@echo "  make test-xrt-emu                               Hardware-emulation test"
 	@echo "  make clean|clean-all                            Remove build artifacts"
@@ -562,6 +568,7 @@ help-zh:
 	@echo "  make cosim TARGET=u250 KERNEL=saxpy            运行 HLS C/RTL cosimulation"
 	@echo "  make analyze-flow TARGET=u250 KERNEL=saxpy     分析 csynth 报告"
 	@echo "  make analyze-cosim TARGET=u250 KERNEL=saxpy    分析 cosim 报告"
+	@echo "  make analyze-link TARGET=u250 HOST_APP=run_saxpy 分析 link/xclbin 报告"
 	@echo "  make check-hls                                 检查最新 HLS run 阈值"
 	@echo "  make compare-hls BASELINE=<id> CANDIDATE=<id>  对比两次 HLS run"
 	@echo ""
@@ -591,7 +598,7 @@ help-zh:
 	@echo "维护 / 兼容别名:"
 	@echo "  make configure|configure-kernel|configure-host  配置 CMake presets"
 	@echo "  make build-kernel|build-all|build-cpp           构建别名"
-	@echo "  make analyze|analyze-legacy|analyze-flow        分析入口"
+	@echo "  make analyze|analyze-cosim|analyze-link          分析入口"
 	@echo "  make test-hls-model|test-csynth|test-cosim      HLS 模型和 Vitis 测试入口"
 	@echo "  make test-xrt-emu                               硬件仿真测试"
 	@echo "  make clean|clean-all                            清理构建产物"

@@ -13,6 +13,7 @@ import click
 from hlsflow import __version__
 from rich.console import Console
 from rich.table import Table
+from rich.markup import escape
 
 from hlsflow.check import run_checks
 from hlsflow.compare import render_diff
@@ -21,6 +22,7 @@ from hlsflow.database import RunRecord, append as db_append, find_by_id, latest,
 from hlsflow.discover import find_cosim_dir, find_csynth_for_kernel, find_csynth_reports
 from hlsflow.parse_cosim import parse_cosim_dir
 from hlsflow.parse_csynth import parse_csynth_report
+from hlsflow.parse_link import LinkReport, parse_link_artifacts
 from hlsflow.parse_vitis import find_and_parse_logs
 from hlsflow.report_md import render
 
@@ -197,10 +199,102 @@ def _do_collect_cosim(build_dir: Path, kernel: str, platform: str, reports_dir: 
     return rec
 
 
+def _fmt_freq(freq_hz: int | None) -> str:
+    if freq_hz is None:
+        return "?"
+    if freq_hz % 1_000_000 == 0:
+        return f"{freq_hz // 1_000_000} MHz"
+    return f"{freq_hz:,} Hz"
+
+
+def _render_link(lr: LinkReport, name: str, platform: str, console: Console) -> None:
+    status_style = "green" if lr.status == "pass" else ("red" if lr.status == "fail" else "yellow")
+    console.print(f"[bold]LINK {name}/{platform}[/bold]  status=[{status_style}]{lr.status}[/{status_style}]  target={lr.target or '?'}")
+
+    if lr.xclbins:
+        table = Table(title="xclbin outputs", show_header=True, header_style="bold")
+        table.add_column("File")
+        table.add_column("Size", justify="right")
+        for xclbin in lr.xclbins:
+            try:
+                size = f"{xclbin.stat().st_size:,} B"
+            except OSError:
+                size = "?"
+            table.add_row(str(xclbin), size)
+        console.print(table)
+    else:
+        console.print("  [yellow]no .xclbin found under build dir[/yellow]")
+
+    if lr.compute_units:
+        table = Table(title="compute units", show_header=True, header_style="bold")
+        table.add_column("Kernel")
+        table.add_column("Count", justify="right")
+        table.add_column("CU name")
+        for cu in lr.compute_units:
+            table.add_row(cu.kernel, str(cu.count), cu.name)
+        console.print(table)
+
+    if lr.memory_connections:
+        table = Table(title="memory connectivity", show_header=True, header_style="bold")
+        table.add_column("Endpoint")
+        table.add_column("Memory")
+        for conn in lr.memory_connections:
+            table.add_row(conn.endpoint, conn.memory)
+        console.print(table)
+
+    if lr.clocks:
+        table = Table(title="clock settings", show_header=True, header_style="bold")
+        table.add_column("Endpoint")
+        table.add_column("Frequency", justify="right")
+        for clk in lr.clocks:
+            table.add_row(clk.endpoint, _fmt_freq(clk.freq_hz))
+        console.print(table)
+
+    if lr.errors:
+        console.print(f"[red]vitis link errors ({len(lr.errors)})[/red]: {escape(lr.errors[0])}")
+    elif lr.warnings:
+        console.print(f"[yellow]vitis link warnings ({len(lr.warnings)})[/yellow]: {escape(lr.warnings[0])}")
+
+    artifacts = [str(p) for p in lr.config_files + [Path(log.log_path) for log in lr.logs]]
+    if artifacts:
+        console.print(f"  artifacts: {', '.join(artifacts[:8])}" + (" ..." if len(artifacts) > 8 else ""))
+
+
+def _do_collect_link(build_dir: Path, name: str, platform: str, reports_dir: Path,
+                     console: Console) -> RunRecord | None:
+    lr = parse_link_artifacts(build_dir, platform=platform)
+    _render_link(lr, name, platform, console)
+    vitis_v = _vitis_version()
+    run_id = now_run_id(name, platform)
+    rec = RunRecord(
+        run_id=run_id, kernel=name, platform=platform, target="link",
+        git_commit=_git_commit(), build_dir=str(build_dir), vitis_version=vitis_v,
+        status=lr.status, timestamp=datetime.now(timezone.utc).isoformat(),
+        reports={
+            "xclbins": ";".join(str(p) for p in lr.xclbins),
+            "logs": ";".join(log.log_path for log in lr.logs),
+            "link_cfg": ";".join(str(p) for p in lr.config_files),
+        },
+        metrics={
+            "xclbin_count": len(lr.xclbins),
+            "xclbins": [str(p) for p in lr.xclbins],
+            "link_target": lr.target,
+            "link_platform": lr.platform,
+            "compute_units": [cu.__dict__ for cu in lr.compute_units],
+            "memory_connections": [conn.__dict__ for conn in lr.memory_connections],
+            "clocks": [clk.__dict__ for clk in lr.clocks],
+            "vitis_errors": lr.errors[:5],
+            "vitis_warnings": lr.warnings[:5],
+        },
+    )
+    db_append(rec, reports_dir / "runs.jsonl")
+    return rec
+
+
 @cli.command()
 @click.option("--build-dir", required=True, type=click.Path(exists=True, file_okay=False, path_type=Path))
 @click.option("--kernel", required=True, help="Kernel name, or 'all' to scan every kernel")
-@click.option("--target", type=click.Choice(["csynth", "cosim"]), default="csynth")
+@click.option("--target", type=click.Choice(["csynth", "cosim", "link"]), default="csynth")
 @click.option("--platform", default=None, help="Override platform tag (default: inferred from build-dir name)")
 @click.option("--reports-dir", default="reports", type=click.Path(path_type=Path))
 def collect(build_dir: Path, kernel: str, target: str, platform: str | None, reports_dir: Path) -> None:
@@ -208,6 +302,11 @@ def collect(build_dir: Path, kernel: str, target: str, platform: str | None, rep
     console = Console()
     platform_tag = _platform_from_build_dir(build_dir, platform)
     reports_dir.mkdir(parents=True, exist_ok=True)
+    if target == "link":
+        name = "xclbin" if kernel == "all" else kernel
+        rec = _do_collect_link(build_dir, name, platform_tag, reports_dir, console)
+        raise SystemExit(1 if rec is None or rec.status == "fail" else 0)
+
     kernels = [h.kernel for h in find_csynth_reports(build_dir)] if kernel == "all" else [kernel]
     if not kernels:
         console.print(f"[red]error[/red]: no csynth reports found under {build_dir}")
@@ -224,7 +323,7 @@ def collect(build_dir: Path, kernel: str, target: str, platform: str | None, rep
 @cli.command()
 @click.option("--run-id", default=None)
 @click.option("--kernel", default=None, help="Filter latest by kernel")
-@click.option("--target", type=click.Choice(["csynth", "cosim"]), default="csynth")
+@click.option("--target", type=click.Choice(["csynth", "cosim", "link"]), default="csynth")
 @click.option("--reports-dir", default="reports", type=click.Path(path_type=Path))
 @click.option("--max-ii", type=int, default=None)
 @click.option("--max-lut", type=int, default=None)
