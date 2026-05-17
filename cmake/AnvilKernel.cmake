@@ -242,22 +242,48 @@ function(add_anvil_kernel)
     list(APPEND _ak_action_meta_args --part "${ANVIL_VITIS_PART}")
   endif()
 
-  # Vitis 2024.2 HLS compile mode accepts platform/frequency but not --target;
-  # ANVIL_VITIS_TARGET is retained as target metadata for future xclbin/link work.
-  # Keep generated config timestamps stable across repeated configure calls;
-  # otherwise every Makefile invocation rewrites hls.cfg/cosim.cfg and Ninja
-  # correctly assumes hour-scale HLS/cosim outputs are stale.
+  set(_ak_hls_legacy_vitis_2022 OFF)
+  if(VITIS_VERSION MATCHES "^2022[.]")
+    set(_ak_hls_legacy_vitis_2022 ON)
+  endif()
+  if(_ak_hls_legacy_vitis_2022 AND NOT ANVIL_VITIS_PART)
+    message(FATAL_ERROR
+      "add_anvil_kernel(${AK_NAME}): Vitis ${VITIS_VERSION} HLS config requires "
+      "ANVIL_VITIS_PART because v++ --mode hls does not accept platform= in hls.cfg")
+  endif()
+
+  if(_ak_hls_legacy_vitis_2022)
+    # Vitis 2022.2 rejects top-level platform=/freqhz= in --mode hls config.
+    # Use the legacy part=/[hls] clock= spelling and the older syn.output.*
+    # keys. Newer Vitis accepts syn.output.* too, but keep package.output.*
+    # for the 2024.x path to match the current documentation.
+    set(_ak_cfg_device_line "part=${ANVIL_VITIS_PART}\n")
+    set(_ak_cfg_freq_line "")
+    set(_ak_cfg_clock_line "clock=${ANVIL_CLOCK_MHZ}MHz\n")
+    set(_ak_cfg_output_lines "syn.output.format=xo\nsyn.output.file=${_ak_xo}\n")
+  else()
+    set(_ak_cfg_device_line "platform=${ANVIL_VITIS_PLATFORM}\n")
+    set(_ak_cfg_freq_line "freqhz=${AK_CLOCK_HZ}\n")
+    set(_ak_cfg_clock_line "")
+    set(_ak_cfg_output_lines "package.output.format=xo\npackage.output.file=${_ak_xo}\n")
+  endif()
+
+  # Vitis HLS compile mode accepts platform/frequency in newer releases but not
+  # --target; ANVIL_VITIS_TARGET is retained as target metadata for future
+  # xclbin/link work. Keep generated config timestamps stable across repeated
+  # configure calls; otherwise every Makefile invocation rewrites hls.cfg/cosim.cfg
+  # and Ninja correctly assumes hour-scale HLS/cosim outputs are stale.
   string(CONCAT _ak_cfg_content
-    "platform=${ANVIL_VITIS_PLATFORM}\n"
-    "freqhz=${AK_CLOCK_HZ}\n"
+    "${_ak_cfg_device_line}"
+    "${_ak_cfg_freq_line}"
     "\n"
     "[hls]\n"
+    "${_ak_cfg_clock_line}"
     "syn.top=${AK_TOP}\n"
     "syn.cflags=${_ak_cflags}\n"
     "${_ak_syn_files}"
     "flow_target=vitis\n"
-    "package.output.format=xo\n"
-    "package.output.file=${_ak_xo}\n")
+    "${_ak_cfg_output_lines}")
   _anvil_write_file_if_changed("${_ak_cfg}" "${_ak_cfg_content}")
 
   if(AK_TESTBENCH)
