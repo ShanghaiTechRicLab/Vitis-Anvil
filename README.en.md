@@ -41,6 +41,7 @@ make csynth TARGET=u250 KERNEL=saxpy          # HLS synthesis for one kernel
 make cosim TARGET=u250 KERNEL=saxpy           # HLS C/RTL cosimulation
 make analyze-flow TARGET=u250 KERNEL=saxpy    # inspect synthesis reports
 make analyze-cosim TARGET=u250 KERNEL=saxpy   # inspect cosimulation reports
+make analyze-link TARGET=u250 HOST_APP=run_saxpy # inspect link/xclbin reports
 make xclbin TARGET=u250                       # link the hardware xclbin (slow)
 make run-host TARGET=u250 HOST_APP=run_saxpy  # run on an installed accelerator card
 ```

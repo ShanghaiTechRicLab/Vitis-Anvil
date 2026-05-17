@@ -136,6 +136,14 @@ Typical output path:
 build/u250-host/src/kernels/saxpy_xclbin/saxpy.xclbin
 ```
 
+After link, inspect what Vitis produced:
+
+```bash
+make analyze-link TARGET=u250 HOST_APP=run_saxpy
+```
+
+This parses the link artifacts and shows the xclbin path, compute units, memory-bank connectivity from `link.cfg`, clock settings, and Vitis link warnings/errors. It answers: did the xclbin get produced, did `saxpy_1` enter it, and do the ports bind to the expected DDR/HBM banks?
+
 This step can be slow. It is normal for hardware builds to take much longer than CPU tests.
 
 ## 8. Build the host app

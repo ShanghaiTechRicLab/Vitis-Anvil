@@ -134,6 +134,14 @@ make xclbin TARGET=u250
 build/u250-host/src/kernels/saxpy_xclbin/saxpy.xclbin
 ```
 
+link 完以后，查看 Vitis 实际生成了什么：
+
+```bash
+make analyze-link TARGET=u250 HOST_APP=run_saxpy
+```
+
+它会解析 link 产物，显示 xclbin 路径、compute unit、来自 `link.cfg` 的内存 bank 绑定、clock 设置，以及 Vitis link warning/error。它回答的是：xclbin 有没有生成，`saxpy_1` 有没有进 xclbin，端口是不是绑到了预期的 DDR/HBM bank。
+
 这一步可能很慢。硬件构建比 CPU 测试慢很多是正常的。
 
 ## 8. 构建 host app

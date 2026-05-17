@@ -41,6 +41,7 @@ make csynth TARGET=u250 KERNEL=saxpy          # HLS 综合
 make cosim TARGET=u250 KERNEL=saxpy           # HLS C/RTL 协同仿真
 make analyze-flow TARGET=u250 KERNEL=saxpy    # 查看综合报告
 make analyze-cosim TARGET=u250 KERNEL=saxpy   # 查看协同仿真报告
+make analyze-link TARGET=u250 HOST_APP=run_saxpy # 查看 link/xclbin 报告
 make xclbin TARGET=u250                       # 链接硬件 xclbin（耗时较长）
 make run-host TARGET=u250 HOST_APP=run_saxpy  # 在已安装的加速卡上运行
 ```

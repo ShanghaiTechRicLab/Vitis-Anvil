@@ -125,6 +125,14 @@ make xclbin TARGET=u250
 build/u250-host/src/kernels/saxpy_xclbin/saxpy.xclbin
 ```
 
+link 成功后，先查看链接产物：
+
+```bash
+make analyze-link TARGET=u250 HOST_APP=run_saxpy
+```
+
+它会打印 xclbin 路径、compute-unit 名、memory connectivity、clock，以及 Vitis link warning/error。
+
 如果 link 失败，看 Vitis link log。常见问题：
 
 - `sp=` 参数名无效

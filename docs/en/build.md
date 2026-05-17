@@ -185,6 +185,32 @@ build/<preset>/src/kernels/<name>_xclbin/<name>.xclbin
 
 This can be slow. Run `csynth` and `cosim` first so you do not wait for link just to discover a kernel bug.
 
+### `make analyze-link TARGET=<target> HOST_APP=<host-app>`
+
+Purpose: summarize Vitis link/xclbin artifacts after `make xclbin` or `make xclbin-hwemu`.
+
+Example:
+
+```bash
+make analyze-link TARGET=u250 HOST_APP=run_saxpy
+```
+
+What it reads:
+
+- `.xclbin` files under the selected build directory
+- Vitis link `v++.log` files
+- `link.cfg` connectivity, either copied under the build tree or from `config/<target>/link.cfg`
+
+What it shows:
+
+- xclbin output paths and sizes
+- compute-unit names such as `saxpy_1` and `vadd_1`
+- memory bindings such as `saxpy_1.x -> DDR[0]` or `HBM[0]`
+- clock settings
+- Vitis link warnings/errors
+
+Use this before debugging the host app. If link did not put the expected compute unit or memory binding into the xclbin, the host app cannot fix it.
+
 ### `make xclbin-hwemu TARGET=<target>`
 
 Purpose: build an xclbin for hardware emulation instead of real hardware.

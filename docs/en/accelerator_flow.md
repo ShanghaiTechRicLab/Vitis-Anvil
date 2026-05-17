@@ -125,6 +125,14 @@ This can take a long time. It produces a file like:
 build/u250-host/src/kernels/saxpy_xclbin/saxpy.xclbin
 ```
 
+After link succeeds, inspect the linked artifact:
+
+```bash
+make analyze-link TARGET=u250 HOST_APP=run_saxpy
+```
+
+This prints the xclbin path, compute-unit names, memory connectivity, clocks, and Vitis link warnings/errors.
+
 If link fails, inspect the Vitis link log. Common issues:
 
 - invalid `sp=` argument name

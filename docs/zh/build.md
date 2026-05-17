@@ -185,6 +185,32 @@ build/<preset>/src/kernels/<name>_xclbin/<name>.xclbin
 
 这一步可能很慢。先跑 `csynth` 和 `cosim`，不要等 link 跑很久后才发现 kernel bug。
 
+### `make analyze-link TARGET=<target> HOST_APP=<host-app>`
+
+目的：在 `make xclbin` 或 `make xclbin-hwemu` 之后汇总 Vitis link/xclbin 产物。
+
+例子：
+
+```bash
+make analyze-link TARGET=u250 HOST_APP=run_saxpy
+```
+
+它读取：
+
+- 当前 build 目录下的 `.xclbin`
+- Vitis link 的 `v++.log`
+- build tree 里的 `link.cfg`，或者 `config/<target>/link.cfg`
+
+它显示：
+
+- xclbin 输出路径和大小
+- `saxpy_1`、`vadd_1` 这类 compute unit 名
+- `saxpy_1.x -> DDR[0]` 或 `HBM[0]` 这类内存绑定
+- clock 设置
+- Vitis link warning/error
+
+先看这个再调 host app。如果 link 没把预期 compute unit 或 memory binding 放进 xclbin，host app 修不好。
+
 ### `make xclbin-hwemu TARGET=<target>`
 
 目的：构建 hardware emulation 用的 xclbin，而不是真实硬件 xclbin。

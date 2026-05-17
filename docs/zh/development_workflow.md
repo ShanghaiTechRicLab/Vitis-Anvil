@@ -119,8 +119,11 @@ make analyze-flow TARGET=<target> KERNEL=saxpy
 
 ```bash
 make xclbin TARGET=<target>
+make analyze-link TARGET=<target> HOST_APP=run_saxpy
 make build TARGET=<target> HOST_APP=run_saxpy
 ```
+
+`analyze-link` 是 xclbin 和 host 之间的检查点。它确认 xclbin 是否存在、哪些 compute unit 被链接进去、kernel 端口绑定到了哪些 DDR/HBM bank。
 
 Embedded 板卡构建 host 时要设置 `PETALINUX_SYSROOT`。
 

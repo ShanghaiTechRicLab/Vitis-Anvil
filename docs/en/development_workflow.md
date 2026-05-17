@@ -119,8 +119,11 @@ Only after that try:
 
 ```bash
 make xclbin TARGET=<target>
+make analyze-link TARGET=<target> HOST_APP=run_saxpy
 make build TARGET=<target> HOST_APP=run_saxpy
 ```
+
+`analyze-link` is the checkpoint between xclbin and host. It confirms that the xclbin exists, which compute units were linked, and how kernel ports were bound to DDR/HBM banks.
 
 For embedded boards, build host with `PETALINUX_SYSROOT` set.
 
