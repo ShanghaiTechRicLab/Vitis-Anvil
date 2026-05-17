@@ -22,7 +22,33 @@ find_package(Threads REQUIRED)
 
 add_library(hlslib_anvil INTERFACE)
 
-set(ANVIL_XILINX_INCLUDE_DIR "/tools/Xilinx/Vitis/2024.2/include" CACHE PATH
+set(_anvil_default_xilinx_include_dir "/tools/Xilinx/Vitis/2024.2/include")
+if(DEFINED ENV{XILINX_VITIS})
+  if(EXISTS "$ENV{XILINX_VITIS}/include/ap_int.h" AND
+     EXISTS "$ENV{XILINX_VITIS}/include/ap_fixed.h")
+    set(_anvil_default_xilinx_include_dir "$ENV{XILINX_VITIS}/include")
+  elseif("$ENV{XILINX_VITIS}" MATCHES "[/\\]Vitis[/\\]([^/\\]+)$")
+    set(_anvil_vitis_hls_sibling "$ENV{XILINX_VITIS}")
+    string(REGEX REPLACE "[/\\]Vitis[/\\][^/\\]+$" "/Vitis_HLS/${CMAKE_MATCH_1}" _anvil_vitis_hls_sibling "${_anvil_vitis_hls_sibling}")
+    if(EXISTS "${_anvil_vitis_hls_sibling}/include/ap_int.h" AND
+       EXISTS "${_anvil_vitis_hls_sibling}/include/ap_fixed.h")
+      set(_anvil_default_xilinx_include_dir "${_anvil_vitis_hls_sibling}/include")
+    endif()
+  endif()
+endif()
+if(DEFINED ENV{XILINX_VITIS} AND ANVIL_XILINX_INCLUDE_DIR)
+  if(ANVIL_XILINX_INCLUDE_DIR MATCHES "[/\\]Vitis(_HLS)?[/\\]([^/\\]+)[/\\]include")
+    set(_anvil_cached_xilinx_version "${CMAKE_MATCH_2}")
+    if("$ENV{XILINX_VITIS}" MATCHES "[/\\]Vitis[/\\]([^/\\]+)$")
+      set(_anvil_env_vitis_version "${CMAKE_MATCH_1}")
+      if(NOT _anvil_cached_xilinx_version STREQUAL _anvil_env_vitis_version)
+        message(STATUS "hlslib: ignoring cached Xilinx headers from ${ANVIL_XILINX_INCLUDE_DIR}; XILINX_VITIS=$ENV{XILINX_VITIS}")
+        unset(ANVIL_XILINX_INCLUDE_DIR CACHE)
+      endif()
+    endif()
+  endif()
+endif()
+set(ANVIL_XILINX_INCLUDE_DIR "${_anvil_default_xilinx_include_dir}" CACHE PATH
   "Directory containing Xilinx ap_int.h/ap_fixed.h for hlslib host builds")
 
 set(_anvil_hlslib_include_dirs ${CMAKE_CURRENT_SOURCE_DIR}/hlslib/include)

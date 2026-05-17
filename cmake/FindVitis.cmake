@@ -1,6 +1,16 @@
 # cmake/FindVitis.cmake
 # Locate Vitis v++ and extract VITIS_VERSION.
 
+
+if(DEFINED ENV{XILINX_VITIS} AND VPP_EXECUTABLE)
+  get_filename_component(_anvil_cached_vpp_bin "${VPP_EXECUTABLE}" DIRECTORY)
+  get_filename_component(_anvil_cached_vitis_root "${_anvil_cached_vpp_bin}" DIRECTORY)
+  if(NOT _anvil_cached_vitis_root STREQUAL "$ENV{XILINX_VITIS}")
+    message(STATUS "FindVitis: ignoring cached v++ from ${_anvil_cached_vitis_root}; XILINX_VITIS=$ENV{XILINX_VITIS}")
+    unset(VPP_EXECUTABLE CACHE)
+  endif()
+endif()
+
 find_program(VPP_EXECUTABLE v++
   HINTS $ENV{XILINX_VITIS}/bin
   PATHS

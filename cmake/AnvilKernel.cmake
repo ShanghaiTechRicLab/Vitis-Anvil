@@ -287,19 +287,36 @@ function(add_anvil_kernel)
   _anvil_write_file_if_changed("${_ak_cfg}" "${_ak_cfg_content}")
 
   if(AK_TESTBENCH)
-    # Vitis 2024.2 cosim rejects the compile config's top-level platform= key;
-    # keep cosim on a separate part-based config.
-    string(CONCAT _ak_cosim_cfg_content
-      "part=${_ak_cosim_part}\n"
-      "freqhz=${AK_CLOCK_HZ}\n"
-      "\n"
-      "[hls]\n"
-      "syn.top=${AK_TOP}\n"
-      "syn.cflags=${_ak_cflags}\n"
-      "${_ak_syn_files}"
-      "tb.file=${_ak_abs_testbench}\n"
-      "tb.file_cflags=${_ak_abs_testbench},${_ak_tb_cflags}\n"
-      "cosim.trace_level=none\n")
+    if(_ak_hls_legacy_vitis_2022)
+      # Vitis 2022.2 cosim is driven through v++ --compile --mode hls with
+      # hls.run=vivado. It rejects freqhz=, tb.file*, and cosim.trace_level.
+      string(CONCAT _ak_cosim_cfg_content
+        "part=${_ak_cosim_part}\n"
+        "\n"
+        "[hls]\n"
+        "clock=${ANVIL_CLOCK_MHZ}MHz\n"
+        "syn.top=${AK_TOP}\n"
+        "syn.cflags=${_ak_cflags}\n"
+        "${_ak_syn_files}"
+        "sim.file=${_ak_abs_testbench}\n"
+        "sim.file_cflags=${_ak_abs_testbench},${_ak_tb_cflags}\n"
+        "sim.hw.trace_level=none\n"
+        "run=vivado\n")
+    else()
+      # Vitis 2024.2 cosim rejects the compile config's top-level platform= key;
+      # keep cosim on a separate part-based config.
+      string(CONCAT _ak_cosim_cfg_content
+        "part=${_ak_cosim_part}\n"
+        "freqhz=${AK_CLOCK_HZ}\n"
+        "\n"
+        "[hls]\n"
+        "syn.top=${AK_TOP}\n"
+        "syn.cflags=${_ak_cflags}\n"
+        "${_ak_syn_files}"
+        "tb.file=${_ak_abs_testbench}\n"
+        "tb.file_cflags=${_ak_abs_testbench},${_ak_tb_cflags}\n"
+        "cosim.trace_level=none\n")
+    endif()
     _anvil_write_file_if_changed("${_ak_cosim_cfg}" "${_ak_cosim_cfg_content}")
   endif()
 
@@ -382,9 +399,25 @@ function(add_anvil_kernel)
       --input "${_ak_xo}"
       --input "${_ak_abs_testbench}"
       --input "${_ak_cosim_cfg}")
+    if(_ak_hls_legacy_vitis_2022)
+      set(_ak_cosim_runner_command
+        "${VPP_EXECUTABLE}"
+        --compile
+        --mode hls
+        --config "${_ak_cosim_cfg}"
+        --work_dir "${_ak_work_dir}")
+    else()
+      set(_ak_cosim_runner_command
+        "${VITIS_RUN_EXECUTABLE}"
+        --cosim
+        --config "${_ak_cosim_cfg}"
+        --work_dir "${_ak_work_dir}")
+    endif()
+
     # vitis-run 2024.2 defaults to --mode hls; the flag is intentionally
     # omitted so this command stays valid if a future release renames mode
-    # tokens (we only need the HLS cosim mode here).
+    # tokens (we only need the HLS cosim mode here). Vitis 2022.2 has no
+    # compatible vitis-run entrypoint, so it uses v++ --compile --mode hls.
     add_custom_command(
       OUTPUT "${_ak_cosim_stamp}"
       BYPRODUCTS
@@ -414,10 +447,7 @@ function(add_anvil_kernel)
               ${_ak_cosim_input_args}
               --output "${_ak_cosim_stamp}"
               --
-              "${VITIS_RUN_EXECUTABLE}"
-              --cosim
-              --config "${_ak_cosim_cfg}"
-              --work_dir "${_ak_work_dir}"
+              ${_ak_cosim_runner_command}
       DEPENDS "${_ak_csynth_stamp}" "${_ak_abs_testbench}" "${_ak_cosim_cfg}" ${_ak_abs_sources}
       DEPFILE "${_ak_cosim_depfile}"
       COMMENT "Running Vitis HLS cosim for ${AK_NAME}"

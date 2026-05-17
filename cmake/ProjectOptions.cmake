@@ -38,12 +38,22 @@ endif()
 
 if(ANVIL_BUILD_KERNELS)
   find_package(Vitis REQUIRED)
-  find_program(VITIS_RUN_EXECUTABLE vitis-run
-    HINTS $ENV{XILINX_VITIS}/bin)
-  if(NOT VITIS_RUN_EXECUTABLE)
-    message(FATAL_ERROR
-      "ANVIL_BUILD_KERNELS=ON requires vitis-run in PATH.\n"
-      "Source the Vitis settings before configuring.")
+  if(DEFINED ENV{XILINX_VITIS} AND VITIS_RUN_EXECUTABLE)
+    get_filename_component(_anvil_cached_vitis_run_bin "${VITIS_RUN_EXECUTABLE}" DIRECTORY)
+    get_filename_component(_anvil_cached_vitis_run_root "${_anvil_cached_vitis_run_bin}" DIRECTORY)
+    if(NOT _anvil_cached_vitis_run_root STREQUAL "$ENV{XILINX_VITIS}")
+      message(STATUS "ProjectOptions: ignoring cached vitis-run from ${_anvil_cached_vitis_run_root}; XILINX_VITIS=$ENV{XILINX_VITIS}")
+      unset(VITIS_RUN_EXECUTABLE CACHE)
+    endif()
+  endif()
+  if(NOT VITIS_VERSION MATCHES "^2022[.]")
+    find_program(VITIS_RUN_EXECUTABLE vitis-run
+      HINTS $ENV{XILINX_VITIS}/bin)
+    if(NOT VITIS_RUN_EXECUTABLE)
+      message(FATAL_ERROR
+        "ANVIL_BUILD_KERNELS=ON requires vitis-run in PATH for Vitis ${VITIS_VERSION}.\n"
+        "Source the Vitis settings before configuring.")
+    endif()
   endif()
   if(NOT ANVIL_VITIS_PLATFORM OR NOT EXISTS "${ANVIL_VITIS_PLATFORM}")
     message(FATAL_ERROR
