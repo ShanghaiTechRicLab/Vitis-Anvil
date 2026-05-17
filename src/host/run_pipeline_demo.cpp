@@ -4,7 +4,7 @@
 #include <anvil/runtime/xrt_buffer.hpp>
 #include <anvil/runtime/xrt_context.hpp>
 
-#include "kernels/kernel_types.hpp"
+#include "kernels/abi.hpp"
 
 #include <nlohmann/json.hpp>
 
