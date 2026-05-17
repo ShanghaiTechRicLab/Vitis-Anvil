@@ -5,7 +5,7 @@
 
 static const int kDepth = 1024;
 static const int kPacks = 4;
-static const int kW = kernels::kPipelinePack;
+static const int kW = kernels::kPipelinePackWidth;
 static const int kTransactions = 2;
 
 namespace {

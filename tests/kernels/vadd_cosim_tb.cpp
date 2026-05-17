@@ -4,7 +4,7 @@
 #include <vector>
 
 using kernels::VaddPack;
-using kernels::kVaddPack;
+using kernels::kVaddPackWidth;
 
 namespace {
 
@@ -15,16 +15,16 @@ constexpr int kTransactions = 2;
 int RunTransaction(int tx) {
     std::vector<VaddPack> a(kInterfaceDepthPacks), b(kInterfaceDepthPacks), out(kInterfaceDepthPacks);
     for (int i = 0; i < kPacks; ++i) {
-        for (int j = 0; j < kVaddPack; ++j) {
-            a[i].Set(j, static_cast<float>(tx * 1000 + i * kVaddPack + j));
+        for (int j = 0; j < kVaddPackWidth; ++j) {
+            a[i].Set(j, static_cast<float>(tx * 1000 + i * kVaddPackWidth + j));
             b[i].Set(j, static_cast<float>(1 + tx));
             out[i].Set(j, 0.0f);
         }
     }
     vadd(a.data(), b.data(), out.data(), kPacks);
     for (int i = 0; i < kPacks; ++i) {
-        for (int j = 0; j < kVaddPack; ++j) {
-            const float expect = static_cast<float>(tx * 1000 + i * kVaddPack + j + 1 + tx);
+        for (int j = 0; j < kVaddPackWidth; ++j) {
+            const float expect = static_cast<float>(tx * 1000 + i * kVaddPackWidth + j + 1 + tx);
             if (out[i][j] != expect) {
                 std::fprintf(stderr, "MISMATCH tx=%d pack=%d lane=%d\n", tx, i, j);
                 return 1;
