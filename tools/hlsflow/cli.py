@@ -22,6 +22,7 @@ from hlsflow.database import RunRecord, append as db_append, find_by_id, latest,
 from hlsflow.discover import find_cosim_dir, find_csynth_for_kernel, find_csynth_reports
 from hlsflow.parse_cosim import parse_cosim_dir
 from hlsflow.parse_csynth import parse_csynth_report
+from hlsflow.parse_hls_compile import find_hls_compile_report, parse_hls_compile_report
 from hlsflow.parse_impl import find_impl_report, parse_impl_report
 from hlsflow.parse_link import LinkReport, parse_link_artifacts
 from hlsflow.parse_vitis import find_and_parse_logs
@@ -63,6 +64,8 @@ def _do_collect_csynth(build_dir: Path, kernel: str, platform: str, reports_dir:
         console.print(f"[red]error[/red]: csynth report for kernel '{kernel}' not found under {build_dir}")
         return None
     rpt = parse_csynth_report(hit.report_path)
+    hls_compile_path = find_hls_compile_report(hit.work_dir)
+    hls_compile = parse_hls_compile_report(hls_compile_path) if hls_compile_path else None
     impl_path = find_impl_report(hit.work_dir)
     impl = parse_impl_report(impl_path) if impl_path else None
     run_id = now_run_id(kernel, platform)
@@ -75,6 +78,13 @@ def _do_collect_csynth(build_dir: Path, kernel: str, platform: str, reports_dir:
     v_errors = [e for lr in vlog for e in lr.errors]
     v_warnings = [w for lr in vlog for w in lr.warnings]
     v_timing = [t for lr in vlog for t in lr.timing_violations]
+    v_phase_times = [phase for lr in vlog for phase in lr.phase_times]
+    v_tool_versions = [tool for lr in vlog for tool in lr.tool_versions]
+    v_total_elapsed = sum(lr.total_elapsed_sec or 0.0 for lr in vlog) or None
+    v_total_cpu_user = sum(lr.total_cpu_user_sec or 0.0 for lr in vlog) or None
+    v_total_cpu_system = sum(lr.total_cpu_system_sec or 0.0 for lr in vlog) or None
+    v_peak_memory = max((lr.peak_memory_mb or 0.0 for lr in vlog), default=0.0) or None
+    hls_report_files = sorted(str(p) for p in hit.work_dir.rglob("*.rpt"))
     if v_errors:
         console.print(f"[red]vitis errors ({len(v_errors)})[/red]: {v_errors[0]}")
     elif v_warnings:
@@ -83,7 +93,13 @@ def _do_collect_csynth(build_dir: Path, kernel: str, platform: str, reports_dir:
         run_id=run_id, kernel=kernel, platform=platform, target="csynth",
         git_commit=_git_commit(), build_dir=str(build_dir), vitis_version=vitis_v,
         status="pass", timestamp=datetime.now(timezone.utc).isoformat(),
-        reports={"csynth_xml": str(hit.report_path), "html": str(html), "txt": str(txt)},
+        reports={
+            "csynth_xml": str(hit.report_path),
+            "hls_compile_rpt": str(hls_compile_path) if hls_compile_path else "",
+            "impl_rpt": str(impl_path) if impl_path else "",
+            "html": str(html),
+            "txt": str(txt),
+        },
         metrics={
             "report_version": rpt.version,
             "part": rpt.part,
@@ -103,6 +119,23 @@ def _do_collect_csynth(build_dir: Path, kernel: str, platform: str, reports_dir:
             "vitis_errors": v_errors[:5],
             "vitis_warnings": v_warnings[:5],
             "vitis_timing_violations": v_timing[:5],
+            "log_tool_versions": v_tool_versions[:8],
+            "log_phase_times": v_phase_times[:20],
+            "log_total_elapsed_sec": v_total_elapsed,
+            "log_total_cpu_user_sec": v_total_cpu_user,
+            "log_total_cpu_system_sec": v_total_cpu_system,
+            "log_peak_memory_mb": v_peak_memory,
+            "hls_report_files": hls_report_files,
+            "hls_report_count": len(hls_report_files),
+            "hls_compile_report": str(hls_compile.report_path) if hls_compile else None,
+            "hls_compile_general": hls_compile.general if hls_compile else {},
+            "hls_m_axi_interfaces": hls_compile.m_axi_interfaces if hls_compile else [],
+            "hls_axilite_registers": hls_compile.axilite_registers if hls_compile else [],
+            "hls_top_arguments": hls_compile.top_arguments if hls_compile else [],
+            "hls_sw_to_hw_mapping": hls_compile.sw_to_hw_mapping if hls_compile else [],
+            "hls_burst_summary": hls_compile.burst_summary if hls_compile else [],
+            "hls_burst_status_counts": hls_compile.burst_status_counts if hls_compile else {},
+            "hls_variable_accesses": hls_compile.variable_accesses[:50] if hls_compile else [],
             "impl_report": str(impl.report_path) if impl else None,
             "impl_tool": impl.implementation_tool if impl else None,
             "impl_device": impl.device if impl else None,
@@ -262,6 +295,35 @@ def _render_link(lr: LinkReport, name: str, platform: str, console: Console) -> 
             table.add_row(clk.endpoint, _fmt_freq(clk.freq_hz))
         console.print(table)
 
+    if lr.vivado_timing:
+        wns = lr.vivado_timing.get("WNS")
+        met = lr.vivado_timing.get("timing_met")
+        style = "green" if met else "red"
+        console.print(f"  routed timing: [{style}]WNS={wns} ns timing_met={met}[/{style}]")
+    if lr.vivado_utilization:
+        used = lr.vivado_utilization.get("Used Resources")
+        if used:
+            console.print(
+                "  routed util: "
+                f"LUT={used.get('LUT', {}).get('used', '?')} "
+                f"REG={used.get('REG', {}).get('used', '?')} "
+                f"BRAM={used.get('BRAM', {}).get('used', '?')} "
+                f"DSP={used.get('DSP', {}).get('used', '?')}"
+            )
+    if lr.vivado_resource_reports:
+        for _, report in sorted(lr.vivado_resource_reports.items())[:1]:
+            rows = report.get("rows", {}) if isinstance(report, dict) else {}
+            if isinstance(rows, dict):
+                lut = rows.get("CLB LUTs", {}) if isinstance(rows.get("CLB LUTs", {}), dict) else {}
+                regs = rows.get("CLB Registers", {}) if isinstance(rows.get("CLB Registers", {}), dict) else {}
+                if lut or regs:
+                    console.print(
+                        "  full util: "
+                        f"CLB_LUTs={lut.get('used', '?')} ({lut.get('utilpct', '?')}%) "
+                        f"CLB_REGs={regs.get('used', '?')} ({regs.get('utilpct', '?')}%)"
+                    )
+                    break
+
     if lr.errors:
         console.print(f"[red]vitis link errors ({len(lr.errors)})[/red]: {escape(lr.errors[0])}")
     elif lr.warnings:
@@ -297,6 +359,10 @@ def _do_collect_link(build_dir: Path, name: str, platform: str, reports_dir: Pat
             "clocks": [clk.__dict__ for clk in lr.clocks],
             "vitis_errors": lr.errors[:5],
             "vitis_warnings": lr.warnings[:5],
+            "vivado_timing": lr.vivado_timing,
+            "vivado_utilization": lr.vivado_utilization,
+            "vivado_resource_reports": lr.vivado_resource_reports,
+            "vivado_report_files": [str(p) for p in lr.report_files],
         },
     )
     db_append(rec, reports_dir / "runs.jsonl")

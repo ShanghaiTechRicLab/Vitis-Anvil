@@ -58,6 +58,12 @@ def test_parse_link_artifacts_collects_xclbin_logs_and_cfg(tmp_path: Path) -> No
         "WARNING: [v++ 60-123] synthetic warning\n",
         encoding="utf-8",
     )
+    hls_db = build / "src" / "kernels" / "saxpy_hls" / "hls" / ".autopilot" / "db"
+    hls_db.mkdir(parents=True)
+    (hls_db / "a.g.llvm-link.err.log").write_text(
+        "ERROR: unrelated HLS llvm-link noise\n",
+        encoding="utf-8",
+    )
 
     rpt = parse_link_artifacts(build, platform="u250")
 
