@@ -1,284 +1,319 @@
-# Get started: run the flow once
+# Get started: run the flow once end-to-end
 
-This guide walks through the project in the same order an FPGA developer normally uses it. The goal is not to get maximum performance; the goal is to understand what each stage does and to prove your local setup works.
+This guide walks through the project in the same order an FPGA developer normally uses it. The goal is not to maximize performance — it is to understand what each stage does and to confirm your local environment works.
 
-Before starting, read [Concepts](concepts.md) if these words are new: kernel, host app, xclbin, XRT, csynth, cosim.
+Before starting, read [Concepts](concepts.md) if these terms are unfamiliar: kernel, host app, xclbin, XRT, csynth, cosim, MODE.
 
-## 1. What you will run
+## What you will run
 
-You will run four levels of work:
+The flow has four levels. Start from the top and only go deeper after the previous level passes.
 
-| Level | Command | Needs Vitis? | Needs XRT? | Needs FPGA hardware? | Purpose |
-|---|---|---:|---:|---:|---|
-| CPU-only tests | `make test` | No | No | No | Check normal C++/Python code and examples |
-| HLS synthesis | `make csynth TARGET=... KERNEL=...` | Yes | No | No | Check Vitis can turn kernel C++ into hardware |
-| HLS cosim | `make cosim TARGET=... KERNEL=...` | Yes | No | No | Check generated RTL behaves like the C++ kernel |
-| Device run | `make xclbin`, then `make swemu`/`make hwemu`/`make qemu`/`make hw` or deploy | Yes | Yes | Optional | Build/load a mode-specific FPGA binary and execute it |
+| Level | Commands | Needs Vitis? | Needs XRT? | Needs FPGA hardware? | Purpose |
+|---|---|:---:|:---:|:---:|---|
+| CPU-only tests | `make test` | No | No | No | Verify normal C++ and Python code |
+| HLS synthesis | `make csynth TARGET=... KERNEL=...` | Yes | No | No | Turn kernel C++ into hardware reports |
+| HLS cosimulation | `make cosim TARGET=... KERNEL=...` | Yes | No | No | Verify generated RTL matches the C++ kernel |
+| Device run | `make xclbin`, then `make swemu`/`make hwemu`/`make hw`/`make qemu` | Yes | Yes | Optional | Build and run a mode-specific FPGA binary |
 
-Do not start with hardware. Start with CPU-only tests, then synthesis, then cosim, then xclbin, then `swemu`/`hwemu`/`qemu`/`hw`.
+**Do not skip levels.** A wrong kernel stays wrong in hardware. Fix it at `csynth` or `cosim` before waiting hours for `xclbin`.
 
-## 2. Check the repository
+---
 
-From the repository root:
+## Step 1: check the repository
 
 ```bash
 git status --short
 ```
 
-A clean tree is easier to debug. Build outputs go under `build/`, datasets under `data/`, runtime outputs under `runs/`, reports under `reports/`.
+A clean working tree is easier to debug. Build outputs go under `build/`, datasets under `data/`, and run outputs under `runs/`. None of these are committed.
 
-## 3. Run CPU-only tests
+---
+
+## Step 2: run CPU-only tests
 
 ```bash
 make test
 ```
 
-What this does:
+This is the fastest sanity check. It configures a CPU-only CMake build, compiles all CPU-side code (gold reference, HLS model, tests), and runs CTest plus the Python test suite. No Vitis, no XRT, no FPGA hardware.
 
-1. Configures the `hls-model-linux-debug` preset.
-2. Builds CPU-side code: gold reference, HLS model, CLI utilities, tests.
-3. Runs CTest.
-
-What it does **not** do:
-
-- no Vitis synthesis
-- no xclbin link
-- no XRT device access
-- no FPGA hardware run
-
-Expected result:
+Expected output:
 
 ```text
 100% tests passed
 ```
 
-If this fails, fix it before touching Vitis. CPU-only failures usually mean normal C++/Python or data-format problems.
+**If this fails, fix it before touching Vitis.** CPU-only failures almost always mean a normal C++ or Python problem, not an FPGA-specific one.
 
-## 4. Understand the demo target names
+What this does internally:
+1. Configures the `hls-model-linux-debug` CMake preset.
+2. Builds CPU targets: gold, HLS model, tests, CLI utilities.
+3. Runs `ctest` and `pytest`.
 
-The default demo has these kernels:
+---
 
-| Kernel | What it computes | Where it lives |
+## Step 3: understand the demo kernels and layout
+
+The default demo ships three kernels:
+
+| Kernel | Computes | Top function |
 |---|---|---|
-| `saxpy` | `out = a*x + y` | `src/kernels/saxpy_kernel.cpp` |
-| `vadd` | `out = a + b` | `src/kernels/vadd_kernel.cpp` |
-| `pipeline_demo` | `saxpy_stream → vadd_stream` | `src/kernels/saxpy_stream_kernel.cpp` / `vadd_stream_kernel.cpp` |
+| `saxpy` | `out[i] = a * x[i] + y[i]` | `saxpy` |
+| `vadd` | `out[i] = a[i] + b[i]` | `vadd` |
+| `pipeline_demo` | `saxpy_stream → vadd_stream` kernel-to-kernel pipeline | `saxpy_stream` + `vadd_stream` |
 
-The default host apps are:
+And three host apps:
 
 | Host app | What it runs |
 |---|---|
-| `run_saxpy` | loads an xclbin containing `saxpy_1` |
-| `run_vadd` | loads an xclbin containing `vadd_1` |
-| `run_pipeline_demo` | loads stream pipeline xclbin |
+| `run_saxpy` | Loads an xclbin containing `saxpy_1` |
+| `run_vadd` | Loads an xclbin containing `vadd_1` |
+| `run_pipeline_demo` | Loads stream pipeline xclbin |
 
-### Where the code lives
-
-The demo follows a layered structure:
+**Key layout:**
 
 ```
-src/kernels/include/kernels/   ← Kernel ABI headers and shared core helpers
-  ├── abi.hpp                  ← pack-width constants (host-compile safe)
-  ├── kernel_types.hpp         ← Pack typedefs (SaxpyPack, VaddPack, etc.)
-  ├── saxpy_kernel.hpp         ← extern "C" saxpy signature
-  ├── saxpy_core.hpp           ← Load/Compute/Store wrappers + SaxpyOp
-  ├── vadd.hpp                 ← extern "C" vadd signature
-  ├── vadd_op.hpp              ← VaddOp functor
-  └── pipeline_types.hpp       ← PipelinePack type for k2k demos
-
-src/kernels/                   ← Vitis HLS kernel implementations (Vitis top)
-  ├── saxpy_kernel.cpp         ← top: pragmas + ANVIL_DATAFLOW_* calls
-  ├── vadd_kernel.cpp          ← top: uses MapMem2Packs
-  ├── saxpy_stream_kernel.cpp  ← k2k producer (m_axi → axis stream)
-  └── vadd_stream_kernel.cpp   ← k2k consumer (axis stream → m_axi)
-
-src/hls_model/                 ← CPU-compiled models mirroring kernel structure
-  ├── saxpy_hls_model.cpp
-  └── vadd_hls_model.cpp
-
-src/gold/                      ← Scalar CPU truth implementations
-  └── cpp/saxpy_gold.cpp
-
-src/host/                      ← XRT host applications
-  ├── run_saxpy.cpp
-  ├── run_vadd.cpp
-  └── run_pipeline_demo.cpp
-
-include/anvil/hls/             ← Framework hlslib wrapper headers (do not edit)
-  ├── pack.hpp                 ← Pack<T,N>, PackTraits, GetLane, SetLane
-  ├── stream.hpp               ← Stream<T,Depth>
-  ├── dataflow.hpp             ← ANVIL_DATAFLOW_* macros
-  ├── packed_ops.hpp           ← LoadPacks, StorePacks, MapPacksWithScalar, MapMem2Packs
-  └── axis.hpp                 ← WriteAxis, ReadAxis
+src/kernels/include/kernels/   ← Kernel ABI headers + shared core helpers (edit these)
+src/kernels/                   ← Vitis HLS kernel implementations (edit these)
+src/hls_model/                 ← CPU-compiled models mirroring kernel structure (edit these)
+src/gold/                      ← Simple CPU truth implementations (edit these)
+src/host/                      ← XRT host applications (edit these)
+include/anvil/hls/             ← Framework hlslib wrappers (do not edit)
+config/<target>/               ← Board/platform configuration (edit these)
 ```
 
-See [Concepts](concepts.md) for what each file does, and [hlslib adaptation](hlslib_adaptation.md) for the packed kernel skeleton pattern.
+---
 
-## 5. Run HLS synthesis
+## Step 4: generate a dataset and gold reference
 
-Pick a target. If you have Vitis 2024.2 installed and a platform exists, U250 is a common accelerator-card target:
+Create the input dataset:
+
+```bash
+make gen DATASET=tiny
+```
+
+This writes files to `data/tiny/`: `meta.json`, `x.bin`, `y.bin`, and others depending on the kernel. You only need to run this once unless you change the generator or want a different size.
+
+Generate the expected output (CPU truth):
+
+```bash
+make gold DATASET=tiny
+```
+
+This runs the scalar CPU gold reference and writes `data/tiny/gold_out.bin`. Run this after `gen`.
+
+You will compare FPGA outputs against this gold later.
+
+---
+
+## Step 5: run HLS synthesis
+
+Pick a target. For accelerator cards with Vitis 2024.2 installed, U250 is a common choice:
 
 ```bash
 make csynth TARGET=u250 KERNEL=saxpy
 ```
 
-What this does:
+This reads `config/u250/anvil.mk` to find the Vitis platform and part, configures the CMake preset, and runs Vitis HLS compile mode for the `saxpy` kernel. Synthesis takes a few minutes.
 
-1. Reads `config/u250/anvil.mk` to find the Vitis platform and part.
-2. Configures the CMake preset for that target.
-3. Runs Vitis HLS compile mode for the `saxpy` kernel.
-4. Writes HLS work directories and reports under `build/<preset>/src/kernels/`.
+**Important outputs:**
 
-The important output is the csynth XML report, usually under a path like:
+- HLS reports under the build tree, typically:
+  ```text
+  build/u250-host/src/kernels/saxpy_hls/hls/syn/report/saxpy_csynth.xml
+  ```
+- `.xo` kernel object: `saxpy.xo`
 
-```text
-build/u250-host/src/kernels/saxpy_hls/hls/syn/report/saxpy_csynth.xml
-```
-
-Now inspect it with:
+Read the synthesis report:
 
 ```bash
 make analyze TARGET=u250 KERNEL=saxpy
 ```
 
-The report tells you timing, II, latency, and resource use. At this stage you are not running on the FPGA yet.
+Look for:
+- **II** — Initiation Interval. 1 is ideal. Higher values reduce throughput. The target is what your pragma requested; the achieved value is what Vitis found after analysis.
+- **Timing** — Whether the design fits in the clock period.
+- **Resource utilization** — How many LUT/FF/DSP/BRAM the kernel uses.
 
-## 6. Run HLS cosimulation
+At this stage you are not running on FPGA yet — only generating hardware reports.
+
+**If csynth fails:**
+- Check the Vitis HLS log for the error.
+- Common causes: HLS-incompatible C++ (templates with complex type inference, dynamic allocation), missing include path, invalid platform path.
+
+---
+
+## Step 6: run HLS cosimulation
 
 ```bash
 make cosim TARGET=u250 KERNEL=saxpy
 make analyze-cosim TARGET=u250 KERNEL=saxpy
 ```
 
-What this does:
+Cosim runs the C++ testbench from `tests/kernels/` against the RTL generated by synthesis. It verifies the RTL produces the same results as the C++ kernel. This can take longer than synthesis.
 
-1. Builds or reuses the HLS kernel output.
-2. Runs a C++ testbench from `tests/kernels/` against generated RTL.
-3. Produces cosim reports.
-4. Extracts pass/fail and latency information.
+**If cosim fails:**
+- Do not debug the host app yet. The kernel or testbench is the problem.
+- Check whether the testbench input matches the kernel's assumptions (element count, pack alignment, scalar arguments).
+- Check the cosim log for the exact simulation failure.
 
-If cosim fails, do not debug XRT or host code yet. The kernel or its testbench is wrong.
+---
 
-## 7. Link an xclbin
+## Step 7: link an xclbin
 
 ```bash
 make xclbin TARGET=u250
 ```
 
-What this does:
+The Vitis linker takes the synthesized kernel objects (`saxpy.xo`, `vadd.xo`) and produces an FPGA binary using the platform and `config/u250/link.cfg`. This is often the slowest step for hardware builds.
 
-1. Uses synthesized kernel objects such as `saxpy_xo` and `vadd_xo`.
-2. Reads `config/u250/link.cfg` for compute-unit names and memory-bank bindings.
-3. Calls Vitis linker.
-4. Produces an xclbin under the build tree.
-
-Typical output path:
+The xclbin lands here:
 
 ```text
 build/u250-host/src/kernels/saxpy_xclbin/saxpy.xclbin
 ```
 
-After link, inspect what Vitis produced:
+Inspect the link result:
 
 ```bash
 make analyze-link TARGET=u250 HOST_APP=run_saxpy
 ```
 
-This parses the link artifacts and shows the xclbin path, compute units, memory-bank connectivity from `link.cfg`, clock settings, and Vitis link warnings/errors. It answers: did the xclbin get produced, did `saxpy_1` enter it, and do the ports bind to the expected DDR/HBM banks?
+This shows:
+- Whether the xclbin was created
+- Which compute units are inside (e.g. `saxpy_1`, `vadd_1`)
+- How each pointer argument is bound to memory (e.g. `saxpy_1.x → DDR[0]`)
+- Clock settings
+- Any Vitis link warnings or errors
 
-This step can be slow. It is normal for hardware builds to take much longer than CPU tests.
+**Fix link problems here before building the host app.** If the compute unit name or memory binding is wrong in the xclbin, the host app cannot fix it at runtime.
 
-## 8. Build the host app
+---
+
+## Step 8: build the host app
 
 ```bash
 make build TARGET=u250 HOST_APP=run_saxpy
 ```
 
-What this does:
-
-1. Configures the host CMake preset.
-2. Builds only the selected host executable.
-3. Does not run synthesis and does not create Python environments.
-
-The host binary is usually:
+This builds only the selected host executable without synthesizing kernels or creating a Python environment. Output:
 
 ```text
 build/u250-host/src/host/run_saxpy
 ```
 
-## 9. Generate input and gold output
+For embedded targets that need cross-compilation, see [Embedded flow](embedded_flow.md).
+
+---
+
+## Step 9: run on hardware or emulation
+
+Before running emulation, generate the emulation configuration:
 
 ```bash
-make gen DATASET=tiny
-make gold DATASET=tiny
+make emconfig TARGET=u250 MODE=sw_emu
 ```
 
-What this does:
+This creates `build/u250/emconfig/emconfig.json`. One file covers both `sw_emu` and `hw_emu` for the same target. You only need to run this once per target.
 
-- `make gen` creates input files and `meta.json` under `data/tiny/`.
-- `make gold` runs the CPU reference and writes expected output.
+### Software emulation (no card needed, fast)
 
-The FPGA run writes output under `runs/<target>/<mode>/<host_app>/<dataset>/<run_key>/`; `make compare` reads those run outputs instead of writing back into `data/`.
-
-## 10. Run in software emulation, hardware emulation, or hardware
-
-For a no-card accelerator smoke test, use software emulation:
+Software emulation runs the original C++ kernel code in a simulated XRT environment. Use it to verify the host app works correctly before committing to hardware synthesis.
 
 ```bash
 make swemu TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
 ```
 
-For a closer accelerator XRT/device integration test without a physical card, use hardware emulation:
+Software emulation does not require csynth. It uses a software model of the kernel, so it cannot tell you about timing or RTL correctness.
+
+### Hardware emulation (no card needed, slower)
+
+Hardware emulation runs RTL simulation against the synthesized kernel. It is much slower than software emulation but catches RTL-level bugs.
 
 ```bash
 make hwemu TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
 ```
 
-If a supported FPGA card is installed and XRT is sourced, run:
+Hardware emulation requires csynth to have run first. Use a small dataset — RTL simulation of large data transfers can take hours.
+
+### Real hardware run
+
+If an FPGA card is installed and XRT is sourced:
 
 ```bash
+. /opt/xilinx/xrt/setup.sh
+xbutil examine    # confirm the card is visible
 make hw TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
 ```
 
-This calls the host app with the xclbin path and dataset path. The host app loads the xclbin, copies input buffers, starts the kernel, reads output, and writes a result file.
+---
 
-Then compare:
+## Step 10: compare results
+
+After any run (swemu, hwemu, or hw), compare the output to the gold reference:
 
 ```bash
 make compare DATASET=tiny
 ```
 
-All three run modes write under `runs/<target>/<mode>/<host_app>/<dataset>/<run_key>/`.
-Read the target-specific notes in [Accelerator-card flow](accelerator_flow.md).
+All run modes write output under `runs/<target>/<mode>/<host_app>/<dataset>/<run_key>/`. The comparison reads from there.
 
-## 11. For embedded boards
+A passing comparison means the FPGA (or emulation) produced the expected results.
 
-Embedded boards need two more concepts:
+---
 
-- a cross-compilation sysroot for the host app
-- a board filesystem/image with XRT installed
+## Step 11: embedded boards
 
-Example:
+Embedded targets (ZCU102, ZCU104, KV260, ...) need two extra things:
+
+- A cross-compilation sysroot for the ARM host app
+- A board filesystem with XRT installed
 
 ```bash
-PETALINUX_SYSROOT=/opt/Xilinx/images/xilinx-zynqmp-common-v2024.2/sysroots/cortexa72-cortexa53-xilinx-linux \
-  make build-host TARGET=zcu102 HOST_APP=run_saxpy
+export PETALINUX_SYSROOT=/opt/Xilinx/images/xilinx-zynqmp-common-v2024.2/sysroots/cortexa72-cortexa53-xilinx-linux
 
-make csynth TARGET=zcu102 KERNEL=saxpy
-make xclbin TARGET=zcu102
+make build-host TARGET=zcu102 HOST_APP=run_saxpy  # cross-compile for AArch64
+make csynth     TARGET=zcu102 KERNEL=saxpy
+make xclbin     TARGET=zcu102
+make gen        DATASET=tiny
+make gold       DATASET=tiny
 ```
 
-Then deploy files to the board. See [Embedded flow](embedded_flow.md) and [Deployment guide](deploy.md).
-For embedded QEMU, use `make qemu TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny QEMU_LAUNCHER=/path/to/qemu-launch.sh`; the launcher is platform/image specific and must create `$OUTPUT` under `runs/<target>/qemu/<host_app>/<dataset>/<run_key>/`.
+Then deploy and run. See [Embedded flow](embedded_flow.md) and [Deployment guide](deploy.md).
 
-## 12. What success looks like
+For QEMU emulation of the embedded target:
 
-A successful first pass means:
+```bash
+make qemu TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny QEMU_LAUNCHER=/path/to/qemu-launch.sh
+```
 
-- `make test` passes.
-- At least one kernel passes `csynth`.
-- The same kernel passes `cosim`.
-- You can build a host app.
-- If hardware or emulation is available, run output matches gold output.
+The launcher is platform/image-specific and must create the output file at `$OUTPUT`.
+
+---
+
+## What success looks like
+
+A complete first pass means:
+
+- `make test` passes (CPU code is correct)
+- At least one kernel passes `csynth` (Vitis accepts the code)
+- The same kernel passes `cosim` (RTL matches the C++ kernel)
+- A host app builds with `make build`
+- `make swemu` or `make hw` produces output that matches `make compare`
 
 After that, move to [Customization guide](customization.md) to replace the demos with your own algorithm.
+
+---
+
+## Common first-run problems
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `make test` fails | Normal C++/Python bug | Read the CTest or pytest error message |
+| `vitis_hls: command not found` | Vitis not sourced | `. /tools/Xilinx/Vitis/2024.2/settings64.sh` |
+| `platform not found` | Wrong `.xpfm` path in `config/<target>/anvil.mk` | Check that the path exists on disk |
+| csynth accepts code but cosim fails | RTL mismatch | Debug the testbench and kernel logic |
+| `xbutil examine` shows no card | XRT not sourced or card not installed | `. /opt/xilinx/xrt/setup.sh`, check PCIe |
+| Host app fails "cannot open xclbin" | Wrong xclbin path or MODE mismatch | Verify the xclbin exists for the right mode |
+| Host app fails "kernel not found" | Compute unit name mismatch | Check `link.cfg` `nk=` vs host `GetKernel()` argument |
+| Output mismatch | Kernel bug, BO group index, or data layout | Start with `make swemu` and compare with gold |

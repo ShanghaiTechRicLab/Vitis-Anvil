@@ -1,41 +1,63 @@
 # 部署指南
 
-部署指的是把工作站上生成的文件放到真正运行 FPGA 工作负载的机器上。对 PCIe 加速卡，这可能就是同一台机器。对 embedded 板卡，通常是通过 SSH 连接的远端板子。
+部署指的是把工作站上生成的文件放到真正运行 FPGA 工作负载的机器上。对 PCIe 加速卡，这通常就是同一台机器。对嵌入式板卡，通常是通过 SSH 连接的远端板子。
 
 ## 1. 运行时需要哪些文件？
 
-一次硬件运行需要这些文件：
+一次硬件运行需要所有这些文件：
 
-| 文件 | 谁生成 | 谁使用 | 作用 |
-|---|---|---|---|
-| host binary，例如 `run_saxpy` | `make build-host` 或 `make build` | CPU | 和 XRT 通信的程序 |
-| xclbin，例如 `saxpy.xclbin` | `make xclbin` | XRT/FPGA | 要加载到 FPGA 的二进制 |
-| `xrt.ini` | `config/<target>/xrt.ini` | XRT | runtime debug/profile 设置 |
-| dataset 输入文件 | `make gen` | host app | 输入 buffer 和 metadata |
-| 可选 gold 输出 | `make gold` | compare 步骤 | 期望输出 |
+| 文件 | 由谁生成 | 用途 |
+|---|---|---|
+| Host binary（如 `run_saxpy`） | `make build` 或 `make build-host` | 驱动 XRT 的 CPU 程序 |
+| xclbin（如 `saxpy.xclbin`） | `make xclbin` | 要加载的 FPGA 二进制文件 |
+| `xrt.ini` | `config/<target>/xrt.ini` | XRT profiling/debug 选项 |
+| `emconfig.json` | `make emconfig` | 仅 emulation 模式需要 |
+| 数据集输入文件 | `make gen` | 输入 buffer 和元数据 |
+| Gold 输出（可选） | `make gold` | 用于对比的期望输出 |
 
-少任何一个，程序都可能启动后在后面失败。
+任何文件缺失或来自错误的构建，运行可能开始后在奇怪的地方失败。
 
-## 2. 本机加速卡部署
+---
 
-如果 PCIe 卡插在同一台机器上，“部署”基本就是在本机把文件构建好：
+## 2. 本地加速卡部署
+
+PCIe 卡在同一台机器上，不需要拷贝步骤。完整本地流程：
 
 ```bash
+# 准备环境
+. /tools/Xilinx/Vitis/2024.2/settings64.sh
+. /opt/xilinx/xrt/setup.sh
+xbutil examine
+
+# 构建
 make csynth TARGET=u250 KERNEL=saxpy
-make cosim TARGET=u250 KERNEL=saxpy
+make cosim  TARGET=u250 KERNEL=saxpy
 make xclbin TARGET=u250
-make build TARGET=u250 HOST_APP=run_saxpy
-make gen DATASET=tiny
-make gold DATASET=tiny
-make hw TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+make build  TARGET=u250 HOST_APP=run_saxpy
+make gen    DATASET=tiny
+make gold   DATASET=tiny
+
+# 运行并对比
+make hw      TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
 make compare DATASET=tiny
 ```
 
-没有 SSH copy 步骤，因为 host app 和卡都在同一台机器上。
+同一台机器上的 emulation：
 
-## 3. 远端 embedded 部署
+```bash
+make emconfig TARGET=u250 MODE=sw_emu
+make swemu   TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+make compare DATASET=tiny
 
-设置连接变量：
+make hwemu   TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+make compare DATASET=tiny
+```
+
+---
+
+## 3. 远端嵌入式板卡部署
+
+### 设置连接变量
 
 ```bash
 export BOARD_IP=192.168.1.10
@@ -43,113 +65,158 @@ export BOARD_SSH_USER=root
 export BOARD_DEPLOY_DIR=~/anvil-deploy
 ```
 
-分开复制各类文件：
+### 在工作站上构建所有东西
 
 ```bash
-make deploy-bin TARGET=zcu102 HOST_APP=run_saxpy BOARD_IP=$BOARD_IP
-make deploy-xclbin TARGET=zcu102 BOARD_IP=$BOARD_IP
-make deploy-data TARGET=zcu102 DATASET=tiny BOARD_IP=$BOARD_IP
-make deploy-check TARGET=zcu102 BOARD_IP=$BOARD_IP
+PETALINUX_SYSROOT=/path/to/sysroot make build-host TARGET=zcu102 HOST_APP=run_saxpy
+make csynth TARGET=zcu102 KERNEL=saxpy
+make xclbin TARGET=zcu102
+make gen    DATASET=tiny
+make gold   DATASET=tiny
 ```
 
-每个 target 做什么：
+### 拷贝到板卡
 
-| Target | 复制/检查什么 |
+```bash
+make deploy-bin    TARGET=zcu102 HOST_APP=run_saxpy BOARD_IP=$BOARD_IP
+make deploy-xclbin TARGET=zcu102 BOARD_IP=$BOARD_IP
+make deploy-data   TARGET=zcu102 DATASET=tiny BOARD_IP=$BOARD_IP
+make deploy-check  TARGET=zcu102 BOARD_IP=$BOARD_IP   # 验证文件是否到位
+```
+
+每个 target 拷贝什么：
+
+| Target | 拷贝内容 |
 |---|---|
-| `deploy-bin` | ARM host 可执行文件 |
-| `deploy-xclbin` | FPGA 二进制和 `xrt.ini` |
-| `deploy-data` | dataset 目录 |
-| `deploy-check` | 检查远端目录和基本文件 |
-| `deploy` | 聚合 copy target |
+| `deploy-bin` | AArch64 host binary |
+| `deploy-xclbin` | FPGA 二进制文件和 `xrt.ini` |
+| `deploy-data` | 数据集目录（`data/<dataset>/`） |
+| `deploy-check` | 验证远端目录有预期的文件 |
+| `deploy` | 汇总：依次执行上面这些 target |
 
-## 4. 在板上手动运行
+---
 
-手动运行最适合调试：
+## 4. 在板卡上手动运行
+
+手动运行是调试板卡问题最直接的方法。SSH 进去之后：
 
 ```bash
 ssh root@$BOARD_IP
 cd ~/anvil-deploy
+
+# 每次新 shell 都要 source XRT
 . /etc/profile.d/xrt_setup.sh
-ls -l
+
+# 确认 XRT 看到了 FPGA
+xbutil examine
+
+# 创建输出目录并运行
 mkdir -p runs/zcu102/hw/run_saxpy/tiny/latest
-./run_saxpy --xclbin saxpy.xclbin --data-dir data/tiny --output runs/zcu102/hw/run_saxpy/tiny/latest/out.bin
+./run_saxpy \
+  --xclbin saxpy.xclbin \
+  --data-dir data/tiny \
+  --output runs/zcu102/hw/run_saxpy/tiny/latest/out.bin
 ```
 
-这能立刻告诉你：
-
-- binary 是否存在且可执行
-- xclbin 路径是否正确
+手动运行能马上告诉你：
+- Binary 是否可执行（架构是否匹配）
 - XRT 是否已 source
-- dataset 路径是否正确
-- 程序是在 kernel launch 前失败还是后失败
+- Xclbin 路径是否正确
+- 数据集路径是否正确
+- 程序在 kernel launch 前还是后失败
 
-正常的 `make test-hw` flow 会由 `scripts/board_run.py` 把远端输出取回到
-`runs/<target>/hw/<host_app>/<dataset>/<run_key>/out.bin`，然后在工作站上由
-`make compare` 读取这个 run 输出。
+---
 
-## 5. All-in-one 硬件测试
+## 5. 一键自动化硬件测试
 
-手动运行成功后，可以用：
+手动运行通了之后，可以用：
 
 ```bash
 make test-hw TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny BOARD_IP=$BOARD_IP
 ```
 
-这个 target 方便，但隐藏了多个步骤。如果失败，把它拆回 deploy 和手动运行。
+这个 target 会部署、通过 SSH 在板卡上运行、取回输出、与 gold 对比。它隐藏了好几步。如果失败，拆回手动部署和运行。
 
-## 6. 调试清单
+`scripts/board_run.py` 把远端输出取回到 `runs/<target>/hw/<host_app>/<dataset>/<run_key>/out.bin`，工作站侧的 `make compare` 就可以读到它。
 
-### SSH 失败
+---
 
-检查 IP、用户名、网络、SSH key/密码：
+## 6. 嵌入式 target 的 QEMU emulation
+
+QEMU 是板卡级仿真路径，和加速卡的 emulation 不是一回事。它模拟 ARM 处理器侧，需要 platform/BSP 特定的 launcher 脚本。
+
+```bash
+make qemu TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny QEMU_LAUNCHER=/path/to/qemu-launch.sh
+```
+
+Launcher 收到这些环境变量：`HOST_BIN`、`XCLBIN_PATH`、`DATA_DIR`、`RUN_DIR`、`OUTPUT`、`EMCONFIG_PATH`、`TARGET`、`HOST_APP`、`DATASET`、`ANVIL_PLATFORM`。
+
+Launcher 必须创建 `$OUTPUT`，默认路径是 `runs/<target>/qemu/<host_app>/<dataset>/<run_key>/out.bin`。
+
+QEMU 运行完后对比：
+
+```bash
+make compare DATASET=tiny RUN_HW_OUTPUT=runs/zcu102/qemu/run_saxpy/tiny/latest/out.bin
+```
+
+---
+
+## 7. 调试检查清单
+
+### SSH 连接失败
 
 ```bash
 ssh root@$BOARD_IP
 ```
 
-### Binary 明明存在却提示 “not found”
+检查：IP 地址、用户名、网络、SSH 密钥或密码。
 
-在 embedded Linux 上，这可能是动态加载器缺失或不兼容。检查：
+### "not found" 但文件明明存在
+
+嵌入式 Linux 上这可能是动态加载器缺失或 binary 架构不对：
 
 ```bash
 file ./run_saxpy
 ldd ./run_saxpy
 ```
 
-binary 必须匹配板卡架构和 sysroot。
+Binary 必须和板卡 CPU 架构匹配，且链接的库在板卡镜像里存在。
 
-### XRT 在 kernel launch 前报错
-
-检查：
+### Kernel launch 前的 XRT 报错
 
 ```bash
 . /etc/profile.d/xrt_setup.sh
 xbutil examine
 ```
 
-同时确认 xclbin 是为同一个 board image/platform 构建的。
+板卡镜像必须包含 XRT 和 setup 脚本。另外检查 xclbin 是否为同一 platform 和 Vitis 版本构建的。
 
-### 找不到 kernel 名
+### "Kernel not found" 或 "CU not found"
 
-host app 会请求类似 `saxpy:{saxpy_1}` 的 compute unit。这个名字必须存在于 `link.cfg` 和 xclbin 中。
+Host app 要找 `saxpy:{saxpy_1}`，这个实例名必须在 xclbin 里，也就是必须在 `link.cfg` 里以 `nk=saxpy:1:saxpy_1` 存在。两处都要检查。
 
 ### 输出不匹配
 
-检查 dataset 和参数顺序：
+按这个顺序检查：
 
-1. host app 读的是正确输入文件
-2. BO group index 和指针参数顺序一致
-3. kernel 收到的是 element count 还是 pack count
-4. 输出路径和 compare 脚本一致
+1. 正确的输入文件是否部署到了板卡上？
+2. Host app 里的 BO group index（index 0 = C++ 签名里第一个指针参数）
+3. Kernel 参数顺序（host 传参和 C++ 签名一致吗？）
+4. 元素数 vs pack 数（kernel 通常需要 `n_packs` 不是原始元素数）
+5. 输出文件路径（compare 脚本读的路径和 host app 写的路径一致吗？）
 
-## 7. 新板卡应该记录什么
+---
 
-添加 `config/<target>/README.md`，记录：
+## 8. 每个新板卡都要记录
 
-- 使用的 Vitis 版本
-- platform 文件路径或下载/来源
-- board image 版本
-- 板上 XRT setup 命令
-- host build 使用的 sysroot 路径
-- 已知限制，例如不支持 hw_emu
-- 实际跑通的 deploy/run 命令
+在 `config/<target>/README.md` 里记录：
+
+- 综合和 link 使用的 Vitis 版本
+- Platform 文件路径和获取方式
+- 板卡镜像版本和下载地址
+- 板卡上的 XRT setup 命令（如 `/etc/profile.d/xrt_setup.sh`）
+- 交叉编译用的 sysroot 路径
+- 这个 platform 是否支持 hw_emu
+- QEMU launcher 细节（如果适用）
+- 实际跑通的完整部署和运行命令序列
+- 已知问题或限制

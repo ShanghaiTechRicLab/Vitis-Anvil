@@ -1,41 +1,63 @@
 # Deployment guide
 
-Deployment means moving the files produced on your workstation to the machine that will run the FPGA workload. For PCIe accelerator cards this may be the same machine. For embedded boards it is usually a remote board reached over SSH.
+Deployment means moving build artifacts to the machine that will run the FPGA workload. For PCIe accelerator cards this is usually the same machine. For embedded boards it is a remote board reached over SSH.
 
-## 1. What files must be present at runtime?
+## 1. What files are needed at runtime?
 
-A hardware run needs these files:
+A hardware run needs all of these:
 
-| File | Produced by | Used by | Purpose |
-|---|---|---|---|
-| host binary, e.g. `run_saxpy` | `make build-host` or `make build` | CPU | Program that talks to XRT |
-| xclbin, e.g. `saxpy.xclbin` | `make xclbin` | XRT/FPGA | FPGA binary to load |
-| `xrt.ini` | `config/<target>/xrt.ini` | XRT | Runtime debug/profile options |
-| dataset input files | `make gen` | host app | Input buffers and metadata |
-| optional gold output | `make gold` | compare step | Expected output |
+| File | Produced by | Purpose |
+|---|---|---|
+| Host binary (`run_saxpy`) | `make build` or `make build-host` | CPU program that drives XRT |
+| xclbin (`saxpy.xclbin`) | `make xclbin` | FPGA binary to load |
+| `xrt.ini` | `config/<target>/xrt.ini` | XRT profiling/debug options |
+| `emconfig.json` | `make emconfig` | Required for emulation modes only |
+| Dataset input files | `make gen` | Input buffers and metadata |
+| Gold output (optional) | `make gold` | Expected output for comparison |
 
-If any one is missing, the run may start but fail later.
+If any file is missing or from the wrong build, the run may start and then fail late with a confusing error.
+
+---
 
 ## 2. Local accelerator-card deployment
 
-For a PCIe card installed in the same machine, “deployment” mostly means building the files in place:
+For a PCIe card in the same machine, there is no copy step. The full local sequence is:
 
 ```bash
+# Environment
+. /tools/Xilinx/Vitis/2024.2/settings64.sh
+. /opt/xilinx/xrt/setup.sh
+xbutil examine
+
+# Build
 make csynth TARGET=u250 KERNEL=saxpy
-make cosim TARGET=u250 KERNEL=saxpy
+make cosim  TARGET=u250 KERNEL=saxpy
 make xclbin TARGET=u250
-make build TARGET=u250 HOST_APP=run_saxpy
-make gen DATASET=tiny
-make gold DATASET=tiny
-make hw TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+make build  TARGET=u250 HOST_APP=run_saxpy
+make gen    DATASET=tiny
+make gold   DATASET=tiny
+
+# Run and compare
+make hw     TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
 make compare DATASET=tiny
 ```
 
-There is no SSH copy step because the host app and card are on the same machine.
+For emulation on the same machine:
 
-## 3. Remote embedded deployment
+```bash
+make emconfig TARGET=u250 MODE=sw_emu
+make swemu  TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+make compare DATASET=tiny
 
-For embedded boards, set connection variables:
+make hwemu  TARGET=u250 HOST_APP=run_saxpy DATASET=tiny
+make compare DATASET=tiny
+```
+
+---
+
+## 3. Remote embedded board deployment
+
+### Set connection variables
 
 ```bash
 export BOARD_IP=192.168.1.10
@@ -43,51 +65,69 @@ export BOARD_SSH_USER=root
 export BOARD_DEPLOY_DIR=~/anvil-deploy
 ```
 
-Then copy the pieces separately:
+### Build everything on the workstation
 
 ```bash
-make deploy-bin TARGET=zcu102 HOST_APP=run_saxpy BOARD_IP=$BOARD_IP
-make deploy-xclbin TARGET=zcu102 BOARD_IP=$BOARD_IP
-make deploy-data TARGET=zcu102 DATASET=tiny BOARD_IP=$BOARD_IP
-make deploy-check TARGET=zcu102 BOARD_IP=$BOARD_IP
+PETALINUX_SYSROOT=/path/to/sysroot make build-host TARGET=zcu102 HOST_APP=run_saxpy
+make csynth TARGET=zcu102 KERNEL=saxpy
+make xclbin TARGET=zcu102
+make gen    DATASET=tiny
+make gold   DATASET=tiny
 ```
 
-What each target does:
+### Copy to the board
 
-| Target | What it copies/checks |
+```bash
+make deploy-bin    TARGET=zcu102 HOST_APP=run_saxpy BOARD_IP=$BOARD_IP
+make deploy-xclbin TARGET=zcu102 BOARD_IP=$BOARD_IP
+make deploy-data   TARGET=zcu102 DATASET=tiny BOARD_IP=$BOARD_IP
+make deploy-check  TARGET=zcu102 BOARD_IP=$BOARD_IP   # verify files arrived
+```
+
+What each target copies:
+
+| Target | What it copies |
 |---|---|
-| `deploy-bin` | ARM host executable |
+| `deploy-bin` | AArch64 host binary |
 | `deploy-xclbin` | FPGA binary and `xrt.ini` |
-| `deploy-data` | dataset directory |
-| `deploy-check` | verifies remote directory and basic files |
-| `deploy` | aggregate copy target |
+| `deploy-data` | Dataset directory (`data/<dataset>/`) |
+| `deploy-check` | Verifies remote directory has expected files |
+| `deploy` | Aggregate: runs the targets above |
+
+---
 
 ## 4. Run manually on the board
 
-Manual run is the clearest debugging method:
+Manual run is the clearest way to debug board issues. After SSH-ing in:
 
 ```bash
 ssh root@$BOARD_IP
 cd ~/anvil-deploy
+
+# Source XRT (required on every new shell session)
 . /etc/profile.d/xrt_setup.sh
-ls -l
+
+# Verify XRT sees the FPGA fabric
+xbutil examine
+
+# Create output directory and run
 mkdir -p runs/zcu102/hw/run_saxpy/tiny/latest
-./run_saxpy --xclbin saxpy.xclbin --data-dir data/tiny --output runs/zcu102/hw/run_saxpy/tiny/latest/out.bin
+./run_saxpy \
+  --xclbin saxpy.xclbin \
+  --data-dir data/tiny \
+  --output runs/zcu102/hw/run_saxpy/tiny/latest/out.bin
 ```
 
-This tells you immediately whether:
-
-- the binary exists and is executable
-- xclbin path is correct
+Manual run tells you immediately whether:
+- The binary is executable (architecture matches)
 - XRT is sourced
-- dataset path is correct
-- the program fails before or after kernel launch
+- xclbin path is correct
+- Dataset path is correct
+- The program fails before or after kernel launch
 
-For the normal `make test-hw` flow, `scripts/board_run.py` retrieves that remote
-output into `runs/<target>/hw/<host_app>/<dataset>/<run_key>/out.bin`, and
-`make compare` reads the retrieved run output on the workstation.
+---
 
-## 5. All-in-one hardware test
+## 5. Automated all-in-one hardware test
 
 After manual run works, use:
 
@@ -95,61 +135,88 @@ After manual run works, use:
 make test-hw TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny BOARD_IP=$BOARD_IP
 ```
 
-This target is convenient, but it hides several steps. If it fails, split it back into deploy and manual run.
+This deploys, runs on the board through SSH, retrieves the output, and compares against gold. It hides several steps. If it fails, split back into manual deploy and run.
 
-## 6. Debug checklist
+The `scripts/board_run.py` script retrieves remote output to `runs/<target>/hw/<host_app>/<dataset>/<run_key>/out.bin` so the workstation-side `make compare` can read it.
+
+---
+
+## 6. QEMU emulation for embedded targets
+
+QEMU is a board-level simulation path, separate from accelerator-card emulation. It models the ARM processor side and requires a platform/BSP-specific launcher.
+
+```bash
+make qemu TARGET=zcu102 HOST_APP=run_saxpy DATASET=tiny QEMU_LAUNCHER=/path/to/qemu-launch.sh
+```
+
+The launcher receives environment variables: `HOST_BIN`, `XCLBIN_PATH`, `DATA_DIR`, `RUN_DIR`, `OUTPUT`, `EMCONFIG_PATH`, `TARGET`, `HOST_APP`, `DATASET`, `ANVIL_PLATFORM`.
+
+The launcher must create `$OUTPUT`, which defaults to `runs/<target>/qemu/<host_app>/<dataset>/<run_key>/out.bin`.
+
+Compare after QEMU run:
+
+```bash
+make compare DATASET=tiny RUN_HW_OUTPUT=runs/zcu102/qemu/run_saxpy/tiny/latest/out.bin
+```
+
+---
+
+## 7. Debug checklist
 
 ### SSH fails
-
-Check IP, username, network, and SSH keys/passwords:
 
 ```bash
 ssh root@$BOARD_IP
 ```
 
-### Binary says “not found” even though it exists
+Check: IP address, username, network, SSH keys or passwords.
 
-On embedded Linux this can mean the dynamic loader is missing or incompatible. Check:
+### "not found" even though the binary exists
+
+On embedded Linux this can mean the dynamic loader is missing or the binary was compiled for the wrong architecture:
 
 ```bash
 file ./run_saxpy
 ldd ./run_saxpy
 ```
 
-The binary must match the board architecture and sysroot.
+The binary must match the board CPU architecture and be linked against libraries present in the board image.
 
 ### XRT errors before kernel launch
-
-Check:
 
 ```bash
 . /etc/profile.d/xrt_setup.sh
 xbutil examine
 ```
 
-Also confirm the xclbin was built for the same platform as the board image.
+The board image must include XRT and the setup script. Also check that the xclbin was built for the same platform and Vitis version as the board image.
 
-### Kernel name not found
+### "Kernel not found" or "CU not found"
 
-The host app asks for a compute unit such as `saxpy:{saxpy_1}`. That name must exist in `link.cfg` and in the xclbin.
+The host app asks for `saxpy:{saxpy_1}`. This instance name must exist in the xclbin, which means it must be in `link.cfg` as `nk=saxpy:1:saxpy_1`. Check both.
 
 ### Output mismatch
 
-Check dataset and argument order:
+Check in this order:
 
-1. host app reads the correct input files
-2. BO group indices match pointer argument order
-3. kernel receives element count vs pack count correctly
-4. output file path matches compare script
+1. Are the correct input files deployed to the board?
+2. BO group indices in the host app (index 0 = first pointer argument in C++ signature)
+3. Kernel argument order (host passes them in the same order as the C++ signature)
+4. Element count vs pack count (kernel often expects `n_packs`, not raw element count)
+5. Output file path (the compare script must read from the same path the host app wrote to)
 
-## 7. What to document for a new board
+---
+
+## 8. Document every new board
 
 Add `config/<target>/README.md` and record:
 
-- Vitis version used
-- platform file path or download/source location
-- board image version
-- XRT setup command on board
-- sysroot path used for host build
-- known limitations, such as hw_emu not supported
-- exact deploy/run command that worked
+- Vitis version used for synthesis and link
+- Platform file path and how to obtain it
+- Board image version and where to download it
+- XRT setup command on the board (`/etc/profile.d/xrt_setup.sh` or similar)
+- Sysroot path used for cross-compilation
+- Whether hw_emu is supported for this platform
+- QEMU launcher details if applicable
+- Exact deploy and run command sequence that worked
+- Known issues or limitations
