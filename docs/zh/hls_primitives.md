@@ -2,8 +2,9 @@
 
 Vitis-Anvil 在 `anvil::hls` 下提供小型 HLS 微架构原语。这不是算法库，而是 kernel
 内部常用硬件结构：定点数、tile buffer、banked buffer、ring buffer、shift register、
-line/window buffer、burst load/store、ping-pong buffer、归约、小规模固定排序、
-radix sort、top-k 选择，以及 double-buffered load-compute-store 骨架。
+line/window buffer、burst load/store、ping-pong buffer、scratch/banked buffer、归约、
+prefix scan、histogram、counting-sort reorder、小规模固定排序、radix sort、top-k
+选择，以及 double-buffered load-compute-store 骨架。
 
 ## Include 风格
 
@@ -57,11 +58,27 @@ auto previous = delay.delay<1>();
 ahls::mem::shift_register<word_t, 0, 1, 2> taps;
 taps.Shift(value);
 auto newest = taps.Get<2>();
+
+ahls::mem::scratchpad<word_t, 256> scratch;
+scratch.write(index, value);
+
+ahls::mem::multi_buffer<ahls::mem::tile<word_t, 64>, 3> multi;
+auto& slot = multi.slot_for(tile_id);
+
+ahls::mem::triple_buffer<ahls::mem::tile<word_t, 64>> triple;
+auto& load_tile = triple.load(tile_id);
+
+ahls::mem::banked_tile<word_t, 4, 256> banked_tile;
+banked_tile.set<0, 0>(value);
 ```
 
 `banked<T, Depth, Banks>` 显式暴露 bank 维度。`ring` 提供编译期 delay 读取。
 `shift_register` 里最大 tap index 对应最新 shift 进去的值。需要在综合中完全 partition
-bank 维度时，在 kernel scope 内调用 `banks.partition()`。
+bank 维度时，在 kernel scope 内调用 `banks.partition()`。`scratchpad`、
+`multi_buffer`、`triple_buffer` 和 `banked_tile` 都只是显式本地存储的薄封装；
+它们不暗示额外 memory port。需要并行访问时，用对应 partition helper 明确表达硬件结构。
+`triple_buffer` 暴露三个 slot；stage 如何轮转由调用者传入的 tile id 决定，比如
+`load(t)`、`compute(t - 1)`、`store(t - 2)`。
 
 ## Line 和 window buffer
 
@@ -104,6 +121,45 @@ ahls::dataflow::dbuf_lcs<Pipeline>(in, out, n_tiles);
 `n_tiles` 是 tile 数量。当前第一版是 correctness skeleton：它显式选择 ping-pong
 bank，但不宣称 load、compute、store 在硬件上已经重叠。
 
+## Prefix scan、histogram 和 counting sort reorder
+
+```cpp
+int values[8];
+int inclusive[8];
+int exclusive[8];
+ahls::compute::inclusive_scan<8>(values, inclusive);
+ahls::compute::exclusive_scan<8>(values, exclusive);
+ahls::compute::prefix_sum<8>(values, exclusive);  // exclusive prefix sum
+
+ap_uint<2> keys[8];
+ahls::compute::count_t<8> counts[4];
+ahls::compute::histogram<2, 4>(keys, counts);
+
+using fixed_key_t = ahls::ufx<8, 4>;
+fixed_key_t fixed_keys[8];
+struct FixedIntBin {
+  static int bin(fixed_key_t value) { return static_cast<int>(value) & 3; }
+};
+ahls::compute::histogram<fixed_key_t, 8, 4, FixedIntBin>(fixed_keys, counts);
+
+payload_t payloads[8];
+ap_uint<2> sorted_keys[8];
+payload_t sorted_payloads[8];
+ahls::compute::counting_sort_reorder<2, 4>(
+    keys, payloads, sorted_keys, sorted_payloads);
+```
+
+这些 scan 和 counting primitive 第一版是顺序、stable、保守可综合实现。
+`prefix_sum` 和 `prefix_sum_inplace` 是 exclusive scan；inclusive 结果使用
+`inclusive_scan` 或 `inclusive_scan_inplace`。histogram 和 scatter 阶段不会强行
+`II=1`，因为多个元素写同一个 bin 时存在真实依赖。
+`count_t<N>` 是足够计数 `N` 个元素的 `ap_uint`。Histogram 可以使用小于完整 key
+domain 的 bin 数，并忽略 `[0, Bins)` 之外的 key；`counting_sort_reorder` 要求
+`Bins == 2^KeyBits`，保证每条输入记录都会被写出一次。当前 unrolled
+histogram/counting-sort 路径限制在 256 个 bin；更大的 domain 应该用 radix pass
+或后续 BRAM-backed histogram。out-of-place scan 对 in-place 调用是 alias-safe；
+`counting_sort_reorder` 要求输入/输出数组不能 alias。
+
 ## 小规模排序和 top-k
 
 ```cpp
@@ -134,7 +190,10 @@ make csynth-component TARGET=u250 COMPONENT=tile_burst
 make cosim-component TARGET=u250 COMPONENT=pingpong_dbuf_lcs
 make csynth-component TARGET=u250 COMPONENT=radix_sort
 make cosim-component TARGET=u250 COMPONENT=line_window
+make csynth-component TARGET=u250 COMPONENT=prefix_histogram
+make cosim-component TARGET=u250 COMPONENT=counting_sort_buffer
 make analyze-component TARGET=u250 COMPONENT=tile_burst
 ```
 
-当前组件包括 `tile_burst`、`pingpong_dbuf_lcs`、`radix_sort` 和 `line_window`。
+当前组件包括 `tile_burst`、`pingpong_dbuf_lcs`、`radix_sort`、`line_window`、
+`prefix_histogram` 和 `counting_sort_buffer`。

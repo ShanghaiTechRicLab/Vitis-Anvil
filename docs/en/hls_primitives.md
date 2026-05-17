@@ -4,7 +4,8 @@ Vitis-Anvil provides small HLS architecture primitives under `anvil::hls`.
 These helpers are not an algorithm library. They expose common hardware
 structures used inside kernels: fixed-point types, tile buffers, banked buffers,
 ring buffers, shift registers, line/window buffers, burst load/store,
-ping-pong buffers, reductions, small fixed-size sorters, radix sort, top-k
+ping-pong buffers, reusable scratch/banked buffers, reductions, prefix scans,
+histograms, counting-sort reorder, small fixed-size sorters, radix sort, top-k
 selectors, and double-buffered load-compute-store skeletons.
 
 ## Include style
@@ -61,12 +62,30 @@ auto previous = delay.delay<1>();
 ahls::mem::shift_register<word_t, 0, 1, 2> taps;
 taps.Shift(value);
 auto newest = taps.Get<2>();
+
+ahls::mem::scratchpad<word_t, 256> scratch;
+scratch.write(index, value);
+
+ahls::mem::multi_buffer<ahls::mem::tile<word_t, 64>, 3> multi;
+auto& slot = multi.slot_for(tile_id);
+
+ahls::mem::triple_buffer<ahls::mem::tile<word_t, 64>> triple;
+auto& load_tile = triple.load(tile_id);
+
+ahls::mem::banked_tile<word_t, 4, 256> banked_tile;
+banked_tile.set<0, 0>(value);
 ```
 
 `banked<T, Depth, Banks>` exposes the bank dimension explicitly. `ring` provides
 compile-time delay reads. `shift_register` uses the largest tap index for the
 newest shifted value. Call `banks.partition()` inside the kernel scope when the
 bank dimension should be completely partitioned for synthesis.
+`scratchpad`, `multi_buffer`, `triple_buffer`, and `banked_tile` are thin
+wrappers around explicit local storage. They do not imply extra memory ports;
+use their partition helpers where the hardware structure needs parallel bank or
+element access. `triple_buffer` exposes three slots; stage rotation is controlled
+by the tile IDs the caller passes, for example `load(t)`, `compute(t - 1)`, and
+`store(t - 2)`.
 
 ## Line and window buffers
 
@@ -112,6 +131,47 @@ ahls::dataflow::dbuf_lcs<Pipeline>(in, out, n_tiles);
 it makes ping-pong bank selection explicit but does not claim hardware overlap
 between load, compute, and store.
 
+## Prefix scan, histogram, and counting sort reorder
+
+```cpp
+int values[8];
+int inclusive[8];
+int exclusive[8];
+ahls::compute::inclusive_scan<8>(values, inclusive);
+ahls::compute::exclusive_scan<8>(values, exclusive);
+ahls::compute::prefix_sum<8>(values, exclusive);  // exclusive prefix sum
+
+ap_uint<2> keys[8];
+ahls::compute::count_t<8> counts[4];
+ahls::compute::histogram<2, 4>(keys, counts);
+
+using fixed_key_t = ahls::ufx<8, 4>;
+fixed_key_t fixed_keys[8];
+struct FixedIntBin {
+  static int bin(fixed_key_t value) { return static_cast<int>(value) & 3; }
+};
+ahls::compute::histogram<fixed_key_t, 8, 4, FixedIntBin>(fixed_keys, counts);
+
+payload_t payloads[8];
+ap_uint<2> sorted_keys[8];
+payload_t sorted_payloads[8];
+ahls::compute::counting_sort_reorder<2, 4>(
+    keys, payloads, sorted_keys, sorted_payloads);
+```
+
+The scan and counting primitives are sequential, stable, and conservative for
+HLS. `prefix_sum` and `prefix_sum_inplace` are exclusive scans; use
+`inclusive_scan` or `inclusive_scan_inplace` for inclusive results. Histogram
+and scatter stages intentionally do not force `II=1`, because
+multiple elements can update the same bin and those dependencies are real.
+`count_t<N>` is an `ap_uint` wide enough to count `N` items. Histograms may use
+fewer bins than the full key domain and ignore keys outside `[0, Bins)`;
+`counting_sort_reorder` requires `Bins == 2^KeyBits` so every input record is
+written exactly once. The unrolled histogram/counting-sort path is limited to
+256 bins; use radix passes or a future BRAM-backed histogram for larger domains.
+Out-of-place scans are alias-safe for in-place use; `counting_sort_reorder`
+requires distinct input/output arrays.
+
 ## Small sorting and top-k
 
 ```cpp
@@ -144,8 +204,10 @@ make csynth-component TARGET=u250 COMPONENT=tile_burst
 make cosim-component TARGET=u250 COMPONENT=pingpong_dbuf_lcs
 make csynth-component TARGET=u250 COMPONENT=radix_sort
 make cosim-component TARGET=u250 COMPONENT=line_window
+make csynth-component TARGET=u250 COMPONENT=prefix_histogram
+make cosim-component TARGET=u250 COMPONENT=counting_sort_buffer
 make analyze-component TARGET=u250 COMPONENT=tile_burst
 ```
 
 Available components are `tile_burst`, `pingpong_dbuf_lcs`, `radix_sort`, and
-`line_window`.
+`line_window`, `prefix_histogram`, and `counting_sort_buffer`.

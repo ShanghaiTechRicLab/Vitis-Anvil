@@ -37,3 +37,21 @@ add_anvil_kernel(
   TESTBENCH ${CMAKE_CURRENT_SOURCE_DIR}/line_window/cosim_tb.cpp
   NO_ALL
   NO_CTEST)
+
+add_anvil_kernel(
+  NAME component_prefix_histogram
+  TOP component_prefix_histogram
+  SOURCES prefix_histogram/kernel.cpp
+  PLATFORM_KIND ${ANVIL_PLATFORM_KIND}
+  TESTBENCH ${CMAKE_CURRENT_SOURCE_DIR}/prefix_histogram/cosim_tb.cpp
+  NO_ALL
+  NO_CTEST)
+
+add_anvil_kernel(
+  NAME component_counting_sort_buffer
+  TOP component_counting_sort_buffer
+  SOURCES counting_sort_buffer/kernel.cpp
+  PLATFORM_KIND ${ANVIL_PLATFORM_KIND}
+  TESTBENCH ${CMAKE_CURRENT_SOURCE_DIR}/counting_sort_buffer/cosim_tb.cpp
+  NO_ALL
+  NO_CTEST)
