@@ -9,6 +9,17 @@ function(_anvil_kernel_reject_space_path kernel_name path_label path_value)
   endif()
 endfunction()
 
+function(_anvil_write_file_if_changed output_path content)
+  if(EXISTS "${output_path}")
+    file(READ "${output_path}" _anvil_existing_content)
+  else()
+    set(_anvil_existing_content "")
+  endif()
+  if(NOT _anvil_existing_content STREQUAL content)
+    file(WRITE "${output_path}" "${content}")
+  endif()
+endfunction()
+
 function(add_anvil_kernel)
   set(options NO_ALL)
   set(one_value_args NAME TOP CLOCK_HZ PLATFORM_KIND TESTBENCH)
@@ -142,7 +153,10 @@ function(add_anvil_kernel)
 
   # Vitis 2024.2 HLS compile mode accepts platform/frequency but not --target;
   # ANVIL_VITIS_TARGET is retained as target metadata for future xclbin/link work.
-  file(WRITE "${_ak_cfg}"
+  # Keep generated config timestamps stable across repeated configure calls;
+  # otherwise every Makefile invocation rewrites hls.cfg/cosim.cfg and Ninja
+  # correctly assumes hour-scale HLS/cosim outputs are stale.
+  string(CONCAT _ak_cfg_content
     "platform=${ANVIL_VITIS_PLATFORM}\n"
     "freqhz=${AK_CLOCK_HZ}\n"
     "\n"
@@ -153,11 +167,12 @@ function(add_anvil_kernel)
     "flow_target=vitis\n"
     "package.output.format=xo\n"
     "package.output.file=${_ak_xo}\n")
+  _anvil_write_file_if_changed("${_ak_cfg}" "${_ak_cfg_content}")
 
   if(AK_TESTBENCH)
     # Vitis 2024.2 cosim rejects the compile config's top-level platform= key;
     # keep cosim on a separate part-based config.
-    file(WRITE "${_ak_cosim_cfg}"
+    string(CONCAT _ak_cosim_cfg_content
       "part=${_ak_cosim_part}\n"
       "freqhz=${AK_CLOCK_HZ}\n"
       "\n"
@@ -168,7 +183,13 @@ function(add_anvil_kernel)
       "tb.file=${_ak_abs_testbench}\n"
       "tb.file_cflags=${_ak_abs_testbench},${_ak_tb_cflags}\n"
       "cosim.trace_level=none\n")
+    _anvil_write_file_if_changed("${_ak_cosim_cfg}" "${_ak_cosim_cfg_content}")
   endif()
+
+  file(GLOB_RECURSE _ak_hls_header_deps CONFIGURE_DEPENDS
+    "${PROJECT_SOURCE_DIR}/include/anvil/hls/*.hpp"
+    "${PROJECT_SOURCE_DIR}/src/kernels/include/kernels/*.hpp"
+    "${CMAKE_BINARY_DIR}/generated/*.hpp")
 
   add_custom_command(
     OUTPUT "${_ak_xo}" "${_ak_csynth_xml}"
@@ -178,7 +199,7 @@ function(add_anvil_kernel)
             --mode hls
             --config "${_ak_cfg}"
             --work_dir "${_ak_work_dir}"
-    DEPENDS ${_ak_abs_sources} "${_ak_cfg}"
+    DEPENDS ${_ak_abs_sources} ${_ak_hls_header_deps} "${_ak_cfg}"
     COMMENT "Running Vitis HLS csynth for ${AK_NAME}"
     VERBATIM
     USES_TERMINAL)
@@ -213,7 +234,7 @@ function(add_anvil_kernel)
               --config "${_ak_cosim_cfg}"
               --work_dir "${_ak_work_dir}"
       COMMAND "${CMAKE_COMMAND}" -E touch "${_ak_cosim_stamp}"
-      DEPENDS "${_ak_xo}" "${_ak_abs_testbench}" "${_ak_cosim_cfg}" ${_ak_abs_sources}
+      DEPENDS "${_ak_xo}" "${_ak_abs_testbench}" "${_ak_cosim_cfg}" ${_ak_abs_sources} ${_ak_hls_header_deps}
       COMMENT "Running Vitis HLS cosim for ${AK_NAME}"
       VERBATIM
       USES_TERMINAL)
