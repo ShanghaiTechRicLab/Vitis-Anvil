@@ -3,6 +3,7 @@
 #include <anvil/log/anvil_log.hpp>
 #include <anvil/runtime/xrt_buffer.hpp>
 #include <anvil/runtime/xrt_context.hpp>
+#include <anvil/runtime/xrt_run.hpp>
 
 #include "kernels/abi.hpp"
 
@@ -20,6 +21,9 @@
 
 namespace fs = std::filesystem;
 using anvil::runtime::SyncDirection;
+using anvil::runtime::RunStateName;
+using anvil::runtime::TryAbortRun;
+using anvil::runtime::WaitRun;
 using anvil::runtime::XrtBuffer;
 using anvil::runtime::XrtContext;
 
@@ -77,10 +81,16 @@ int main(int argc, char* argv[]) {
     cli.add_argument("--n").default_value(1024).scan<'i', int>().help("Number of synthetic elements");
     cli.add_argument("--data-dir").help("Dataset directory containing meta.json, x.bin, y.bin");
     cli.add_argument("--output").help("Optional path for writing device output .bin");
+    cli.add_argument("--timeout-ms").default_value(120000).scan<'i', int>().help("Kernel wait timeout in milliseconds (0 = block forever)");
     anvil::cli::parse_or_exit(cli, argc, argv);
 
     const fs::path xclbin_path = cli.get<std::string>("--xclbin");
     int n_arg = cli.get<int>("--n");
+    const int timeout_ms = cli.get<int>("--timeout-ms");
+    if (timeout_ms < 0) {
+        anvil::log::Error("--timeout-ms must be >= 0, got {}", timeout_ms);
+        return 2;
+    }
     std::vector<float> input_a;
     std::vector<float> input_b;
     try {
@@ -119,7 +129,22 @@ int main(int argc, char* argv[]) {
     std::copy(input_b.begin(), input_b.end(), b_buf.host());
     a_buf.Sync(SyncDirection::HostToDevice);
     b_buf.Sync(SyncDirection::HostToDevice);
-    kernel(a_buf.bo(), b_buf.bo(), out_buf.bo(), static_cast<int>(padded_n / kPackWidth));
+    anvil::log::Info("launching vadd kernel n={} padded_n={}", n, padded_n);
+    auto run = kernel.Launch(a_buf.bo(), b_buf.bo(), out_buf.bo(), static_cast<int>(padded_n / kPackWidth));
+    const auto state = WaitRun(run, timeout_ms);
+    anvil::log::Info("vadd kernel completed with state {}", RunStateName(state));
+    if (state == ERT_CMD_STATE_TIMEOUT) {
+        anvil::log::Error("vadd kernel timed out after {} ms; aborting run", timeout_ms);
+        std::string abort_error;
+        if (!TryAbortRun(run, &abort_error)) {
+            anvil::log::Warn("failed to abort timed-out vadd run cleanly: {}", abort_error);
+        }
+        return 3;
+    }
+    if (state != ERT_CMD_STATE_COMPLETED) {
+        anvil::log::Error("vadd kernel failed with state {}", RunStateName(state));
+        return 3;
+    }
     out_buf.Sync(SyncDirection::DeviceToHost);
 
     std::vector<float> gold(n);

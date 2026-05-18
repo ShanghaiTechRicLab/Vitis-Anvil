@@ -4,6 +4,7 @@
 #include <anvil/log/anvil_log.hpp>
 #include <anvil/runtime/xrt_buffer.hpp>
 #include <anvil/runtime/xrt_context.hpp>
+#include <anvil/runtime/xrt_run.hpp>
 
 #include "kernels/abi.hpp"
 
@@ -21,6 +22,9 @@
 
 namespace fs = std::filesystem;
 using anvil::runtime::SyncDirection;
+using anvil::runtime::RunStateName;
+using anvil::runtime::TryAbortRun;
+using anvil::runtime::WaitRun;
 using anvil::runtime::XrtBuffer;
 using anvil::runtime::XrtContext;
 
@@ -57,23 +61,6 @@ std::vector<float> ReadFloats(const fs::path& path, std::size_t expected_n) {
     return v;
 }
 
-
-const char* RunStateName(ert_cmd_state state) {
-    switch (state) {
-        case ERT_CMD_STATE_NEW: return "NEW";
-        case ERT_CMD_STATE_QUEUED: return "QUEUED";
-        case ERT_CMD_STATE_RUNNING: return "RUNNING";
-        case ERT_CMD_STATE_COMPLETED: return "COMPLETED";
-        case ERT_CMD_STATE_ERROR: return "ERROR";
-        case ERT_CMD_STATE_ABORT: return "ABORT";
-        case ERT_CMD_STATE_SUBMITTED: return "SUBMITTED";
-        case ERT_CMD_STATE_TIMEOUT: return "TIMEOUT";
-        case ERT_CMD_STATE_NORESPONSE: return "NORESPONSE";
-        case ERT_CMD_STATE_SKERROR: return "SKERROR";
-        case ERT_CMD_STATE_SKCRASHED: return "SKCRASHED";
-        default: return "UNKNOWN";
-    }
-}
 
 void WriteFloats(const fs::path& path, std::span<const float> values) {
     if (path.has_parent_path()) {
@@ -187,14 +174,13 @@ int main(int argc, char* argv[]) {
     // padded to a full pack.
     // Args 3=a (float), 4=n_total (int) — do not swap these.
     auto run = kernel.Launch(x_buf.bo(), y_buf.bo(), out_buf.bo(), a, n_arg);
-    const auto state = timeout_ms == 0 ? run.wait() : run.wait(static_cast<unsigned int>(timeout_ms));
+    const auto state = WaitRun(run, timeout_ms);
     anvil::log::Info("saxpy kernel completed with state {}", RunStateName(state));
     if (state == ERT_CMD_STATE_TIMEOUT) {
         anvil::log::Error("saxpy kernel timed out after {} ms; aborting run. This usually means a stale/incompatible xclbin, a kernel deadlock, or a board/platform shell mismatch.", timeout_ms);
-        try {
-            run.abort();
-        } catch (const std::exception& e) {
-            anvil::log::Warn("failed to abort timed-out saxpy run cleanly: {}", e.what());
+        std::string abort_error;
+        if (!TryAbortRun(run, &abort_error)) {
+            anvil::log::Warn("failed to abort timed-out saxpy run cleanly: {}", abort_error);
         }
         return 3;
     }

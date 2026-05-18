@@ -3,6 +3,7 @@
 #include <anvil/log/anvil_log.hpp>
 #include <anvil/runtime/xrt_buffer.hpp>
 #include <anvil/runtime/xrt_context.hpp>
+#include <anvil/runtime/xrt_run.hpp>
 
 #include "kernels/abi.hpp"
 
@@ -20,6 +21,9 @@
 
 namespace fs = std::filesystem;
 using anvil::runtime::SyncDirection;
+using anvil::runtime::RunStateName;
+using anvil::runtime::TryAbortRun;
+using anvil::runtime::WaitRun;
 using anvil::runtime::XrtBuffer;
 using anvil::runtime::XrtContext;
 
@@ -70,12 +74,18 @@ int main(int argc, char* argv[]) {
     cli.add_argument("--b").default_value(1.0F).scan<'g', float>().help("Synthetic vadd b value");
     cli.add_argument("--data-dir").help("Dataset directory containing meta.json, x.bin, y.bin");
     cli.add_argument("--output").help("Optional path for writing device output .bin");
+    cli.add_argument("--timeout-ms").default_value(120000).scan<'i', int>().help("Per-kernel wait timeout in milliseconds (0 = block forever)");
     anvil::cli::parse_or_exit(cli, argc, argv);
 
     const fs::path xclbin_path = cli.get<std::string>("--xclbin");
     int n_arg = cli.get<int>("--n");
     float coeff = cli.get<float>("--a");
     const float b_value = cli.get<float>("--b");
+    const int timeout_ms = cli.get<int>("--timeout-ms");
+    if (timeout_ms < 0) {
+        anvil::log::Error("--timeout-ms must be >= 0, got {}", timeout_ms);
+        return 2;
+    }
     std::vector<float> x;
     std::vector<float> y;
     try {
@@ -119,10 +129,31 @@ int main(int argc, char* argv[]) {
     y_buf.Sync(SyncDirection::HostToDevice);
     b_buf.Sync(SyncDirection::HostToDevice);
 
+    anvil::log::Info("launching pipeline_demo n={} padded_n={} packs={} a={} b={}", n, padded_n, n_packs, coeff, b_value);
     auto r1 = saxpy.Launch(x_buf.bo(), y_buf.bo(), coeff, n_packs);
     auto r2 = vadd.Launch(b_buf.bo(), out_buf.bo(), n_packs);
-    r1.wait();
-    r2.wait();
+    const auto saxpy_state = WaitRun(r1, timeout_ms);
+    const auto vadd_state = WaitRun(r2, timeout_ms);
+    anvil::log::Info("saxpy_stream completed with state {}", RunStateName(saxpy_state));
+    anvil::log::Info("vadd_stream completed with state {}", RunStateName(vadd_state));
+    if (saxpy_state == ERT_CMD_STATE_TIMEOUT || vadd_state == ERT_CMD_STATE_TIMEOUT) {
+        anvil::log::Error("pipeline_demo timed out after {} ms: saxpy_stream={} vadd_stream={}",
+                          timeout_ms, RunStateName(saxpy_state), RunStateName(vadd_state));
+        std::string abort_error;
+        if (saxpy_state == ERT_CMD_STATE_TIMEOUT && !TryAbortRun(r1, &abort_error)) {
+            anvil::log::Warn("failed to abort timed-out saxpy_stream run cleanly: {}", abort_error);
+        }
+        abort_error.clear();
+        if (vadd_state == ERT_CMD_STATE_TIMEOUT && !TryAbortRun(r2, &abort_error)) {
+            anvil::log::Warn("failed to abort timed-out vadd_stream run cleanly: {}", abort_error);
+        }
+        return 3;
+    }
+    if (saxpy_state != ERT_CMD_STATE_COMPLETED || vadd_state != ERT_CMD_STATE_COMPLETED) {
+        anvil::log::Error("pipeline_demo failed: saxpy_stream={} vadd_stream={}",
+                          RunStateName(saxpy_state), RunStateName(vadd_state));
+        return 3;
+    }
     out_buf.Sync(SyncDirection::DeviceToHost);
 
     std::vector<float> gold(n);
