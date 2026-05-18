@@ -1,7 +1,6 @@
 #include "kernels/saxpy_kernel.hpp"
 
-#include "anvil/hls/dataflow.hpp"
-#include "kernels/saxpy_core.hpp"
+#include "anvil/hls/pack.hpp"
 
 extern "C" void saxpy(
     SaxpyPack* x,
@@ -23,12 +22,15 @@ extern "C" void saxpy(
 
   const int n_pack = (n_total - 1) / kernels::kSaxpyPackWidth + 1;
 
-  kernels::saxpy_core::SaxpyStream sx("sx"), sy("sy"), so("so");
-
-  ANVIL_DATAFLOW_INIT();
-  ANVIL_DATAFLOW_FUNCTION(kernels::saxpy_core::Load, x, sx, n_pack);
-  ANVIL_DATAFLOW_FUNCTION(kernels::saxpy_core::Load, y, sy, n_pack);
-  ANVIL_DATAFLOW_FUNCTION(kernels::saxpy_core::Compute, sx, sy, so, a, n_pack);
-  ANVIL_DATAFLOW_FUNCTION(kernels::saxpy_core::Store, so, out, n_pack);
-  ANVIL_DATAFLOW_FINALIZE();
+  for (int p = 0; p < n_pack; ++p) {
+#pragma HLS PIPELINE II=1
+    const SaxpyPack px = x[p];
+    const SaxpyPack py = y[p];
+    SaxpyPack po;
+    for (int lane = 0; lane < kernels::kSaxpyPackWidth; ++lane) {
+#pragma HLS UNROLL
+      anvil::hls::SetLane(po, lane, a * anvil::hls::GetLane(px, lane) + anvil::hls::GetLane(py, lane));
+    }
+    out[p] = po;
+  }
 }

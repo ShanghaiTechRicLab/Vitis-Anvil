@@ -7,8 +7,6 @@
 // signature to preserve reference parameters; std::ref at the call site can
 // double-wrap and fail to bind.
 
-#include <hlslib/xilinx/Simulation.h>
-
 #ifdef HLSLIB_SYNTHESIS
 // hlslib's synthesis-mode dataflow helpers intentionally collapse to plain
 // sequential function calls. That is fine for leaf functions, but not for this
@@ -22,6 +20,7 @@
 #define ANVIL_DATAFLOW_FUNCTION(func, ...) func(__VA_ARGS__)
 #define ANVIL_DATAFLOW_FINALIZE()
 #else
+#include <hlslib/xilinx/Simulation.h>
 #define ANVIL_DATAFLOW_INIT       HLSLIB_DATAFLOW_INIT
 #define ANVIL_DATAFLOW_FUNCTION   HLSLIB_DATAFLOW_FUNCTION
 #define ANVIL_DATAFLOW_FINALIZE   HLSLIB_DATAFLOW_FINALIZE
