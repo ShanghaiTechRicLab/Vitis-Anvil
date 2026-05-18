@@ -21,6 +21,60 @@ set(ANVIL_PARALLELISM    "8"       CACHE STRING "DataPack width / kernel paralle
 set(ANVIL_HLS_STD        "c++14"   CACHE STRING "C++ std for HLS kernel synthesis (Phase 2)")
 set(ANVIL_MAX_ELEMENTS   "131072"  CACHE STRING "Max elements per saxpy frame")
 
+function(_anvil_find_vitis_platform out_var platform_kind requested_path)
+  if(requested_path AND EXISTS "${requested_path}")
+    set(${out_var} "${requested_path}" PARENT_SCOPE)
+    return()
+  endif()
+
+  set(_anvil_platform_roots)
+  if(DEFINED ENV{XILINX_VITIS})
+    list(APPEND _anvil_platform_roots "$ENV{XILINX_VITIS}/base_platforms")
+  endif()
+  list(APPEND _anvil_platform_roots "/opt/xilinx/platforms")
+  file(GLOB _anvil_vitis_base_platform_roots
+    LIST_DIRECTORIES true
+    "/tools/Xilinx/Vitis/*/base_platforms")
+  list(APPEND _anvil_platform_roots ${_anvil_vitis_base_platform_roots})
+  list(REMOVE_DUPLICATES _anvil_platform_roots)
+
+  set(_anvil_patterns)
+  if(requested_path)
+    get_filename_component(_anvil_requested_name "${requested_path}" NAME_WE)
+    if(_anvil_requested_name)
+      list(APPEND _anvil_patterns "*${_anvil_requested_name}*.xpfm")
+    endif()
+  endif()
+  if(platform_kind)
+    string(TOUPPER "${platform_kind}" _anvil_platform_kind_upper)
+    list(APPEND _anvil_patterns
+      "*${platform_kind}*.xpfm"
+      "*${_anvil_platform_kind_upper}*.xpfm")
+    if(platform_kind STREQUAL "kv260")
+      list(APPEND _anvil_patterns "*k26*.xpfm" "*K26*.xpfm")
+    endif()
+  endif()
+
+  foreach(_anvil_root IN LISTS _anvil_platform_roots)
+    if(NOT IS_DIRECTORY "${_anvil_root}")
+      continue()
+    endif()
+    foreach(_anvil_pattern IN LISTS _anvil_patterns)
+      file(GLOB_RECURSE _anvil_matches
+        LIST_DIRECTORIES false
+        "${_anvil_root}/${_anvil_pattern}")
+      if(_anvil_matches)
+        list(SORT _anvil_matches)
+        list(GET _anvil_matches 0 _anvil_match)
+        set(${out_var} "${_anvil_match}" PARENT_SCOPE)
+        return()
+      endif()
+    endforeach()
+  endforeach()
+
+  set(${out_var} "${requested_path}" PARENT_SCOPE)
+endfunction()
+
 # ---------------------------------------------------------------------------
 # Phase 2: when ANVIL_BUILD_KERNELS=ON, verify Vitis HLS toolchain is available
 # and the U250 / target platform .xpfm path is set. ANVIL_VITIS_TARGET is
@@ -56,9 +110,21 @@ if(ANVIL_BUILD_KERNELS)
     endif()
   endif()
   if(NOT ANVIL_VITIS_PLATFORM OR NOT EXISTS "${ANVIL_VITIS_PLATFORM}")
+    _anvil_find_vitis_platform(_anvil_discovered_platform
+      "${ANVIL_PLATFORM_KIND}" "${ANVIL_VITIS_PLATFORM}")
+    if(_anvil_discovered_platform AND EXISTS "${_anvil_discovered_platform}")
+      message(STATUS
+        "ProjectOptions: discovered Vitis platform for ${ANVIL_PLATFORM_KIND}: "
+        "${_anvil_discovered_platform}")
+      set(ANVIL_VITIS_PLATFORM "${_anvil_discovered_platform}" CACHE STRING
+        "Path to .xpfm (Phase 2)" FORCE)
+    endif()
+  endif()
+  if(NOT ANVIL_VITIS_PLATFORM OR NOT EXISTS "${ANVIL_VITIS_PLATFORM}")
     message(FATAL_ERROR
       "ANVIL_VITIS_PLATFORM not set or .xpfm missing: '${ANVIL_VITIS_PLATFORM}'\n"
-      "Find installed platforms with: find /opt /tools/Xilinx -name '*.xpfm' 2>/dev/null\n"
+      "Searched $XILINX_VITIS/base_platforms, /tools/Xilinx/Vitis/*/base_platforms, and /opt/xilinx/platforms.\n"
+      "Find installed platforms with: find /opt/xilinx/platforms /tools/Xilinx -name '*.xpfm' 2>/dev/null\n"
       "Then override from make with: make <target> TARGET=<board> ANVIL_PLATFORM=/path/to/platform.xpfm")
   endif()
   message(STATUS "Vitis target: ${ANVIL_VITIS_TARGET}")

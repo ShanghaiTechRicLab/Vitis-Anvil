@@ -49,7 +49,8 @@ endif
 # This lets users override ANVIL_PLATFORM=/path/to/platform.xpfm from make.
 # 从 config/<TARGET>/anvil.mk 提取的 CMake 命令行覆写；
 # 允许用户在 make 命令行直接覆盖 ANVIL_PLATFORM。
-CMAKE_PLATFORM_ARGS := -DANVIL_VITIS_PLATFORM=$(ANVIL_PLATFORM) -DANVIL_VITIS_PART=$(ANVIL_VITIS_PART)
+RESOLVED_ANVIL_PLATFORM := $(shell scripts/find_platform.sh "$(TARGET)" "$(ANVIL_PLATFORM)")
+CMAKE_PLATFORM_ARGS := -DANVIL_VITIS_PLATFORM=$(RESOLVED_ANVIL_PLATFORM) -DANVIL_VITIS_PART=$(ANVIL_VITIS_PART)
 # Build directory for the selected preset / 当前 preset 的构建目录
 BUILD_DIR   := build/$(ANVIL_PRESET)
 # Optional K2K stream pipeline config / 可选 K2K stream pipeline 配置
@@ -328,7 +329,7 @@ hw: $(DATASET_STAMP)
 
 # emconfig — Generate shared emconfig.json for sw_emu/hw_emu / 生成 sw_emu/hw_emu 共享 emconfig.json
 emconfig:
-	env ANVIL_PLATFORM=$(ANVIL_PLATFORM) TARGET=$(TARGET) EMCONFIG_DIR=$(EMCONFIG_DIR) bash scripts/emconfig.sh
+	env ANVIL_PLATFORM=$(RESOLVED_ANVIL_PLATFORM) TARGET=$(TARGET) EMCONFIG_DIR=$(EMCONFIG_DIR) bash scripts/emconfig.sh
 
 swemu: $(DATASET_STAMP)
 	@if [ "$(ANVIL_DEVICE_KIND)" != "accelerator" ]; then echo "make swemu currently requires an accelerator target; got TARGET=$(TARGET) ($(ANVIL_DEVICE_KIND))" >&2; exit 1; fi
@@ -363,13 +364,13 @@ qemu: $(DATASET_STAMP)
 		cmake --preset $(ANVIL_HOST_PRESET) $(CMAKE_PLATFORM_ARGS); \
 	fi
 	cmake --build --preset $(ANVIL_HOST_PRESET) --target $(HOST_APP)
-	env ANVIL_PLATFORM=$(ANVIL_PLATFORM) TARGET=$(TARGET) EMCONFIG_DIR=$(EMCONFIG_DIR) bash scripts/emconfig.sh
+	env ANVIL_PLATFORM=$(RESOLVED_ANVIL_PLATFORM) TARGET=$(TARGET) EMCONFIG_DIR=$(EMCONFIG_DIR) bash scripts/emconfig.sh
 	@if [ -z "$(QEMU_LAUNCHER)" ]; then echo "make qemu requires QEMU_LAUNCHER=/path/to/launcher (or set it in config/$(TARGET)/target.mk)" >&2; exit 2; fi
 	@if [ ! -x $(HOST_BIN) ]; then echo "$(HOST_BIN) not built" >&2; exit 1; fi
 	@if [ ! -f $(XCLBIN_PATH) ]; then echo "$(XCLBIN_PATH) not found" >&2; exit 1; fi
 	mkdir -p "$(QEMU_RUN_DIR)"
 	env TARGET="$(TARGET)" HOST_APP="$(HOST_APP)" DATASET="$(DATASET)" RUN_KEY="$(RUN_KEY)" \
-		ANVIL_PLATFORM="$(ANVIL_PLATFORM)" EMCONFIG_PATH="$(EMCONFIG_DIR)" \
+		ANVIL_PLATFORM="$(RESOLVED_ANVIL_PLATFORM)" EMCONFIG_PATH="$(EMCONFIG_DIR)" \
 		HOST_BIN="$(HOST_BIN)" XCLBIN_PATH="$(XCLBIN_PATH)" DATA_DIR="data/$(DATASET)" \
 		RUN_DIR="$(QEMU_RUN_DIR)" OUTPUT="$(QEMU_OUTPUT)" \
 		$(QEMU_LAUNCHER) $(QEMU_ARGS) >"$(QEMU_RUN_DIR)/stdout.log" 2>&1
