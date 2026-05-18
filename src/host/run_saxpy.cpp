@@ -191,7 +191,11 @@ int main(int argc, char* argv[]) {
     anvil::log::Info("saxpy kernel completed with state {}", RunStateName(state));
     if (state == ERT_CMD_STATE_TIMEOUT) {
         anvil::log::Error("saxpy kernel timed out after {} ms; aborting run. This usually means a stale/incompatible xclbin, a kernel deadlock, or a board/platform shell mismatch.", timeout_ms);
-        run.abort();
+        try {
+            run.abort();
+        } catch (const std::exception& e) {
+            anvil::log::Warn("failed to abort timed-out saxpy run cleanly: {}", e.what());
+        }
         return 3;
     }
     if (state != ERT_CMD_STATE_COMPLETED) {

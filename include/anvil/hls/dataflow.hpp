@@ -9,6 +9,20 @@
 
 #include <hlslib/xilinx/Simulation.h>
 
+#ifdef HLSLIB_SYNTHESIS
+// hlslib's synthesis-mode dataflow helpers intentionally collapse to plain
+// sequential function calls. That is fine for leaf functions, but not for this
+// project's bounded-stream Load/Compute/Store pipelines: without an enclosing
+// HLS dataflow region, synthesis emits sequential producers/consumers and the
+// first producer can fill its finite stream before the consumer ever starts.
+//
+// Keep hlslib's threaded simulation behavior below, but make synthesis an
+// actual Vitis HLS dataflow region.
+#define ANVIL_DATAFLOW_INIT()     _Pragma("HLS dataflow")
+#define ANVIL_DATAFLOW_FUNCTION(func, ...) func(__VA_ARGS__)
+#define ANVIL_DATAFLOW_FINALIZE()
+#else
 #define ANVIL_DATAFLOW_INIT       HLSLIB_DATAFLOW_INIT
 #define ANVIL_DATAFLOW_FUNCTION   HLSLIB_DATAFLOW_FUNCTION
 #define ANVIL_DATAFLOW_FINALIZE   HLSLIB_DATAFLOW_FINALIZE
+#endif
