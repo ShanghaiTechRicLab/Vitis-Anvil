@@ -239,7 +239,7 @@ TEST_CASE("triple_buffer aliases stages by tile id", "[hls][mem]") {
 }
 
 TEST_CASE("banked_tile combines bank and tile indexing", "[hls][mem]") {
-  anvil::hls::mem::banked_tile<int, 2, 4> bt{};
+  anvil::hls::mem::banked_tile<int, 4, 2> bt{};
   bt.fill(0);
   bt.at(0, 1) = 11;
   bt.set<1, 2>(22);

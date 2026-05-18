@@ -25,7 +25,7 @@ extern "C" void component_counting_sort_buffer(const ap_uint<2>* in_keys,
   ap_uint<16> sorted_payloads[N];
   ahls::mem::multi_buffer<ahls::mem::tile<ap_uint<16>, 4>, 2> mb;
   ahls::mem::triple_buffer<ahls::mem::tile<ap_uint<16>, 4> > tb;
-  ahls::mem::banked_tile<ap_uint<16>, 2, 4> banks;
+  ahls::mem::banked_tile<ap_uint<16>, 4, 2> banks;
 #pragma HLS array_partition variable=keys complete
 #pragma HLS array_partition variable=payloads complete
 #pragma HLS array_partition variable=sorted_keys complete

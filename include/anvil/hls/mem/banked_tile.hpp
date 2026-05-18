@@ -4,14 +4,14 @@ namespace anvil {
 namespace hls {
 namespace mem {
 
-template <typename T, int Banks, int Depth>
+template <typename T, int Depth, int Banks>
 struct banked_tile {
-  static_assert(Banks > 0, "banked_tile: Banks must be positive");
   static_assert(Depth > 0, "banked_tile: Depth must be positive");
+  static_assert(Banks > 0, "banked_tile: Banks must be positive");
 
   typedef T value_type;
-  static const int banks = Banks;
   static const int depth = Depth;
+  static const int banks = Banks;
 
   T data[Banks][Depth];
 

@@ -68,17 +68,20 @@ auto& slot = multi.slot_for(tile_id);
 ahls::mem::triple_buffer<ahls::mem::tile<word_t, 64>> triple;
 auto& load_tile = triple.load(tile_id);
 
-ahls::mem::banked_tile<word_t, 4, 256> banked_tile;
+ahls::mem::banked_tile<word_t, 256, 4> banked_tile;
 banked_tile.set<0, 0>(value);
 ```
 
 `banked<T, Depth, Banks>` 显式暴露 bank 维度。`ring` 提供编译期 delay 读取。
 `shift_register` 里最大 tap index 对应最新 shift 进去的值。需要在综合中完全 partition
-bank 维度时，在 kernel scope 内调用 `banks.partition()`。`scratchpad`、
+bank 维度时，在 kernel scope 内调用 `banks.partition()`。`banked_tile` 使用相同的
+模板顺序 `banked_tile<T, Depth, Banks>`，内部存储仍是 `data[Banks][Depth]`。
+`scratchpad`、
 `multi_buffer`、`triple_buffer` 和 `banked_tile` 都只是显式本地存储的薄封装；
 它们不暗示额外 memory port。需要并行访问时，用对应 partition helper 明确表达硬件结构。
 `triple_buffer` 暴露三个 slot；stage 如何轮转由调用者传入的 tile id 决定，比如
-`load(t)`、`compute(t - 1)`、`store(t - 2)`。
+`load(t)`、`compute(t - 1)`、`store(t - 2)`。如果给这些 stage helper 传入相同
+`tile_id`，它们会有意返回同一个 slot。
 
 ## Line 和 window buffer
 
@@ -153,6 +156,8 @@ ahls::compute::counting_sort_reorder<2, 4>(
 `prefix_sum` 和 `prefix_sum_inplace` 是 exclusive scan；inclusive 结果使用
 `inclusive_scan` 或 `inclusive_scan_inplace`。histogram 和 scatter 阶段不会强行
 `II=1`，因为多个元素写同一个 bin 时存在真实依赖。
+`histogram_accumulate` 对 `counts[bin]` 有 read-modify-write 依赖，所以吞吐量和输入
+冲突情况相关；有冲突 bin 时不应该期待达到每周期一个输入。
 `count_t<N>` 是足够计数 `N` 个元素的 `ap_uint`。Histogram 可以使用小于完整 key
 domain 的 bin 数，并忽略 `[0, Bins)` 之外的 key；`counting_sort_reorder` 要求
 `Bins == 2^KeyBits`，保证每条输入记录都会被写出一次。当前 unrolled

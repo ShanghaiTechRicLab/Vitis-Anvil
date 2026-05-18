@@ -13,6 +13,10 @@ struct triple_buffer {
 
   multi_buffer<TileT, slots> storage;
 
+  // Typical pipeline rotation uses load(t), compute(t - 1), and store(t - 2).
+  // The stage names are aliases for slot_for(tile_id); tile IDs that are
+  // distinct modulo slots map to distinct slots, while IDs equal modulo slots
+  // intentionally alias.
   TileT& at(int slot_id) {
 #pragma HLS inline
     return storage.slot(slot_id);

@@ -72,20 +72,23 @@ auto& slot = multi.slot_for(tile_id);
 ahls::mem::triple_buffer<ahls::mem::tile<word_t, 64>> triple;
 auto& load_tile = triple.load(tile_id);
 
-ahls::mem::banked_tile<word_t, 4, 256> banked_tile;
+ahls::mem::banked_tile<word_t, 256, 4> banked_tile;
 banked_tile.set<0, 0>(value);
 ```
 
 `banked<T, Depth, Banks>` exposes the bank dimension explicitly. `ring` provides
 compile-time delay reads. `shift_register` uses the largest tap index for the
 newest shifted value. Call `banks.partition()` inside the kernel scope when the
-bank dimension should be completely partitioned for synthesis.
+bank dimension should be completely partitioned for synthesis. `banked_tile`
+uses the same template order, `banked_tile<T, Depth, Banks>`, and stores data as
+`data[Banks][Depth]`.
 `scratchpad`, `multi_buffer`, `triple_buffer`, and `banked_tile` are thin
 wrappers around explicit local storage. They do not imply extra memory ports;
 use their partition helpers where the hardware structure needs parallel bank or
 element access. `triple_buffer` exposes three slots; stage rotation is controlled
 by the tile IDs the caller passes, for example `load(t)`, `compute(t - 1)`, and
-`store(t - 2)`.
+`store(t - 2)`. Passing the same `tile_id` to those stage helpers intentionally
+returns the same slot.
 
 ## Line and window buffers
 
@@ -164,6 +167,9 @@ HLS. `prefix_sum` and `prefix_sum_inplace` are exclusive scans; use
 `inclusive_scan` or `inclusive_scan_inplace` for inclusive results. Histogram
 and scatter stages intentionally do not force `II=1`, because
 multiple elements can update the same bin and those dependencies are real.
+`histogram_accumulate` has a read-modify-write dependency on `counts[bin]`, so
+the throughput is data-dependent and should not be expected to reach one input
+per cycle for conflicting bins.
 `count_t<N>` is an `ap_uint` wide enough to count `N` items. Histograms may use
 fewer bins than the full key domain and ignore keys outside `[0, Bins)`;
 `counting_sort_reorder` requires `Bins == 2^KeyBits` so every input record is

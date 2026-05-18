@@ -20,7 +20,7 @@ int main() {
   ahls::mem::scratchpad<int, 4> scratch{};
   ahls::mem::multi_buffer<ahls::mem::tile<int, 2>, 3> multi{};
   ahls::mem::triple_buffer<ahls::mem::tile<int, 2> > triple{};
-  ahls::mem::banked_tile<int, 2, 4> banked_tile{};
+  ahls::mem::banked_tile<int, 4, 2> banked_tile{};
   ahls::mem::line_buffer<int, 2, 3> lines{};
   ahls::mem::window_buffer<int, 2, 2> window{};
   ahls::mem::ring<int, 3> ring{};
