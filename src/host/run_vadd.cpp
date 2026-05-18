@@ -134,7 +134,7 @@ int main(int argc, char* argv[]) {
     const auto state = WaitRun(run, timeout_ms);
     anvil::log::Info("vadd kernel completed with state {}", RunStateName(state));
     if (state == ERT_CMD_STATE_TIMEOUT) {
-        anvil::log::Error("vadd kernel timed out after {} ms; aborting run", timeout_ms);
+        anvil::log::Error("vadd kernel timed out after {} ms; aborting run. Common causes: stale/incompatible xclbin, board/platform shell mismatch, kernel-side deadlock, or host/kernel ABI mismatch.", timeout_ms);
         std::string abort_error;
         if (!TryAbortRun(run, &abort_error)) {
             anvil::log::Warn("failed to abort timed-out vadd run cleanly: {}", abort_error);

@@ -177,7 +177,7 @@ int main(int argc, char* argv[]) {
     const auto state = WaitRun(run, timeout_ms);
     anvil::log::Info("saxpy kernel completed with state {}", RunStateName(state));
     if (state == ERT_CMD_STATE_TIMEOUT) {
-        anvil::log::Error("saxpy kernel timed out after {} ms; aborting run. This usually means a stale/incompatible xclbin, a kernel deadlock, or a board/platform shell mismatch.", timeout_ms);
+        anvil::log::Error("saxpy kernel timed out after {} ms; aborting run. Common causes: stale/incompatible xclbin, board/platform shell mismatch, or an HLS dataflow deadlock. For bounded stream pipelines, verify the synthesized kernel contains an enclosing '#pragma HLS dataflow' region; hlslib simulation helpers alone collapse to sequential calls under HLSLIB_SYNTHESIS.", timeout_ms);
         std::string abort_error;
         if (!TryAbortRun(run, &abort_error)) {
             anvil::log::Warn("failed to abort timed-out saxpy run cleanly: {}", abort_error);

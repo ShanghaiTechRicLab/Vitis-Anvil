@@ -139,6 +139,7 @@ int main(int argc, char* argv[]) {
     if (saxpy_state == ERT_CMD_STATE_TIMEOUT || vadd_state == ERT_CMD_STATE_TIMEOUT) {
         anvil::log::Error("pipeline_demo timed out after {} ms: saxpy_stream={} vadd_stream={}",
                           timeout_ms, RunStateName(saxpy_state), RunStateName(vadd_state));
+        anvil::log::Error("pipeline_demo timeout hint: check K2K stream connectivity in link.cfg (sc=...), host/kernel ABI argument order, stale xclbin, and whether every bounded internal stream pipeline is enclosed by a synthesized '#pragma HLS dataflow' region.");
         std::string abort_error;
         if (saxpy_state == ERT_CMD_STATE_TIMEOUT && !TryAbortRun(r1, &abort_error)) {
             anvil::log::Warn("failed to abort timed-out saxpy_stream run cleanly: {}", abort_error);
